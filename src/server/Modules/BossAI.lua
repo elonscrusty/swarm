@@ -22,6 +22,11 @@
 	  Hive Mother  Heave (egg barrage), Spew (acid pools)
 	  Briar        Root (root lines / bramble ring wind-up) + Rooted, Volley + Fling
 	  Colossus     SlamWindup + Slam, Stomp (ice lanes), Inhale + Breathe, ShardCall
+	  Breaker      SlamWindup (root slam), Windup + Charge (+ Stuck), Spew (sap circles)
+	[stream D] The Basin Breaker (the single map's final boss, BossData BasinBreaker): attack
+	damage = DamageH0 x H0 x e.DmgScale (the director's party damage multiplier); its charge hits
+	each hero once per charge (a hit ledger, the body is harmless meanwhile so contact cannot add a
+	second hit); the root slam and the sap circles are Hazards strikes on their own circles.
 	Body attribute "BannerOut" = the Warlord's banner is planted (hidden on his back);
 	"FrostArmor" = the Colossus wears his phase-2 frost armour (e.Shield soaks the hits in
 	EnemySpawner.Damage; breaking it staggers him, it grows back after a while).
@@ -348,6 +353,10 @@ function Start.Rush(e, name: string, windup: number?)
 	if blocked and len < 10 and e.BossData.Attacks.GroundPound then
 		-- facing a wall right in front of him: a charge would be silly, pound instead
 		Start.GroundPound(e)
+		return
+	end
+	if blocked and len < 10 and A.ShortFallback and Start[A.ShortFallback] then
+		Start[A.ShortFallback](e) -- [stream D] the Basin Breaker slams instead
 		return
 	end
 	-- the fence: EnemyAI keeps the body's centre Radius inside it, so the rush stops there
@@ -888,6 +897,62 @@ function Start.ShardRain(e)
 	setState(e, "ShardWindup", A.Windup)
 end
 
+
+------------------------------------------------------------------------------------------
+-- [stream D] Basin Breaker
+------------------------------------------------------------------------------------------
+
+-- H0 (the brief's normal player max HP) from the director, else the existing baseline.
+local function h0(): number
+	local SM = ctx.StageManager
+	if SM and SM.Baselines then
+		local _, value = SM.Baselines()
+		return value
+	end
+	return (Config.Player :: any).BaseMaxHP or 100
+end
+
+-- An attack's hit: DamageH0 x H0 x the boss's damage multiplier (party scaling).
+local function damageH0(e, coeff: number): number
+	return coeff * h0() * (e.DmgScale or 1)
+end
+
+-- Root slam: a marked circle of Radius around it for Windup s, then one hit.
+function Start.RootSlam(e)
+	local A = e.BossData.Attacks.RootSlam
+	e.SpeedOverride = 0
+	local at = HeightGrid.Ground(e.Pos)
+	Hazards.Strike(at, A.Radius, A.Windup, damageH0(e, A.DamageH0), { Group = GROUP, Style = "burrow", Cause = e.BossData.DisplayName .. " root slam" })
+	setAct(e, "SlamWindup")
+	setState(e, "RootSlam", A.Windup)
+end
+
+-- Straight charge: the lane rush (Start.Rush draws the lane; a wall / cliff ends it).
+function Start.BreakerCharge(e)
+	Start.Rush(e, "BreakerCharge")
+end
+
+-- Sap circles: Count circles one after another, each on a hero's spot, Warn s before it splashes.
+local function placeSap(e)
+	local A = e.BossData.Attacks.SapCircles
+	local list = targets()
+	if #list == 0 then
+		return
+	end
+	e.SapIndex = (e.SapIndex or 0) + 1
+	local rp = list[(e.SapIndex - 1) % #list + 1]
+	Hazards.Strike(floorPos(rp), A.Radius, A.Warn, damageH0(e, A.DamageH0), { Group = GROUP, Style = "acid", Cause = e.BossData.DisplayName .. " sap" })
+end
+
+function Start.SapCircles(e)
+	local A = e.BossData.Attacks.SapCircles
+	e.SpeedOverride = 0
+	e.SapLeft = A.Count
+	e.SapIndex = 0
+	setAct(e, "Spew")
+	setState(e, "SapWindup", A.Windup)
+end
+
 -- Frost armour (the Colossus in phase 2): EnemySpawner.Damage lets e.Shield soak hits;
 -- the body attribute "FrostArmor" shows the ice plates on the client.
 local function growArmor(e)
@@ -1180,6 +1245,11 @@ State.ChargeWindup = function(e, _dt)
 	e.SpeedOverride = 0
 	e.Dir = e.ChargeDir
 	if e.BossTimer <= 0 then
+		if e.ChargeName == "BreakerCharge" then
+			-- [stream D] one hit per hero per charge (ledger); no extra contact hits meanwhile
+			e.ChargeHits = {}
+			e.Harmless = true
+		end
 		setAct(e, e.ChargeName == "Dive" and "Swoop" or "Charge")
 		setState(e, "Charging", e.ChargeTime or e.BossData.Attacks[e.ChargeName].Duration)
 	end
@@ -1190,10 +1260,37 @@ State.Charging = function(e, _dt)
 	local A = e.BossData.Attacks[name]
 	e.Dir = e.ChargeDir
 	e.SpeedOverride = A.Speed
+	if e.ChargeHits and A.DamageH0 then
+		-- [stream D] the Breaker's charge: heroes inside the lane's reach (the drawn lane width)
+		-- on its level are hit once each
+		local reach = ctx.EnemyAI.ContactReach(e)
+		for _, rp in ipairs(living()) do
+			if not e.ChargeHits[rp] then
+				local p = rp.Root.Position
+				local d = ((p - e.Pos) * FLAT).Magnitude
+				if d <= reach and HeightGrid.InBand(HeightGrid.GroundY(p.X, p.Z), e.Pos.Y, Nav.ContactBand) then
+					e.ChargeHits[rp] = true
+					ctx.RunManager.DamagePlayer(rp, damageH0(e, A.DamageH0), e.BossData.DisplayName .. " charge", "contact")
+				end
+			end
+		end
+	end
 	if e.BossTimer > 0 then
 		return
 	end
 	e.SpeedOverride = 0
+	if name == "BreakerCharge" then
+		e.ChargeHits = nil
+		e.Harmless = false
+		if e.ChargeBlocked then
+			Fx.Warn("pop", e.Pos.X, e.Pos.Z, 6, "slam")
+			stunned(e, paced(e, A.Stuck or A.Recover), "Stuck")
+		else
+			setAct(e, nil)
+			recover(e, paced(e, A.Recover))
+		end
+		return
+	end
 	if name == "Charge" and twist(e) == "DoubleCharge" and not e.SecondCharge and #living() > 0 then
 		e.SecondCharge = true
 		Start.Rush(e, "Charge", A.SecondWindup)
@@ -1218,6 +1315,52 @@ State.Charging = function(e, _dt)
 	else
 		stunned(e, paced(e, A.Recover))
 	end
+end
+
+-- Basin Breaker [stream D] ---------------------------------------------------------------
+
+State.RootSlam = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		local A = e.BossData.Attacks.RootSlam
+		Fx.Warn("pop", e.Pos.X, e.Pos.Z, A.Radius, "slam")
+		Fx.Sound("BossPound")
+		setAct(e, "Slam")
+		afterAttack(e, "RootSlam", paced(e, A.Recover))
+	end
+end
+
+State.SapWindup = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		placeSap(e)
+		e.SapLeft = (e.SapLeft or 1) - 1
+		setState(e, "SapSeq", e.BossData.Attacks.SapCircles.Interval)
+	end
+end
+
+-- the next circle every Interval s; once the last one has landed, the recovery
+State.SapSeq = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer > 0 then
+		return
+	end
+	local A = e.BossData.Attacks.SapCircles
+	if (e.SapLeft or 0) > 0 then
+		placeSap(e)
+		e.SapLeft -= 1
+		e.BossTimer = A.Interval
+		return
+	end
+	-- the last circle went down Interval s ago; it lands Warn s after it went down
+	local wait = math.max(0, A.Warn - A.Interval)
+	if wait > 0 and not e.SapWaited then
+		e.SapWaited = true
+		e.BossTimer = wait
+		return
+	end
+	e.SapWaited = nil
+	afterAttack(e, "SapCircles", paced(e, A.Recover))
 end
 
 -- Queen ---------------------------------------------------------------------------------
@@ -1662,6 +1805,10 @@ function BossAI.Begin(e, data: any?)
 	e.BossRings = nil
 	e.FrostArmorOn = false
 	e.ArmorRegrowAt = nil
+	e.ChargeHits = nil
+	e.SapLeft = nil
+	e.SapIndex = nil
+	e.SapWaited = nil
 	e.HitSum = 0
 	e.HitAt = clock
 	e.PulseReady = clock + 4
@@ -1699,6 +1846,8 @@ function BossAI.ClearHazards(e)
 		e.BossFollowup = nil
 		e.BossLines = nil
 		e.BossRings = nil
+		e.ChargeHits = nil
+		e.SapLeft = nil
 		if e.FrostArmorOn then
 			e.FrostArmorOn = false
 			e.Shield = 0

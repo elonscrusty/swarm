@@ -40,6 +40,25 @@
 	the four multipliers grow further (endlessMult; bounded by MaxExtraStages, spawns by
 	SpawnMultCap and Config.Enemies.MaxLive). Standard runs are unchanged.
 
+	[stream D] DIRECTOR RUN (docs/redesign/DECISIONS.md C5; RunConfig.Director): a run on the single
+	map (RunConfig.Map.MapName, Cliffwood) with Director.LegacyStages off is ONE 15-minute run instead
+	of the loop above. No portal, no next-stage choice, no travel. RunStage (SwarmState) goes
+	  Survive -> BeaconAvailable (12:30, the beacon is revealed at the Stone Circle, Beacon.lua)
+	  -> Rally (a living, non-downed hero lit it; RallySeconds) -> Charge (BeaconCharge fills while a
+	  hero stands inside ChargeRadius; pauses outside, never goes back) -> Boss (the Basin Breaker,
+	  spawned exactly once at 100%) -> Victory (its death, once) | Defeat (a full wipe, once).
+	The director clock (RunClock) runs with the simulation (x Director.TimeScale in Studio tests);
+	past RunMinutes only the spawn rate ramps up (overtime, SwarmState Overtime). Party size N
+	(PartyN) starts at the heroes in the run and only grows (late admissions: OnPlayerAdmitted).
+	Victory locks the terminal state at once: ordinary enemies and hazards are cleared without
+	rewards, open upgrade offers are cancelled, the boss XP is banked and RunManager.EndRun(true) follows;
+	a later wipe can no longer turn it into a defeat (RunManager.EndRun checks Terminal()).
+	StagePhase stays "Explore" until the boss ("Boss"), so the encounter / loot systems work as on
+	stage 1; GetStage() is 1 (WinMinStages after a victory, so the win and its bonuses settle as a
+	full expedition did). Other arenas (and LegacyStages = true) keep the stage loop above.
+	SwarmState (director): RunStage, RunClock, BeaconPos, BeaconCharge, RallyLeft, Overtime;
+	BossHP / BossMaxHP / BossName come from EnemySpawner / BossAI as for every boss.
+
 	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, StageBoss, PortalPos,
 	PortalHint, SwarmWarn (0-2, Config.Stages.Pressure), PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, ChoiceLeftHeld (group: the countdown waits for an open upgrade choice), PortalReady ("ready/total"),
 	PortalReveal (counts up each time a stage's portal becomes chargeable: the clients'
@@ -74,6 +93,25 @@ do
 		end
 	end
 end
+
+-- [stream D] the run director's settings (RunConfig.Director) and the beacon (SwarmV2.Run.Beacon)
+local DirCfg: { [string]: any } = {}
+local RunCfgAll: { [string]: any } = {}
+do
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("SwarmV2")
+	local run = folder and folder:FindFirstChild("Run")
+	local mod = run and run:FindFirstChild("RunConfig")
+	if mod and mod:IsA("ModuleScript") then
+		local ok, cfg = pcall(require, mod)
+		if ok and type(cfg) == "table" then
+			RunCfgAll = cfg
+			if type(cfg.Director) == "table" then
+				DirCfg = cfg.Director
+			end
+		end
+	end
+end
+local Beacon: any = nil
 
 local ctx
 local state: Configuration
@@ -116,12 +154,25 @@ local landmarkBag: { string } = {}
 local portalNodes: { Instance } = {}
 local stageBase: { Obstacles: number, Keepout: number, Colliders: { [Instance]: boolean } }? = nil
 local lastClearTime = 0 -- run time when the last stage boss died (Daily Challenge score)
+-- [stream D] director run state (see the header)
+local directorOn = false
+local runStage: string? = nil -- SwarmState RunStage
+local dClock = 0 -- director seconds
+local shownClock = -1
+local partyN = 0 -- 0 = not counted yet (the first director step counts the run's heroes)
+local terminal: string? = nil -- "Victory" | "Defeat" once the run's outcome is locked
+local bossSpawned = false
+local overtimeShown = false
+local timeScale = 1 -- Studio tests only (SetTimeScale / Director.TimeScale)
 
 ------------------------------------------------------------------------------------------
 -- Queries
 ------------------------------------------------------------------------------------------
 
 function StageManager.GetStage(): number
+	if directorOn and terminal == "Victory" then
+		return Config.Stages.WinMinStages -- a won director run settles as a full expedition
+	end
 	return stage
 end
 
@@ -131,6 +182,9 @@ end
 
 -- Stages whose Queen is dead (the current one counts once the surge started).
 function StageManager.StagesCleared(): number
+	if directorOn then
+		return terminal == "Victory" and Config.Stages.WinMinStages or 0
+	end
 	if sub == "Surge" or sub == "Open" or sub == "Travel" then
 		return stage
 	end
@@ -144,12 +198,17 @@ function StageManager.ArenaDisplayName(): string
 end
 
 -- Travel: nothing moves, nobody can be hurt, the timer stops.
+-- [stream D] Also a director run's locked outcome (the victory frame, until RunManager.EndRun):
+-- the boss XP banked then opens no upgrade panel (LevelUpSystem waits while holding).
 function StageManager.IsHolding(): boolean
-	return sub == "Travel"
+	return sub == "Travel" or (directorOn and terminal ~= nil)
 end
 
 -- Regular top-up spawning runs while exploring and during the boss fight (boss rules).
 function StageManager.AllowSpawning(): boolean
+	if directorOn then
+		return false -- the director spawns on its own clock (EnemySpawner stepDirector)
+	end
 	return sub == "Explore" or sub == "Boss"
 end
 
@@ -534,6 +593,393 @@ local function buildStage(n: number)
 end
 
 ------------------------------------------------------------------------------------------
+-- [stream D] Director run: formulas, state, beacon, the Basin Breaker
+------------------------------------------------------------------------------------------
+
+local function dget(section: string): { [string]: any }
+	local t = DirCfg[section]
+	return type(t) == "table" and t or {}
+end
+
+--[[
+	The brief's baselines. B: weapon / enemy HP coefficients (RunConfig.Combat.B from stream B,
+	else Director.DefaultB = the starter weapons' base damage, 10). H0: normal player maximum HP
+	(RunConfig.Survival.H0 from stream E1, else Config.Player.BaseMaxHP = 120).
+]]
+function StageManager.Baselines(): (number, number)
+	local combat = RunCfgAll.Combat
+	local survival = RunCfgAll.Survival
+	local B = (type(combat) == "table" and tonumber(combat.B)) or tonumber(DirCfg.DefaultB) or 10
+	local H0 = (type(survival) == "table" and tonumber(survival.H0)) or tonumber((Config.Player :: any).BaseMaxHP) or 100
+	return B, H0
+end
+
+-- Pure formulas of the brief (n = party size N, t = director minutes). Tests read these.
+local Formula = {}
+StageManager.Formula = Formula
+
+function Formula.PartyHP(n: number): number
+	return 1 + (dget("Party").HPPerExtra or 0.30) * (math.max(1, n) - 1)
+end
+function Formula.PartyDamage(n: number): number
+	return 1 + (dget("Party").DamagePerExtra or 0.10) * (math.max(1, n) - 1)
+end
+function Formula.PartySpawn(n: number): number
+	return 1 + (dget("Party").SpawnPerExtra or 0.45) * (math.max(1, n) - 1)
+end
+function Formula.TimeHP(t: number): number
+	return 1 + (dget("Time").HPPerMinute or 0.07) * math.max(0, t)
+end
+function Formula.TimeDamage(t: number): number
+	return 1 + (dget("Time").DamagePerMinute or 0.025) * math.max(0, t)
+end
+-- ordinary enemy HP: coeff x B x party x time
+function Formula.EnemyHP(coeff: number, n: number, t: number): number
+	local B = StageManager.Baselines()
+	return coeff * B * Formula.PartyHP(n) * Formula.TimeHP(t)
+end
+-- ordinary contact / attack damage: coeff x H0 x party x time
+function Formula.EnemyDamage(coeff: number, n: number, t: number): number
+	local _, H0 = StageManager.Baselines()
+	return coeff * H0 * Formula.PartyDamage(n) * Formula.TimeDamage(t)
+end
+-- past RunMinutes: min(OvertimeCap, 1 + OvertimePerMinute (t - RunMinutes)), else 1
+function Formula.Overtime(t: number): number
+	local S = dget("Spawn")
+	local over = t - (DirCfg.RunMinutes or 15)
+	if over <= 0 then
+		return 1
+	end
+	return math.min(S.OvertimeCap or 1.5, 1 + (S.OvertimePerMinute or 0.10) * over)
+end
+-- enemies per second: (Base + PerMinute t) x party spawn x overtime
+function Formula.SpawnRate(t: number, n: number): number
+	local S = dget("Spawn")
+	return ((S.Base or 0.60) + (S.PerMinute or 0.14) * math.max(0, t)) * Formula.PartySpawn(n) * Formula.Overtime(t)
+end
+function Formula.AliveCap(n: number): number
+	local caps = dget("Spawn").AliveCaps or { 55, 95, 145, 200 }
+	return math.min(caps[math.clamp(math.floor(n), 1, #caps)], Config.Enemies.MaxLive)
+end
+-- the Basin Breaker: HPB x B x [1 + HPPerExtra (N-1)] x [1 + HPPerMinute t]
+function Formula.BossHP(n: number, t: number): number
+	local Bs = dget("Boss")
+	local B = StageManager.Baselines()
+	return (Bs.HPB or 200) * B * (1 + (Bs.HPPerExtra or 0.80) * (math.max(1, n) - 1)) * (1 + (Bs.HPPerMinute or 0.07) * math.max(0, t))
+end
+
+function StageManager.IsDirector(): boolean
+	return directorOn
+end
+
+-- SwarmState RunStage (nil outside a director run).
+function StageManager.RunStage(): string?
+	return runStage
+end
+
+-- Director seconds / minutes (RunClock).
+function StageManager.DirectorClock(): number
+	return dClock
+end
+function StageManager.DirectorMinutes(): number
+	return dClock / 60
+end
+
+-- Party size N for spawns (at least 1; only ever grows during a run).
+function StageManager.PartyN(): number
+	if partyN <= 0 and directorOn and ctx then
+		return math.clamp(#ctx.RunManager.GetRunPlayers(), 1, dget("Party").Max or 4)
+	end
+	return math.max(1, partyN)
+end
+
+-- The locked outcome of this director run ("Victory" | "Defeat") or nil.
+function StageManager.Terminal(): string?
+	return directorOn and terminal or nil
+end
+
+local function setRunStage(name: string?)
+	runStage = name
+	state:SetAttribute("RunStage", name)
+end
+
+local function noteParty(count: number)
+	local n = math.clamp(math.floor(count), 1, dget("Party").Max or 4)
+	if n > partyN then
+		partyN = n
+		state:SetAttribute("PartyN", n)
+	end
+end
+
+-- RunManager.AddLatePlayer: an admitted late arrival raises N for future spawns (never lowers it;
+-- living enemies and an existing boss keep their stats).
+function StageManager.OnPlayerAdmitted(count: number)
+	if directorOn and not terminal then
+		noteParty(count)
+	end
+end
+
+local function timeScaleNow(): number
+	if game:GetService("RunService"):IsStudio() then
+		return math.max(0, timeScale)
+	end
+	return 1
+end
+
+-- Studio tests: the director clock runs `scale` times faster (live servers ignore it).
+function StageManager.SetTimeScale(scale: number)
+	if game:GetService("RunService"):IsStudio() and type(scale) == "number" and scale == scale then
+		timeScale = math.max(0, scale)
+	end
+end
+
+-- Studio tests / DEV: move the director clock to `seconds` (forward only).
+function StageManager.SetDirectorClock(seconds: number): boolean
+	if not directorOn or terminal or not game:GetService("RunService"):IsStudio() then
+		return false
+	end
+	if type(seconds) == "number" and seconds == seconds and seconds > dClock then
+		dClock = seconds
+	end
+	return true
+end
+
+-- The beacon's landmark (Director.Beacon.Landmark) on the ground; the first landmark or a free
+-- spot when the map has no such landmark.
+local function beaconSpotFor(arena): Vector3
+	local want = dget("Beacon").Landmark or MapCfg.BossLandmark
+	local pick = nil
+	for _, lm in ipairs(arena.Landmarks or {}) do
+		if lm.Name == want then
+			pick = lm
+			break
+		end
+	end
+	pick = pick or (arena.Landmarks and arena.Landmarks[1])
+	local p = pick and pick.Pos or MapBuilder.FindPortalSpot(arena, rng, nil)
+	local x, z = p.X, p.Z
+	if not HeightGrid.IsWalkable(x, z) then
+		local nx, nz = HeightGrid.NearestWalkable(x, z, 8)
+		if nx and nz then
+			x, z = nx, nz
+		end
+	end
+	return Vector3.new(x, HeightGrid.GroundY(x, z), z)
+end
+
+-- Builds the single map for a director run. Returns the arena.
+local function buildDirector()
+	stage = 1
+	arenaName = plan[1]
+	local arena = MapBuilder.BuildArena(arenaName, 0)
+	HeightGrid.Build(arena)
+	mapArena = arena
+	singleMode = false
+	portal = nil
+	table.clear(portalNodes)
+	stageBase = nil
+	local spot = beaconSpotFor(arena)
+	Beacon.Place(arena, spot)
+	-- loot and encounters keep clear of the (hidden) beacon like they kept clear of the portal
+	ctx.LootSystem.BuildStage(arena, 1, spot)
+	EncounterDirector.StageStart(arena, 1, spot, arenaName)
+	ctx.EnemyAI.SetArena(arena)
+	BiomeHazards.SetArena(arena)
+	stageTime = 0
+	revealed = false
+	charge = 0
+	dClock = 0
+	shownClock = -1
+	partyN = 0
+	terminal = nil
+	bossSpawned = false
+	overtimeShown = false
+	timeScale = tonumber(DirCfg.TimeScale) or 1
+	stageBoss = dget("Boss").Id or "BasinBreaker"
+	state:SetAttribute("Stage", 1)
+	state:SetAttribute("Arena", arenaName)
+	state:SetAttribute("StageArena", StageManager.ArenaDisplayName())
+	state:SetAttribute("StageBoss", bossName(forcedBoss or stageBoss))
+	state:SetAttribute("PortalPos", nil)
+	state:SetAttribute("PortalHint", false)
+	state:SetAttribute("SwarmWarn", 0)
+	state:SetAttribute("PortalCharge", 0)
+	state:SetAttribute("PortalLockLeft", 0)
+	state:SetAttribute("SurgeLeft", 0)
+	state:SetAttribute("ChoiceLeft", 0)
+	state:SetAttribute("ChoiceLeftHeld", false)
+	state:SetAttribute("PortalReady", "")
+	state:SetAttribute("RunClock", 0)
+	state:SetAttribute("Overtime", false)
+	state:SetAttribute("PartyN", nil)
+	state:SetAttribute("BeaconPos", nil)
+	state:SetAttribute("BeaconCharge", 0)
+	state:SetAttribute("RallyLeft", 0)
+	setRunStage("Survive")
+	ctx.EnemySpawner.SetDirector(true)
+	return arena
+end
+
+local function revealBeacon(): boolean
+	if not Beacon.Reveal() then
+		return false
+	end
+	setRunStage("BeaconAvailable")
+	local p = Beacon.Position()
+	if p then
+		Fx.Ring(p, 30, Color3.fromRGB(255, 220, 130))
+	end
+	ctx.RunManager.Broadcast("THE BEACON HAS APPEARED AT THE STONE CIRCLE", Color3.fromRGB(255, 220, 130), true, { Id = "beacon.reveal", Lane = "Headline", Class = "Info" })
+	return true
+end
+
+-- Beacon.TryActivate succeeded: the rally starts.
+function StageManager.OnBeaconActivated(rp)
+	if not directorOn or terminal then
+		return
+	end
+	setRunStage("Rally")
+	local who = rp and rp.Player and rp.Player.DisplayName or "A hero"
+	ctx.RunManager.Broadcast(string.format("%s LIT THE BEACON! RALLY: THE CHARGE STARTS IN %d s", string.upper(who), math.ceil(dget("Beacon").RallySeconds or 30)),
+		Color3.fromRGB(255, 190, 90), true, { Id = "beacon.rally", Lane = "Headline", Class = "Critical" })
+end
+
+-- A walkable spot SpawnDistance from the beacon, on the side away from the heroes.
+local function breakerSpot(): Vector3
+	local p = Beacon.Position() or Config.ArenaOrigin
+	local d = dget("Boss").SpawnDistance or 22
+	local cx, cz, k = 0, 0, 0
+	for _, rp in ipairs(participants()) do
+		if rp.Alive and rp.Root then
+			cx += rp.Root.Position.X
+			cz += rp.Root.Position.Z
+			k += 1
+		end
+	end
+	local base = rng:NextNumber(0, math.pi * 2)
+	if k > 0 then
+		local ax, az = p.X - cx / k, p.Z - cz / k
+		if ax * ax + az * az > 1 then
+			base = math.atan2(az, ax)
+		end
+	end
+	for i = 0, 11 do
+		local a = base + (i % 2 == 0 and 1 or -1) * math.ceil(i / 2) * (math.pi / 6)
+		local x, z = ctx.EnemySpawner.ClampToArena(p.X + math.cos(a) * d, p.Z + math.sin(a) * d, 8)
+		if HeightGrid.IsWalkable(x, z) and HeightGrid.CanStep(p.X, p.Z, x, z) and not ctx.EnemyAI.IsBlocked(x, z, 4) then
+			return Vector3.new(x, HeightGrid.GroundY(x, z), z)
+		end
+	end
+	return p
+end
+
+-- The Basin Breaker, exactly once (HP / damage from N and the minute at its spawn).
+local function spawnBreaker(): boolean
+	if bossSpawned or terminal then
+		return false
+	end
+	local n = StageManager.PartyN()
+	local t = dClock / 60
+	local _, H0 = StageManager.Baselines()
+	local hpDiff = ctx.RunModifiers and ctx.RunModifiers.DifficultyMultiplier and ctx.RunModifiers.DifficultyMultiplier("HP") or 1
+	local dmgDiff = ctx.RunModifiers and ctx.RunModifiers.DifficultyMultiplier and ctx.RunModifiers.DifficultyMultiplier("Damage") or 1
+	local dmg = Formula.PartyDamage(n) * dmgDiff
+	local id = forcedBoss or stageBoss
+	local boss = ctx.EnemySpawner.SpawnBoss(breakerSpot(), id, {
+		BossHP = Formula.BossHP(n, t) * hpDiff,
+		BossContact = (dget("Boss").Contact or 0.10) * H0 * dmg,
+		BossDmgScale = dmg,
+	})
+	if not boss then
+		return false -- no free enemy slot this frame: tried again next frame
+	end
+	bossSpawned = true
+	boss.SpawnMinute = t
+	boss.SpawnN = n
+	setSub("Boss")
+	setRunStage("Boss")
+	Fx.Ring(boss.Pos, 40, Color3.fromRGB(255, 60, 70))
+	ctx.RunManager.Broadcast(BossData.Get(id).Title, Color3.fromRGB(255, 60, 60), true, { Id = "boss.arrive", Lane = "Headline", Class = "Critical" })
+	return true
+end
+
+-- How many times the Basin Breaker was spawned this run (tests: exactly once).
+function StageManager.BossSpawned(): boolean
+	return bossSpawned
+end
+
+-- The boss died: the run is won, once. Everything run-only stops here.
+local function directorVictory(bossId: string)
+	if terminal then
+		return
+	end
+	terminal = "Victory"
+	setRunStage("Victory")
+	lastClearTime = ctx.RunManager.GetRunTime()
+	for _, rp in ipairs(participants()) do
+		if rp.Alive then
+			ctx.GoldSystem.AddRunGold(rp, Config.Gold.Boss * (rp.Stats and rp.Stats.GoldMult or 1))
+		end
+		if not rp.Returned then
+			Events.Fire("BossDefeated", rp.Player, { Boss = bossId, Stage = stage })
+		end
+	end
+	-- the terminal lock: unclaimed offers cancelled (no new panels after this), ordinary
+	-- enemies and every hazard gone without rewards, the boss's XP banked
+	for _, rp in ipairs(participants()) do
+		local LU = ctx.LevelUpSystem
+		if LU.CancelAll then
+			LU.CancelAll(rp)
+		else
+			LU.Cancel(rp)
+		end
+	end
+	ctx.EnemySpawner.DespawnAll()
+	ctx.WeaponSystem.ClearHostile()
+	ctx.EnemySpawner.SetDirector(false)
+	pcall(ctx.XPSystem.CollectAll, true)
+	Fx.Sound("BossRoar")
+	ctx.RunManager.EndRun(true)
+end
+
+local function stepDirector(dt: number)
+	if partyN <= 0 then
+		noteParty(#participants())
+	end
+	if not ctx.RunManager.IsSimulating() then
+		return
+	end
+	BiomeHazards.Step(dt)
+	EncounterDirector.Step(dt)
+	if terminal then
+		return
+	end
+	local ddt = dt * timeScaleNow()
+	dClock += ddt
+	local whole = math.floor(dClock)
+	if whole ~= shownClock then
+		shownClock = whole
+		state:SetAttribute("RunClock", whole)
+	end
+	if not overtimeShown and dClock >= (DirCfg.RunMinutes or 15) * 60 then
+		overtimeShown = true
+		state:SetAttribute("Overtime", true)
+		ctx.RunManager.Broadcast("OVERTIME! THE SWARM KEEPS GROWING", Color3.fromRGB(255, 120, 90), true, { Id = "run.overtime", Lane = "Headline", Class = "Critical" })
+	end
+	if runStage == "Survive" and dClock >= (dget("Beacon").RevealAt or 750) then
+		revealBeacon()
+	end
+	local ev = Beacon.Step(ddt, participants())
+	if ev == "ChargeStarted" then
+		setRunStage("Charge")
+		ctx.RunManager.Broadcast("CHARGE THE BEACON! STAY INSIDE ITS RING", Color3.fromRGB(255, 220, 130), true, { Id = "beacon.charge", Lane = "Headline", Class = "Critical" })
+	end
+	if not bossSpawned and runStage == "Charge" and Beacon.Phase() == "Done" then
+		spawnBreaker()
+	end
+end
+
+------------------------------------------------------------------------------------------
 -- Run lifecycle (called by RunManager)
 ------------------------------------------------------------------------------------------
 
@@ -548,6 +994,7 @@ function StageManager.BeginRun(selectedArena: string, fixed: { Arenas: { string 
 	plan = { known(selectedArena) and selectedArena or "Forest" }
 	fixedBosses = nil
 	lastClearTime = 0
+	terminal = nil
 	if fixed then
 		plan = {}
 		for _, name in ipairs(fixed.Arenas) do
@@ -575,13 +1022,41 @@ function StageManager.BeginRun(selectedArena: string, fixed: { Arenas: { string 
 	table.clear(landmarkBag)
 	table.clear(portalNodes)
 	stageBase = nil
+	-- [stream D] the single map with the director: one run, no stage loop
+	directorOn = DirCfg.Enabled ~= false and not DirCfg.LegacyStages and Beacon ~= nil and fixed == nil
+		and #plan == 1 and plan[1] == MapCfg.MapName and not StageManager.IsEndless()
+	if directorOn then
+		local arena = buildDirector()
+		setSub("Explore")
+		return arena
+	end
+	setRunStage(nil)
 	local arena = buildStage(1)
 	setSub("Explore")
 	return arena
 end
 
--- The run is over (defeat, everyone returned, server cleanup).
-function StageManager.EndRun()
+-- The run is over (defeat, everyone returned, server cleanup). outcome ("Victory" | "Defeat",
+-- RunManager.EndRun) locks a director run's terminal state and stays in RunStage through the
+-- results; the call without one (back in the lobby) clears it.
+function StageManager.EndRun(outcome: string?)
+	if directorOn then
+		if outcome and not terminal then
+			terminal = outcome
+		end
+		ctx.EnemySpawner.SetDirector(false)
+		if Beacon then
+			Beacon.Clear()
+		end
+		directorOn = false
+		setRunStage(terminal)
+	elseif outcome == nil and runStage ~= nil then
+		setRunStage(nil)
+	end
+	bossSpawned = false
+	partyN = 0
+	state:SetAttribute("Overtime", false)
+	state:SetAttribute("PartyN", nil)
 	EncounterDirector.StageEnd("RunEnd") -- feature encounters clean up (defeat, abandon, last one out)
 	portal = nil
 	singleMode = false
@@ -648,6 +1123,10 @@ end
 -- Called by RunManager when the Queen dies (EnemySpawner.Kill → RunManager.OnBossKilled).
 function StageManager.OnBossKilled(_pos: Vector3)
 	if sub ~= "Boss" then
+		return
+	end
+	if directorOn then
+		directorVictory(forcedBoss or stageBoss) -- [stream D] the run is won
 		return
 	end
 	lastClearTime = ctx.RunManager.GetRunTime()
@@ -1097,6 +1576,10 @@ function StageManager.Step(dt: number)
 	if sub == "None" or not ctx.RunManager.IsRunning() then
 		return
 	end
+	if directorOn then
+		stepDirector(dt)
+		return
+	end
 	if sub == "Travel" then
 		stepTravel(dt)
 		return
@@ -1124,6 +1607,16 @@ end
 
 -- "Spawn portal boss": charges the portal at once (also while it is dormant).
 function StageManager.DevActivate(): boolean
+	if directorOn then
+		-- the Basin Breaker now (the beacon is revealed if it was hidden; dev runs are tainted)
+		if terminal or bossSpawned then
+			return false
+		end
+		if Beacon.Phase() == "Hidden" then
+			revealBeacon()
+		end
+		return spawnBreaker()
+	end
 	if sub ~= "Explore" then
 		return false
 	end
@@ -1150,6 +1643,21 @@ end
 
 -- "Teleport to portal": next to the portal's rune circle (the charge then starts).
 function StageManager.DevTeleport(rp): boolean
+	if directorOn then
+		-- next to the beacon (revealed first if it was hidden)
+		if terminal or not rp.Alive or not rp.Root then
+			return false
+		end
+		if Beacon.Phase() == "Hidden" then
+			revealBeacon()
+		end
+		local b = Beacon.Position()
+		if not b then
+			return false
+		end
+		ctx.RunManager.TeleportPlayer(rp, b + Vector3.new(6, 0, 6))
+		return true
+	end
 	local p = portal
 	local root: BasePart? = rp.Root
 	if not p or not root or not rp.Alive or sub == "Travel" then
@@ -1164,6 +1672,31 @@ end
 -- "Next stage": opens the portal now (leftovers burn up, a live boss is removed) and sends every
 -- living player on to the next stage.
 function StageManager.DevNextStage(): boolean
+	if directorOn then
+		-- one director step on: reveal -> light (rally) -> charge -> boss -> victory (dev)
+		if terminal then
+			return false
+		end
+		if runStage == "Survive" then
+			dClock = math.max(dClock, dget("Beacon").RevealAt or 750)
+			return revealBeacon()
+		elseif runStage == "BeaconAvailable" then
+			return Beacon.DevActivate()
+		elseif runStage == "Rally" then
+			Beacon.ForceCharge(0)
+			return true
+		elseif runStage == "Charge" then
+			Beacon.ForceCharge(1)
+			return true
+		elseif runStage == "Boss" then
+			local boss = ctx.EnemySpawner.Boss
+			if boss and boss.Alive then
+				ctx.EnemySpawner.Kill(boss, nil)
+				return true
+			end
+		end
+		return false
+	end
 	if sub ~= "Explore" and sub ~= "Boss" and sub ~= "Surge" and sub ~= "Open" then
 		return false
 	end
@@ -1200,6 +1733,20 @@ function StageManager.Init(c)
 	state = Remotes.State()
 	state:SetAttribute("Stage", 0)
 	state:SetAttribute("StagePhase", "None")
+	-- [stream D] the beacon (SwarmV2.Run.Beacon); without it every run keeps the stage loop
+	local v2 = game:GetService("ServerScriptService"):FindFirstChild("SwarmV2")
+	local run = v2 and v2:FindFirstChild("Run")
+	local mod = run and run:FindFirstChild("Beacon")
+	if mod and mod:IsA("ModuleScript") then
+		local ok, result = pcall(require, mod)
+		if ok and type(result) == "table" then
+			Beacon = result
+			Beacon.Init(c)
+			c.Beacon = Beacon -- the interact / UI layer: ctx.Beacon.TryActivate(rp)
+		else
+			warn("[StageManager] Beacon failed to load: " .. tostring(result))
+		end
+	end
 end
 
 function StageManager.Start()

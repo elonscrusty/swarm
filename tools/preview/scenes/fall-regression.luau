@@ -73,6 +73,11 @@ local function expedition(first: string)
 	settle()
 	checkStanding("stage 1 " .. arenaName())
 	seen[arenaName()] = true
+	if SM.IsDirector and SM.IsDirector() then
+		-- the single map is one director run now (stream D, DECISIONS C5): no stage travel there
+		preview.log("director run on", arenaName(), ": no travel to check")
+		return
+	end
 	for stageN = 2, 5 do
 		settle()
 		assert(SM.DevNextStage(), "dev next stage must start the travel")
@@ -110,7 +115,7 @@ for _, p in ipairs(players) do
 		data.Stats.BestStage = math.max(data.Stats.BestStage or 0, 10)
 	end
 end
--- the single map first (Cliffwood: every stage on one map), then the old biome tour, then any
+-- the single map first (Cliffwood: one director run, no travel), then the old biome tour, then any
 -- arena the tour skipped; the rescue checks below run on the last (flat) arena
 local function missingArena(): string?
 	local names = {}

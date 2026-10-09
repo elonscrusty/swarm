@@ -561,6 +561,75 @@ BossData.Bosses = {
 	},
 }
 
+--[[
+	[stream D] Basin Breaker: the single map's final boss (RunConfig.Director.Boss), an old
+	stump-golem of the basin. Spawned once by the beacon charge; its death is the victory.
+	HP and damage come from the director (B / H0, party size and minute at its spawn):
+	attack damage is DamageH0 x H0 x the party damage multiplier. Three readable attacks, each
+	hitting exactly what its telegraph shows, timed like every boss (BossTimer on the server
+	clock; the client fills the telegraph from its server start time):
+	  RootSlam       1.20 s marked circle of Radius around it, then roots burst out (one hit)
+	  BreakerCharge  1.50 s lane wind-up, a straight 45-stud charge (Speed x Duration; the lane
+	                 stops at walls and cliffs, where it stops too); one hit per hero per charge
+	  SapCircles     Count circles, one after another (Interval apart), each Warn s on the
+	                 nearest hero's spot before it splashes
+	Below 50% HP its recoveries and chases are 15% shorter (Speed = 1 / 0.85); the telegraphs
+	keep their full length.
+]]
+BossData.Bosses.BasinBreaker = {
+	Id = "BasinBreaker",
+	EnemyType = "BasinBoss",
+	DisplayName = "Basin Breaker",
+	Title = "THE BASIN BREAKER RISES!",
+	HPMult = 1, -- (HP is the director's formula)
+	ContactDamage = 12, -- (the director passes 0.10 x H0 x party damage)
+	Entrance = { Seconds = 2.5, Grace = 1.5, DustRadius = 20, From = "Ground" },
+	Collapse = 1.8,
+	Chase = 2.4,
+	Phases = {
+		{
+			Name = "Breaker",
+			Above = 0.5,
+			Speed = 1,
+			Cycle = { "RootSlam", "BreakerCharge", "SapCircles", "BreakerCharge", "RootSlam", "SapCircles" },
+		},
+		{
+			Name = "Uprooted",
+			Above = 0,
+			Speed = 1 / 0.85, -- recoveries and chases x 0.85
+			Cycle = { "RootSlam", "BreakerCharge", "SapCircles", "BreakerCharge", "RootSlam", "SapCircles" },
+			Roar = 1.2,
+			Message = "THE BASIN BREAKER IS UPROOTED!",
+		},
+	},
+	Attacks = {
+		RootSlam = {
+			Windup = 1.2,
+			Radius = 12,
+			DamageH0 = 0.15,
+			Recover = 1.1,
+		},
+		BreakerCharge = {
+			Windup = 1.5,
+			Speed = 50,
+			Duration = 0.9, -- lane = 45 studs
+			DamageH0 = 0.20,
+			Stuck = 1.4, -- recovery when the lane ended at a wall / cliff (lane drawn to it)
+			Recover = 1.0,
+			ShortFallback = "RootSlam", -- a wall right in front: slam instead of a 5-stud charge
+		},
+		SapCircles = {
+			Windup = 0.4, -- it rears up before the first circle
+			Count = 3,
+			Interval = 1.0, -- seconds between the circles (each shows when the last one lands)
+			Warn = 1.0,
+			Radius = 5,
+			DamageH0 = 0.12,
+			Recover = 0.9,
+		},
+	},
+}
+
 -- Bosses that rotate on later stages (stage 1 is Config.Boss.First).
 BossData.Rotation = { "ScorpionQueen", "MothMatriarch", "RhinoWarlord", "HiveMother", "BriarSentinel", "FrostboundColossus" }
 

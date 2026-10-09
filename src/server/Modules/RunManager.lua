@@ -1322,6 +1322,10 @@ function RunManager.AddLatePlayer(player: Player): boolean
 	end
 	setupRunPlayer(player, #runPlayers + 1, #runPlayers + 1, arena, pos, team)
 	state:SetAttribute("Participants", #runPlayers)
+	-- [stream D] a late admission raises the director's party size N for future spawns only
+	if ctx.StageManager.OnPlayerAdmitted then
+		ctx.StageManager.OnPlayerAdmitted(#runPlayers)
+	end
 	return true
 end
 
@@ -1592,8 +1596,15 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 end
 
 -- Everyone fell (won = false). A portal win never comes through here.
+-- [stream D] A director run (StageManager.IsDirector) also ends here as a win (won = true) when
+-- its Basin Breaker dies; the outcome is locked once (StageManager.Terminal): a wipe after the
+-- victory cannot turn it into a defeat, and the phase check keeps every end to one.
 function RunManager.EndRun(won: boolean)
 	if phase ~= "Running" then
+		return
+	end
+	local terminal = ctx.StageManager.Terminal and ctx.StageManager.Terminal()
+	if terminal == "Victory" and not won then
 		return
 	end
 	frozen = false
@@ -1604,12 +1615,17 @@ function RunManager.EndRun(won: boolean)
 	resultsTimer = Config.Run.ResultsSeconds
 
 	for _, rp in ipairs(runPlayers) do
-		ctx.LevelUpSystem.Cancel(rp)
+		-- unclaimed run-only offers end here (stream B's CancelAll when it exists)
+		if ctx.LevelUpSystem.CancelAll then
+			ctx.LevelUpSystem.CancelAll(rp)
+		else
+			ctx.LevelUpSystem.Cancel(rp)
+		end
 		finishPlayer(rp, won, false)
 		setAwaiting(rp, false)
 		RunManager.ApplyMovement(rp)
 	end
-	ctx.StageManager.EndRun() -- the results are out: the stage loop stops here
+	ctx.StageManager.EndRun(won and "Victory" or "Defeat") -- the results are out: the stage loop stops here
 	RunManager.Broadcast(won and "VICTORY!" or "THE SWARM WINS...", won and Color3.fromRGB(255, 220, 80) or Color3.fromRGB(255, 80, 80), true, { Id = "run.end", Class = "Info" })
 end
 

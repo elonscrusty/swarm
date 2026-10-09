@@ -358,6 +358,52 @@ local LOOKS: { [string]: { [string]: Color3 } } = {
 		Dark = Palette.chitin_900,
 		Glow = Palette.amber_300,
 	},
+	-- [stream D] the Cliffwood roster and the Basin Breaker (part-built; no meshes yet).
+	-- Forest creatures in bark, ivory and amber that read on the basin's grass.
+	FloatingEye = {
+		Base = Palette.ivory_100,
+		Lid = Palette.wood_600,
+		Iris = Palette.amber_500,
+		Pupil = Palette.chitin_900,
+		Vein = Palette.crimson_400,
+		Leaf = Palette.moss_400,
+		Dark = Palette.wood_800,
+		Eye = Palette.amber_500,
+	},
+	RootRunner = {
+		Base = Palette.wood_500,
+		Light = Palette.wood_400,
+		Dark = Palette.wood_800,
+		Leaf = Palette.moss_400,
+		Eye = Palette.amber_500,
+	},
+	StumpBrute = {
+		Base = Palette.wood_600,
+		Bark = Palette.wood_800,
+		Ring = Palette.wood_400,
+		Light = Palette.ivory_300,
+		Moss = Palette.moss_500,
+		Dark = Palette.chitin_900,
+		Eye = Palette.amber_500,
+	},
+	SapLobber = {
+		Base = Palette.wood_700,
+		Sap = Palette.amber_500,
+		Glow = Palette.amber_300,
+		Dark = Palette.chitin_900,
+		Leaf = Palette.moss_500,
+		Eye = Palette.amber_500,
+	},
+	BasinBoss = {
+		Base = Palette.wood_700,
+		Bark = Palette.wood_900,
+		Light = Palette.wood_500,
+		Moss = Palette.moss_500,
+		Stone = Palette.stone_500,
+		Sap = Palette.amber_300,
+		Eye = Palette.amber_500,
+		Gold = Palette.gold_500,
+	},
 }
 
 -- Elites get a slight gold tint: the main shell most, glowing bits not at all.
@@ -924,6 +970,140 @@ ENEMIES.BroodEgg = function(b, c)
 	ball(b, 0.45, c.Accent, V(0.15, 2.1, 0.7))
 	egg(b, V(1.1, 1.4, 1.1), c.Glow, CFrame.new(0, 1.3, 0), { Material = NEON, Transparency = 0.55 })
 	return "Static"
+end
+
+-- [stream D] Floating Eye: a hovering ivory eyeball with an amber iris, a bark lid, red veins,
+-- two leaf wings and a dangling root.
+ENEMIES.FloatingEye = function(b, c)
+	ball(b, 2.3, c.Base, V(0, 1.3, 0))
+	egg(b, V(1.3, 1.3, 0.34), c.Iris, CFrame.new(0, 1.35, -1.02), { Material = NEON })
+	egg(b, V(0.62, 0.62, 0.2), c.Pupil, CFrame.new(0, 1.35, -1.2))
+	egg(b, V(2.5, 0.7, 2.0), c.Lid, CFrame.new(0, 2.25, -0.1))
+	for k = 0, 3 do
+		local a = math.rad(-60 + k * 40)
+		local from = V(math.sin(a) * 1.05, 1.3 + math.cos(a) * 0.35, 0.3)
+		bar(b, from, from + V(math.sin(a) * 0.1, -0.2, -0.75), 0.08, c.Vein)
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		local root = V(side * 0.95, 1.7, 0.35)
+		local wing = CFrame.new(root) * CFrame.Angles(0, 0, side * math.rad(20))
+		local opts = { Anim = side < 0 and "FlutterL" or "FlutterR", Joint = root }
+		egg(b, V(1.7, 0.06, 0.9), c.Leaf, wing * CFrame.new(side * 0.85, 0, 0.2), opts)
+	end
+	bar(b, V(0, 0.25, 0.35), V(0.15, -0.9, 0.7), 0.24, c.Dark, { Anim = "Tail", Joint = V(0, 0.25, 0.35) })
+	return "Float"
+end
+
+-- [stream D] Root Runner: a low knotted root bulb on six root legs, a leaf sprout on its back.
+ENEMIES.RootRunner = function(b, c)
+	egg(b, V(1.8, 1.0, 2.4), c.Base, CFrame.new(0, 0.85, 0.15))
+	egg(b, V(1.2, 0.85, 1.0), c.Light, CFrame.new(0, 1.0, -1.0))
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.3, c.Eye, V(side * 0.3, 1.15, -1.46), { Material = NEON })
+		for k = 1, 3 do
+			local hip = V(side * 0.6, 0.75, -0.7 + k * 0.5)
+			local anim = ((k + (side > 0 and 1 or 0)) % 2 == 0) and "SwingA" or "SwingB"
+			bar(b, hip, V(side * 1.35, 0.05, -0.9 + k * 0.55), 0.22, c.Dark, { Anim = anim, Joint = hip })
+		end
+	end
+	local sprout = V(0, 1.35, 0.4)
+	egg(b, V(0.22, 0.1, 1.3), c.Leaf, CFrame.new(0, 1.7, 0.6) * CFrame.Angles(0.6, 0, 0), { Anim = "Wiggle", Joint = sprout })
+	egg(b, V(0.9, 0.1, 0.22), c.Leaf, CFrame.new(0, 1.65, 0.5) * CFrame.Angles(0, 0, 0.5), { Anim = "Wiggle", Joint = sprout })
+	return "Scuttle"
+end
+
+-- [stream D] Stump Brute: a walking tree stump with a cut top (growth rings), a mossy side, two
+-- amber eyes, branch arms and root feet.
+ENEMIES.StumpBrute = function(b, c)
+	for _, side in ipairs({ -1, 1 }) do
+		local hip = V(side * 1.0, 1.2, 0)
+		local anim = side < 0 and "SwingA" or "SwingB"
+		bar(b, hip, V(side * 1.4, 0.1, -0.3), 0.8, c.Bark, { Anim = anim, Joint = hip })
+		bar(b, hip, V(side * 1.5, 0.1, 0.6), 0.7, c.Bark, { Anim = anim, Joint = hip })
+	end
+	b.add("Cylinder", V(3.2, 3.6, 3.6), c.Base, CFrame.new(0, 2.6, 0) * CYL_UP)
+	b.add("Cylinder", V(0.18, 3.4, 3.4), c.Ring, CFrame.new(0, 4.26, 0) * CYL_UP)
+	b.add("Cylinder", V(0.2, 2.1, 2.1), c.Light, CFrame.new(0, 4.28, 0) * CYL_UP)
+	b.add("Cylinder", V(0.22, 0.8, 0.8), c.Ring, CFrame.new(0, 4.3, 0) * CYL_UP)
+	for k = 0, 5 do
+		local a = k * TAU_ML / 6 + 0.3
+		b.add("Block", V(0.5, 3.0, 0.4), c.Bark, CFrame.new(math.cos(a) * 1.75, 2.5, math.sin(a) * 1.75) * CFrame.Angles(0, -a, 0))
+	end
+	egg(b, V(2.0, 1.2, 1.2), c.Moss, CFrame.new(1.1, 3.6, 1.0))
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.5, c.Eye, V(side * 0.6, 3.3, -1.78), { Material = NEON })
+		local shoulder = V(side * 1.7, 3.4, -0.2)
+		local reach = { Anim = side < 0 and "SwingB" or "SwingA", Joint = shoulder }
+		bar(b, shoulder, V(side * 2.5, 4.6, -0.6), 0.55, c.Bark, reach)
+		bar(b, V(side * 2.5, 4.6, -0.6), V(side * 2.7, 5.3, -1.1), 0.3, c.Bark, reach)
+	end
+	b.add("Block", V(1.2, 0.25, 0.3), c.Dark, CFrame.new(0, 2.7, -1.82))
+	return "Stomp"
+end
+
+-- [stream D] Sap Lobber: a bark beetle carrying a glowing amber sap gourd on its back.
+ENEMIES.SapLobber = function(b, c)
+	egg(b, V(2.4, 1.1, 2.8), c.Base, CFrame.new(0, 0.85, 0.2))
+	egg(b, V(1.9, 1.8, 1.9), c.Sap, CFrame.new(0, 1.85, 0.45), { Anim = "Throb", Transparency = 0.1 })
+	ball(b, 0.8, c.Glow, V(0, 2.1, 0.3), { Material = NEON, Anim = "Pulse" })
+	egg(b, V(0.9, 0.25, 0.9), c.Leaf, CFrame.new(0, 2.8, 0.5))
+	egg(b, V(1.2, 0.8, 1.0), c.Dark, CFrame.new(0, 0.95, -1.25))
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.28, c.Eye, V(side * 0.3, 1.1, -1.7), { Material = NEON })
+		for k = 1, 3 do
+			local hip = V(side * 0.85, 0.7, -0.8 + k * 0.55)
+			local anim = ((k + (side > 0 and 1 or 0)) % 2 == 0) and "SwingA" or "SwingB"
+			bar(b, hip, V(side * 1.5, 0.05, -1.0 + k * 0.6), 0.2, c.Dark, { Anim = anim, Joint = hip })
+		end
+	end
+	return "Scuttle"
+end
+
+-- [stream D] Basin Breaker: an old stump-golem of the basin. Root legs splaying on the ground, a
+-- stump body ringed in bark with a glowing sap core and sap cracks, a moss mantle, a stone face
+-- with amber eyes under a crown of branches, long arms ending in stone fists.
+ENEMIES.BasinBoss = function(b, c)
+	for _, side in ipairs({ -1, 1 }) do
+		local hip = V(side * 2.6, 5.4, 0.3)
+		local anim = side < 0 and "SwingA" or "SwingB"
+		bar(b, hip, V(side * 3.0, 1.4, 0), 2.4, c.Bark, { Anim = anim, Joint = hip })
+		for k, r in ipairs({ { -1.6, -1.6 }, { 1.4, -0.2 }, { 0.2, 1.7 } }) do
+			bar(b, V(side * 3.0, 1.5, 0), V(side * 3.0 + side * r[1] * 0.7, 0.15, r[2] * 1.3), 0.9 - k * 0.1, c.Bark, { Anim = anim, Joint = hip })
+		end
+	end
+	b.add("Cylinder", V(6.4, 7.6, 7.6), c.Base, CFrame.new(0, 8.4, 0.3) * CYL_UP)
+	for k = 0, 9 do
+		local a = k * TAU_ML / 10 + 0.15
+		b.add("Block", V(1.0, 5.6, 0.6), c.Bark, CFrame.new(math.cos(a) * 3.75, 8.2, 0.3 + math.sin(a) * 3.75) * CFrame.Angles(0, -a, 0))
+	end
+	ball(b, 2.4, c.Sap, V(0, 8.8, -3.3), { Material = NEON, Anim = "Pulse" })
+	for k = -1, 1 do
+		bar(b, V(k * 0.9, 8.8, -3.5), V(k * 1.9, 6.4 + math.abs(k) * 0.6, -3.7), 0.3, c.Sap, { Material = NEON })
+	end
+	egg(b, V(8.6, 3.8, 7.0), c.Bark, CFrame.new(0, 11.7, 0.3))
+	egg(b, V(9.0, 1.9, 6.2), c.Moss, CFrame.new(0, 13.0, 0.5))
+	egg(b, V(3.2, 2.6, 3.0), c.Stone, CFrame.new(0, 13.7, -1.6))
+	b.add("Block", V(2.8, 0.45, 0.6), c.Bark, CFrame.new(0, 14.4, -3.0))
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.6, c.Eye, V(side * 0.7, 13.9, -3.05), { Material = NEON })
+	end
+	for k = 0, 6 do
+		local a = math.rad(-75 + k * 25)
+		local base = V(math.sin(a) * 1.3, 14.6, -1.4 + math.cos(a) * 0.3)
+		bar(b, base, base + V(math.sin(a) * 1.4, 2.0 + (k % 2) * 0.9, 0.4), 0.35, k % 3 == 1 and c.Gold or c.Light, k % 3 == 1 and { Material = METAL } or nil)
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		local shoulder = V(side * 4.6, 11.4, 0.2)
+		local swing = { Anim = side < 0 and "SwingB" or "SwingA", Joint = shoulder }
+		local elbow = V(side * 6.1, 7.8, -0.8)
+		local wrist = V(side * 6.2, 4.6, -1.6)
+		egg(b, V(3.0, 2.8, 3.0), c.Bark, CFrame.new(side * 4.8, 11.6, 0.2), swing)
+		bar(b, shoulder, elbow, 1.8, c.Base, swing)
+		bar(b, elbow, wrist, 1.6, c.Bark, swing)
+		egg(b, V(2.8, 2.6, 2.8), c.Stone, CFrame.new(wrist + V(0, -1.3, -0.4)), swing)
+		egg(b, V(1.6, 1.0, 1.6), c.Moss, CFrame.new(elbow), swing)
+	end
+	return "Stomp"
 end
 
 -- Elite marker: a small antique-gold crown (band, five points, a crimson stone) that bobs

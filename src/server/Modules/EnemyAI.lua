@@ -34,6 +34,14 @@
 	                     at its openings, then mites climb out; a Brood Egg ("Incubate")
 	                     hatches Mites when its timer ends; the War Banner rallies beetles in
 	                     its zone (faster, harder contact hits; body attribute "Rallied")
+	  Slam (Stump Brute) [stream D] next to a hero: "Slam" (rears up, held in place) while a
+	                     circle marks Radius for Warn s, then one hit (Hazards strike); one
+	                     slam every Every s
+	[stream D] Director runs: a stuck enemy (no progress toward a far hero for
+	Director.Stuck.CheckSeconds while it tries to walk) gets a short sideways repath, at most
+	Repaths times, then EnemySpawner.DespawnStuck removes it without rewards. Contact hits use
+	the enemy's own ContactCooldown when it has one (the beetle's 0.8 s). Every boss ignores
+	knockback, and slows take at most Director.Boss.SlowCap of its speed.
 	The boss runs BossAI (data in BossData). Hazards (strikes / patches / waves) step here too.
 	Fresh spawns are harmless for Config.Enemies.SpawnGrace (they fade in on clients);
 	Harmless / Untargetable enemies (the Queen's entrance, burrow, collapse) neither touch
@@ -46,7 +54,10 @@ local Fx = require(script.Parent.Fx)
 local Hazards = require(script.Parent.Hazards)
 local BossAI = require(script.Parent.BossAI)
 local HeightGrid = require(script.Parent.HeightGrid)
-local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
+local RunConfig = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig)
+local Nav = RunConfig.Nav
+-- [stream D] director settings (stuck repath, the boss slow cap)
+local Dir: { [string]: any } = (RunConfig :: any).Director or {}
 
 local EnemyAI = {}
 -- Weather (a snow storm): every walking enemy x this; 1 = normal.
@@ -229,6 +240,14 @@ local function think(e, runPlayers)
 		e.Dir = Vector3.zero
 		e.Sep = Vector3.zero
 		return
+	end
+	if e.RepathUntil then
+		if clock < e.RepathUntil and e.RepathDir then
+			e.Dir = e.RepathDir -- [stream D] a stuck enemy walks its sideways repath first
+			return
+		end
+		e.RepathUntil = nil
+		e.RepathDir = nil
 	end
 	local tp = playerPos[target]
 	local to = (tp - e.Pos) * FLAT
@@ -537,7 +556,7 @@ local function startWindupRanged(e, R, to: Vector3)
 	local p = t.Root.Position
 	local point = HeightGrid.Ground(p)
 	e.GlobTarget = point
-	e.WarnId = Fx.Warn("circle", point.X, point.Z, R.Splash, R.Windup + R.Flight, "acid")
+	e.WarnId = Fx.Warn("circle", point.X, point.Z, R.Splash, R.Windup + R.Flight, R.Style or "acid")
 	e.Face = to.Unit
 	setAct(e, "Windup", R.Windup)
 end
@@ -549,7 +568,7 @@ local function launchGlob(e, R)
 	end
 	local dist = ((point - e.Pos) * FLAT).Magnitude
 	Fx.Warn("glob", e.Pos.X, e.Pos.Z, point.X, point.Z, R.Flight, 5 + dist * 0.12)
-	Hazards.Strike(point, R.Splash, R.Flight, R.Damage * (e.DmgScale or 1), { Warn = e.WarnId, Style = "acid", Cause = "Spitter acid glob" })
+	Hazards.Strike(point, R.Splash, R.Flight, e.AttackDamage or R.Damage * (e.DmgScale or 1), { Warn = e.WarnId, Style = R.Style or "acid", Cause = R.Cause or "Spitter acid glob" })
 	e.WarnId = nil -- the strike owns the landing circle now
 	e.GlobTarget = nil
 end
@@ -623,6 +642,13 @@ local function behave(e, dt: number)
 				ctx.EnemySpawner.Explode(e)
 				return
 			end
+		elseif act == "Slam" and def.Slam then
+			-- [stream D] held inside its marked circle until the hit lands (Hazards strike)
+			e.SpeedOverride = 0
+			if e.ActTimer <= 0 then
+				e.SpeedOverride = nil
+				setAct(e, nil)
+			end
 		elseif e.ActTimer <= 0 then
 			setAct(e, nil)
 			e.SpeedOverride = nil
@@ -660,6 +686,17 @@ local function behave(e, dt: number)
 				e.PinPos = e.Pos -- held where the lane was drawn (EnemyAI.Step)
 				e.SpeedOverride = 0
 				setAct(e, "Windup", L.Windup)
+			end
+		elseif def.Slam then
+			-- [stream D] the Stump Brute: next to a hero, a marked slam around itself
+			local S = def.Slam
+			if to and e.SpawnGrace <= 0 and dist <= S.Trigger and clock >= (e.SlamReady or 0) then
+				local at = HeightGrid.Ground(e.Pos)
+				Hazards.Strike(at, S.Radius, S.Warn, e.AttackDamage or S.Damage * (e.DmgScale or 1), { Style = "pound", Cause = S.Cause or "Slam" })
+				e.SlamReady = clock + S.Every -- launch to launch
+				e.PinPos = e.Pos
+				e.SpeedOverride = 0
+				setAct(e, "Slam", S.Warn)
 			end
 		elseif def.Explode and def.Fuse then
 			if to and e.SpawnGrace <= 0 and dist <= e.Radius + PLAYER_RADIUS + 1 then
@@ -747,6 +784,9 @@ function EnemyAI.Step(dt: number)
 	local contactBand = Nav.ContactBand
 	local syncNear2 = Config.Enemies.BodySyncNear ^ 2
 	local farEvery = Config.Enemies.BodyFarEvery
+	-- [stream D] director runs only (the stage loop keeps its tested behaviour)
+	local stuckOn = Dir.Stuck ~= nil and ctx.StageManager.IsDirector ~= nil and ctx.StageManager.IsDirector()
+	local bossSlowCap = (Dir.Boss and Dir.Boss.SlowCap) or 0.10
 
 	table.clear(movedBuf)
 	table.clear(cframesBuf)
@@ -773,7 +813,11 @@ function EnemyAI.Step(dt: number)
 
 		local speed = e.SpeedOverride or e.Speed
 		if e.SlowUntil and e.SlowUntil > now then
-			speed *= e.SlowMult or 1 -- Chilling Aura (Garlic perk, WeaponSystem)
+			local slow = e.SlowMult or 1 -- Chilling Aura (Garlic perk, WeaponSystem)
+			if e.Boss then
+				slow = math.max(slow, 1 - bossSlowCap) -- [stream D] bosses: at most SlowCap
+			end
+			speed *= slow
 		end
 		-- a War Banner's rally (BossData WarBanner): faster beetles, harder contact hits
 		local rallied = e.RallyUntil ~= nil and e.RallyUntil > clock
@@ -790,7 +834,7 @@ function EnemyAI.Step(dt: number)
 		-- A fuse / lunge wind-up stays exactly where its telegraph was drawn (no
 		-- separation or knockback drift).
 		local pin = e.PinPos
-		if pin and not (e.Act == "Fuse" or e.Act == "Surface" or (e.Act == "Windup" and e.Def.Lunge)) then
+		if pin and not (e.Act == "Fuse" or e.Act == "Surface" or e.Act == "Slam" or (e.Act == "Windup" and e.Def.Lunge)) then
 			pin = nil
 			e.PinPos = nil
 		end
@@ -866,7 +910,7 @@ function EnemyAI.Step(dt: number)
 						e.ContactUid = e.Uid
 					end
 					if now >= (cd[rp] or 0) then
-						cd[rp] = now + Config.Enemies.ContactCooldown
+						cd[rp] = now + (e.ContactCooldown or Config.Enemies.ContactCooldown)
 						e.NextContact = cd[rp] -- latest bite on anyone (read by tests and tools)
 						local name = (e.BossData and e.BossData.DisplayName) or e.Def.DisplayName or e.Type
 						ctx.RunManager.DamagePlayer(rp, e.Damage * (rallied and e.RallyDamage or 1), name .. " contact", "contact")
@@ -882,6 +926,56 @@ function EnemyAI.Step(dt: number)
 				e.Pos = spawnAt
 				e.Knock = Vector3.zero
 				nearest2 = 0 -- moved: sync the body now
+			end
+		end
+
+		-- [stream D] stuck check (director runs): every CheckSeconds, an enemy trying to walk
+		-- toward a hero farther than NearTarget that moved under MinMove repaths sideways;
+		-- after Repaths tries it is despawned without rewards
+		if stuckOn and e.Alive and not e.Boss and not static and not e.Act and not e.Def.Object then
+			local S = Dir.Stuck
+			if e.StuckAt == nil then
+				e.StuckAt = clock + (S.CheckSeconds or 3)
+				e.StuckPos = pos
+			elseif clock >= e.StuckAt then
+				local sp = e.StuckPos or pos
+				local mx, mz = pos.X - sp.X, pos.Z - sp.Z
+				local moved = math.sqrt(mx * mx + mz * mz)
+				local tp = e.Target and playerPos[e.Target]
+				local awayFromHero = false
+				if tp then
+					local tx, tz = tp.X - pos.X, tp.Z - pos.Z
+					awayFromHero = tx * tx + tz * tz > (S.NearTarget or 12) ^ 2
+				end
+				local trying = e.SpeedOverride ~= 0 and e.Dir.Magnitude > 0.1
+				if awayFromHero and trying and moved < (S.MinMove or 2) then
+					e.StuckCount = (e.StuckCount or 0) + 1
+					if e.StuckCount > (S.Repaths or 2) then
+						ctx.EnemySpawner.DespawnStuck(e)
+					else
+						-- a steppable sideways direction (left or right of the way to the hero)
+						local base = tp and Vector3.new(tp.X - pos.X, 0, tp.Z - pos.Z) or e.Dir
+						base = base.Magnitude > 0.1 and base.Unit or Vector3.new(1, 0, 0)
+						local side = (e.StuckCount + e.Id) % 2 == 0 and 1 or -1
+						local pick = nil
+						for k = 0, 3 do
+							local a = side * (math.pi / 2 - k * math.pi / 8)
+							local d = CFrame.fromAxisAngle(UP, a):VectorToWorldSpace(base)
+							if HeightGrid.CanStep(pos.X, pos.Z, pos.X + d.X * 6, pos.Z + d.Z * 6) and not EnemyAI.IsBlocked(pos.X + d.X * 4, pos.Z + d.Z * 4, e.Radius) then
+								pick = d
+								break
+							end
+						end
+						e.RepathDir = pick or -base
+						e.RepathUntil = clock + (S.RepathSeconds or 1.2)
+						e.Dir = e.RepathDir
+						ctx.EnemySpawner.DirectorStats.StuckRepaths += 1
+					end
+				else
+					e.StuckCount = 0
+				end
+				e.StuckAt = clock + (S.CheckSeconds or 3)
+				e.StuckPos = pos
 			end
 		end
 

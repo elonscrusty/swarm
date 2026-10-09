@@ -3,11 +3,13 @@
 -- started with the admitted class (RunManager.SetAdmittedClass + StartTeamRun), ~40 s at a coarse step:
 --   HeightGrid active; the hero is the class rig (mesh Torso, Motor6Ds, Humanoid); it starts with
 --   the class weapon; the weapon deals damage and kills; enemies stand on HeightGrid.GroundY and
---   never in unwalkable cells; XP gems rest on the ground; the portal sits on the ground; a launch
+--   never in unwalkable cells; XP gems rest on the ground; the run is a director run (no portal;
+--   the hidden beacon spot is on the ground, stream D / DECISIONS C5); a launch
 --   pad throws the hero toward its Target (Dash.Launch) and the arc is not snapped back; a dash
 --   request through the server handler sets rp.DashUntil (class variant) and the dash move is not
---   snapped back by the speed check. For the first class: DevNextStage goes to stage 2 on the same
---   arena table with the portal at another landmark. No "Step error" / handler errors logged.
+--   snapped back by the speed check. For the first class: DevNextStage reveals the beacon at the
+--   Stone Circle on the same arena table (the director replaced the stage-2 travel). No "Step error"
+--   / handler errors logged. (Director details: director-sim.)
 -- The mock has no physics and its raycasts hit nothing, so this scene answers workspace:Raycast
 -- against the map's parts (oriented boxes, the current arena model). Prints PASS / FAIL lines.
 --   lune run tools/preview/runtime/main.luau -- --scene cliffwood-run-sim --studio --device pc
@@ -196,6 +198,7 @@ MapBuilder = preview.server("MapBuilder")
 local CharacterData = require(ReplicatedStorage.Shared.CharacterData)
 local MeshCatalog = require(ReplicatedStorage.Shared.MeshCatalog)
 local Dash = preview.require(ServerScriptService.SwarmV2.Run.Dash)
+local Beacon = preview.require(ServerScriptService.SwarmV2.Run.Beacon)
 local Config = require(ReplicatedStorage.Shared.Config)
 local st = C.state()
 local XP_HEIGHT = Config.XP.GemHeight
@@ -348,10 +351,11 @@ for ci, cls in ipairs(classes) do
 	local sig = SIGNATURE[cls]
 	check(cls .. ": starts with " .. sig, rp.Weapons[sig] ~= nil and rp.WeaponOrder[1] == sig, table.concat(rp.WeaponOrder, ","))
 
-	-- the portal on the ground
-	local portalPos = SM.PortalPosition()
-	check(cls .. ": portal on the ground", portalPos ~= nil and math.abs(portalPos.Y - HG.GroundY(portalPos.X, portalPos.Z)) < 0.6,
-		portalPos and string.format("%.1f vs ground %.1f at %s", portalPos.Y, HG.GroundY(portalPos.X, portalPos.Z), nearestLandmark(arena, portalPos) or "?"))
+	-- [stream D] a director run: no portal; the (hidden) beacon spot is on the ground
+	local beaconPos = Beacon.Position()
+	check(cls .. ": director run, no portal, beacon spot on the ground", SM.IsDirector() and SM.PortalPosition() == nil and beaconPos ~= nil
+		and math.abs(beaconPos.Y - HG.GroundY(beaconPos.X, beaconPos.Z)) < 0.6 and st:GetAttribute("RunStage") == "Survive",
+		beaconPos and string.format("%.1f vs ground %.1f at %s", beaconPos.Y, HG.GroundY(beaconPos.X, beaconPos.Z), nearestLandmark(arena, beaconPos) or "?"))
 
 	-- ~40 s of play
 	local kills0 = tonumber(me:GetAttribute("Kills")) or 0
@@ -514,28 +518,16 @@ for ci, cls in ipairs(classes) do
 		end
 	end
 
-	-- stage 2 on the same map (first class only: the travel takes a while)
+	-- [stream D] the director's next step on the same map (first class only): the beacon reveal
+	-- (it replaced the stage-2 travel; the full flow is in director-sim)
 	if ci == 1 then
-		local p1 = SM.PortalPosition()
-		local lm1 = p1 and nearestLandmark(arena, p1)
 		local okDev = SM.DevNextStage()
-		local reached = false
-		for _ = 1, 60 do
-			advance(0.5, 10)
-			pickLevels()
-			if st:GetAttribute("Stage") == 2 and not SM.IsHolding() then
-				reached = true
-				break
-			end
-		end
 		run(1)
-		local p2 = SM.PortalPosition()
-		local lm2 = p2 and nearestLandmark(arena, p2)
-		check(cls .. ": DevNextStage reaches stage 2", okDev and reached, "stage " .. tostring(st:GetAttribute("Stage")))
-		check(cls .. ": stage 2 keeps the same arena table (no rebuild)", MapBuilder.GetArena() == arena and arena.Model.Parent ~= nil)
-		check(cls .. ": stage 2 portal at another landmark", lm1 ~= nil and lm2 ~= nil and lm1 ~= lm2, tostring(lm1) .. " -> " .. tostring(lm2))
-		check(cls .. ": stage 2 portal on the ground", p2 ~= nil and math.abs(p2.Y - HG.GroundY(p2.X, p2.Z)) < 0.6)
-		check(cls .. ": HeightGrid still active on stage 2", HG.IsActive())
+		local b = Beacon.Position()
+		check(cls .. ": DevNextStage reveals the beacon", okDev and st:GetAttribute("RunStage") == "BeaconAvailable" and st:GetAttribute("BeaconPos") == b, tostring(st:GetAttribute("RunStage")))
+		check(cls .. ": the reveal keeps the same arena table (no rebuild)", MapBuilder.GetArena() == arena and arena.Model.Parent ~= nil and st:GetAttribute("Stage") == 1)
+		check(cls .. ": the beacon stands at the Stone Circle", b ~= nil and nearestLandmark(arena, b) == "Stone Circle", b and nearestLandmark(arena, b) or "none")
+		check(cls .. ": HeightGrid still active after the reveal", HG.IsActive())
 	end
 
 	-- leave the run

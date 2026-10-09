@@ -254,7 +254,109 @@ RunConfig.Entry = {
 ------------------------------------------------------------------------------------------
 RunConfig.Builds = {} -- [stream B] ranks, offers, slots, evolutions
 RunConfig.Combat = {} -- [stream B] damage formula, crit, armor, status caps, targeting
-RunConfig.Director = {} -- [stream D] run clock, beacon, boss, enemy pressure
+--[[
+	[stream D] RUN DIRECTOR (docs/redesign/DECISIONS.md C5; brief "Enemy pressure and final objective").
+	One 15-minute run on the single map (Map.MapName) replaces the 5-stage portal loop:
+	  Survive -> (12:30) BeaconAvailable -> Rally (30 s) -> Charge (60 s, r35) -> Boss -> Victory,
+	  or Defeat on a full wipe. Overtime (past RunMinutes) only ramps the spawn rate.
+	StageManager runs the phases, Beacon.lua the beacon, EnemySpawner the pressure, BossAI the
+	Basin Breaker. Every number below is a proposed default from the brief and can be changed.
+	B / H0: the brief's baselines (weapon/enemy HP coefficients x B, player damage x H0).
+	  B  = Combat.B when stream B sets it, else DefaultB (the starter weapons' base damage, 10)
+	  H0 = Survival.H0 when stream E1 sets it, else Config.Player.BaseMaxHP (120, the existing
+	       normal player maximum HP)
+]]
+RunConfig.Director = {
+	Enabled = true,
+	-- true: the single map plays the old 5-stage portal loop again (other arenas always do)
+	LegacyStages = false,
+	-- tests only: the director clock runs this many times faster. Honoured in Studio only
+	-- (RunService:IsStudio(), the preview runs with --studio); live servers always use 1.
+	TimeScale = 1,
+	RunMinutes = 15, -- the target length; past it the overtime ramp starts (no timer defeat)
+	DefaultB = 10,
+
+	-- the final objective (Beacon.lua)
+	Beacon = {
+		RevealAt = 750, -- seconds of director clock (12:30)
+		Landmark = "Stone Circle", -- arena.Landmarks name; the landmark centre on the ground
+		ActivateRadius = 20, -- a living, non-downed hero this close activates it (once)
+		RallySeconds = 30, -- warning broadcast before the charge starts
+		ChargeSeconds = 60, -- charge time with at least one living hero inside ChargeRadius
+		ChargeRadius = 35,
+		HeightBand = 8, -- |dy| of ground heights that still counts as "at the beacon"
+		PromptHold = 0.5, -- the ProximityPrompt hold (E / touch); TryActivate checks the rules
+		PublishStep = 0.01, -- BeaconCharge attribute resolution
+	},
+
+	-- party size N (1..Max): initialised heroes at start, raised by late admissions, never lowered
+	Party = {
+		Max = 4,
+		HPPerExtra = 0.30, -- ordinary HP x (1 + 0.30 (N-1))
+		DamagePerExtra = 0.10, -- contact / attack damage x (1 + 0.10 (N-1)); the boss too
+		SpawnPerExtra = 0.45, -- spawn rate x (1 + 0.45 (N-1))
+	},
+	-- t = director minutes at the enemy's spawn (living enemies are never rescaled)
+	Time = {
+		HPPerMinute = 0.07, -- ordinary HP x (1 + 0.07 t)
+		DamagePerMinute = 0.025, -- damage x (1 + 0.025 t)
+	},
+	Spawn = {
+		Base = 0.60, -- enemies/s at t = 0 ...
+		PerMinute = 0.14, -- ... + this per minute
+		OvertimePerMinute = 0.10, -- past RunMinutes: rate x min(OvertimeCap, 1 + 0.10 (t - 15))
+		OvertimeCap = 1.5,
+		AliveCaps = { 55, 95, 145, 200 }, -- ordinary enemies alive by N (perf limits to test)
+		MinDistance = 35, -- spawn ring around a living hero (flat studs) ...
+		MaxDistance = 70,
+		MaxPathFactor = 2.0, -- reachable: walking distance (flow field) at most this x MaxDistance
+		Tries = 12,
+		TickSeconds = 0.25, -- spawn checks per second = 4
+		MaxPerTick = 6,
+		MaxBank = 3, -- budget kept while capped / no spot (no burst when room opens)
+		BossRateMult = 0.5, -- during the boss fight
+		BossCapMult = 0.5,
+	},
+	Elite = {
+		FromMinute = 5,
+		Chance = 0.05, -- share of spawns
+		HPMult = 3, -- x the archetype HP
+		DamageMult = 1.25,
+		Affixes = false, -- true: the old elite affixes (Swift / Shielded / Burning) as well
+	},
+	--[[
+		Roster of the single map (other EnemyData types are kept but never spawned there).
+		HP x B, Contact / Attack x H0; Kind is the XP / gold tag (Normal / Tough / Elite / Boss).
+		The attack timings live in EnemyData (FloatingEye / SapLobber Ranged, StumpBrute Slam).
+		Contact values marked "proposed" are not in the brief.
+	]]
+	Roster = {
+		{ Type = "Skeleton", Name = "Beetle", FromMinute = 0, Weight = 60, HP = 2, Speed = 14, Contact = 0.05, ContactCooldown = 0.8, Kind = "Normal" },
+		{ Type = "FloatingEye", FromMinute = 0, Weight = 25, HP = 3, Speed = 10, Contact = 0.02, Attack = 0.07, Kind = "Normal" }, -- contact proposed
+		{ Type = "RootRunner", FromMinute = 2, Weight = 30, HP = 1.5, Speed = 20, Contact = 0.04, Kind = "Normal" },
+		{ Type = "StumpBrute", FromMinute = 4, Weight = 14, HP = 5, Speed = 8, Contact = 0.05, Attack = 0.10, Kind = "Tough" }, -- contact proposed
+		{ Type = "SapLobber", FromMinute = 6, Weight = 16, HP = 3, Speed = 9, Contact = 0.02, Attack = 0.06, Kind = "Normal" }, -- contact proposed
+	} :: { any },
+	-- stuck enemies (EnemyAI): no progress for CheckSeconds -> a short sideways repath, at most
+	-- Repaths times, then a quiet despawn (no rewards)
+	Stuck = {
+		CheckSeconds = 3,
+		MinMove = 2, -- studs moved per check while trying to walk
+		NearTarget = 12, -- closer than this to its hero: crowding, never "stuck"
+		Repaths = 2,
+		RepathSeconds = 1.2,
+	},
+	-- the Basin Breaker (BossData BasinBreaker): HP = HPB x B x [1 + 0.80 (N-1)] x [1 + 0.07 t]
+	Boss = {
+		Id = "BasinBreaker",
+		HPB = 200,
+		HPPerExtra = 0.80,
+		HPPerMinute = 0.07,
+		Contact = 0.10, -- walking into it, x H0 x party damage (proposed; attacks in BossData)
+		SpawnDistance = 22, -- from the beacon, on walkable ground
+		SlowCap = 0.10, -- every boss: slows take at most 10% of its speed (no knockback, no stun)
+	},
+}
 RunConfig.Survival = {} -- [stream E1] downed, revive, protection, falls, movement feel
 RunConfig.Economy = {} -- [stream E2] XP shards, team run gold, chests, class goals
 RunConfig.UI = {} -- [stream F] run HUD layout and screens
