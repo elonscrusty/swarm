@@ -1,4 +1,12 @@
 {
+ "BeaconActivate": {
+  "id": 101983713680096,
+  "status": "ok"
+ },
+ "BeaconCharge": {
+  "id": 116632965410778,
+  "status": "ok"
+ },
  "BigKill": {
   "id": 79432466085613,
   "status": "ok"
@@ -11,12 +19,24 @@
   "id": 114145211136875,
   "status": "ok"
  },
+ "BossSpawn": {
+  "id": 77012636523636,
+  "status": "ok"
+ },
  "BossWhoosh": {
   "id": 113336786346138,
   "status": "ok"
  },
+ "BubbleBloop": {
+  "id": 132010916160149,
+  "status": "ok"
+ },
  "Chest": {
   "id": 109507162178062,
+  "status": "ok"
+ },
+ "ChestBuy": {
+  "id": 127806368430108,
   "status": "ok"
  },
  "Click": {
@@ -27,8 +47,32 @@
   "id": 86606172414417,
   "status": "ok"
  },
+ "ConfettiHonk": {
+  "id": 123550918869276,
+  "status": "ok"
+ },
+ "ConfettiRattle": {
+  "id": 125336972916367,
+  "status": "ok"
+ },
+ "CritTick": {
+  "id": 130747321535480,
+  "status": "ok"
+ },
  "Death": {
   "id": 106619962538253,
+  "status": "ok"
+ },
+ "DodgeballThump": {
+  "id": 130806214212181,
+  "status": "ok"
+ },
+ "DodgeballWhistle": {
+  "id": 125785610035813,
+  "status": "ok"
+ },
+ "Downed": {
+  "id": 116846841000990,
   "status": "ok"
  },
  "EnemyDeath": {
@@ -45,6 +89,18 @@
  },
  "GemPickup": {
   "id": 111456984593913,
+  "status": "ok"
+ },
+ "GloveBell": {
+  "id": 111533137471424,
+  "status": "ok"
+ },
+ "GloveThud": {
+  "id": 87565218066949,
+  "status": "ok"
+ },
+ "GymScrape": {
+  "id": 123947392192969,
   "status": "ok"
  },
  "Heartbeat": {
@@ -71,8 +127,20 @@
   "id": 74962400988388,
   "status": "ok"
  },
+ "MopSqueak": {
+  "id": 130304148137330,
+  "status": "ok"
+ },
+ "MopSwoosh": {
+  "id": 100812590264480,
+  "status": "ok"
+ },
  "PortalAppear": {
   "id": 72802301491749,
+  "status": "ok"
+ },
+ "PuckClack": {
+  "id": 101673143804604,
   "status": "ok"
  },
  "ReelTick": {
@@ -83,8 +151,36 @@
   "id": 97435297484172,
   "status": "ok"
  },
+ "ReviveBeat": {
+  "id": 96148528483086,
+  "status": "ok"
+ },
+ "RunDefeat": {
+  "id": 122212551428474,
+  "status": "ok"
+ },
+ "RunVictory": {
+  "id": 135733489539540,
+  "status": "ok"
+ },
+ "ScrapClatter": {
+  "id": 126675498482317,
+  "status": "ok"
+ },
+ "SeedSprout": {
+  "id": 104808793216642,
+  "status": "ok"
+ },
+ "ShoeBoing": {
+  "id": 98678378204244,
+  "status": "ok"
+ },
  "Shrine": {
   "id": 106727264178055,
+  "status": "ok"
+ },
+ "SkateRoll": {
+  "id": 78117229124778,
   "status": "ok"
  },
  "Swing": {
@@ -95,12 +191,20 @@
   "id": 133320151991833,
   "status": "ok"
  },
+ "ToastPop": {
+  "id": 89543620087020,
+  "status": "ok"
+ },
  "Toggle": {
   "id": 78864064038524,
   "status": "ok"
  },
  "Victory": {
   "id": 71641610011777,
+  "status": "ok"
+ },
+ "YarnPop": {
+  "id": 81759392777602,
   "status": "ok"
  }
 }
