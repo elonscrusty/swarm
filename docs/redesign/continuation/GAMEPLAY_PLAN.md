@@ -87,3 +87,33 @@ goes into `rp.CommitInfo.NewUnlocks` for the results screen.
 - [ ] **F** HUD layout (desktop and phone positions from the brief), boss bar and objective stage strip, 4+4 slot rows with ranks, upgrade cards (rarity symbol + text, current -> next), inventory (Tab), north-up minimap with 80-stud reveal shared per team and big map (M), interact (E) prompts for chest / beacon / revive, downed / spectate UI, results (Pending Save -> Saved, new unlocks), Escape run menu "The run continues"
 - [ ] **G** class sounds, contact sparks, crit burst, damage text grouping, mild shake (<0.12 s), reduced-motion paths
 - [ ] **H** acceptance flows 1-8 offline where possible, perf scenes (4 players, 200 enemies), full regression, report
+
+## Notes from stream A for stream C (models done, uploaded, in MeshCatalog)
+
+- **Mesh names** for the ClassRoster `MeshName` field (ModelBuilder reads it):
+
+  | Class id | MeshName |
+  |---|---|
+  | coach_crunch | CoachCrunch |
+  | doug_janitor | DougJanitor |
+  | peter_parkour | PeterParkour |
+  | barry_plotter | BarryPlotter |
+  | rambozo | Rambozo |
+  | swolverine | Swolverine |
+  | crash_cassidy | CrashCassidy |
+  | knuckles_mcgee | KnucklesMcGee |
+
+- **ClassAnimator:** `CLASS_IDS` / `TUNE` only know the first 4 classes. Add the 8 new ones with these settings:
+
+  | Class | Gear and anchor | Animation tuning |
+  |---|---|---|
+  | Rambozo | gun welded to the torso, arms posed on it | ArmSwing 0 |
+  | Crash | stick on the right arm, blade near the ground | small or zero right-arm swing |
+  | Doug | mop on the right arm, soap on the left | small swing |
+  | Barry | staff and pots on the right arm | reduced swing |
+  | Coach | ball on the right arm | none listed |
+  | Peter | spring shoes, long legs | Hop style, bigger Bob |
+  | Knuckles | big gloves | ArmSwing ~0.3 |
+  | Swolverine | claws on the arms | small swing |
+
+- **Rig:** feet at y=0, HumanoidRootPart at y=3, CanCollide off on the mesh parts (as before).
