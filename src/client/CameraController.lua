@@ -428,7 +428,7 @@ function CameraController.Init()
 		standardMode = lobbyIsStandard()
 		if standardMode then
 			-- the lobby track's basecamp: the standard follow camera, left alone
-			if cam.CameraType == Enum.CameraType.Scriptable then
+			if cam.CameraType ~= Enum.CameraType.Custom then
 				cam.CameraType = Enum.CameraType.Custom
 			end
 			local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")

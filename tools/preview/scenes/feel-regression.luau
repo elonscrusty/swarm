@@ -160,6 +160,8 @@ preview.advance(0.2, 60)
 check(Audio.CurrentMusic() == "BattleMusic", "music: an empty world slot falls back to BattleMusic", Audio.CurrentMusic())
 check(Audio.ResolveMusic("BossPhaseMusic") == "BossMusic" and Audio.ResolveMusic("Nope") == nil, "music: fallback chain")
 base = camOffset()
+-- the third-person run camera aims a little above the hero: compare against its own angle
+local baseLook = cam.CFrame.LookVector
 
 ------------------------------------------------------------------------------------------
 -- 2) boss intro, solo
@@ -176,7 +178,7 @@ preview.advance(0.45, 60)
 local off = camOffset() - base
 local toBoss = (bossBody.Position - hero) * Vector3.new(1, 0, 1)
 check(BossIntro.Active() == "Push" and off.Magnitude > 4 and off:Dot(toBoss) > 0, "solo: camera slides toward the boss", string.format("%.1f studs", off.Magnitude))
-check(cam.CFrame.LookVector:Dot((CFrame.lookAt(base + hero, hero)).LookVector) > 0.999, "solo: camera angle unchanged (controls stay the same)")
+check(cam.CFrame.LookVector:Dot(baseLook) > 0.999, "solo: camera angle unchanged (controls stay the same)")
 check(UIState.Blocking() == false and C.state():GetAttribute("Frozen") == frozenBefore, "solo: the world is not paused, input free")
 preview.advance(0.8, 60) -- 1.3 s after the arrival
 check(BossIntro.Active() == nil, "solo: push over within 1.2 s")
@@ -197,7 +199,8 @@ local mate = preview.addPlayer("Mate", 2)
 mate:SetAttribute("InRun", true)
 mate:SetAttribute("Alive", true)
 preview.advance(0.2, 60)
-local runFov = Config.Camera.RunFieldOfView or Config.Camera.FieldOfView
+-- the redesign's run camera (CameraController: RunConfig.Camera.FieldOfView in a run)
+local runFov = preview.require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Camera.FieldOfView
 bossArrive("Moth Matriarch", "MothMatriarch")
 preview.advance(0.45, 60)
 local vg = me.PlayerGui:FindFirstChild("SwarmBossVignette")

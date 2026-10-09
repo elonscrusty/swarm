@@ -102,7 +102,7 @@ function MenuGroup.Build(screen: Frame, ctx: { [string]: any })
 			{ Name = "Gold", Icon = "lobby_Gold", Title = string.format("+%d%% GOLD FROM RUNS", pct), Sub = string.format("Up to +%s per run, added when the run ends.", UIKit.formatNumber(tonumber(c.GoldCap) or 0)) },
 			{ Name = "Title", Icon = "medal", Title = "GROUP MEMBER TITLE", Sub = "Wear it under your name (TITLES)." },
 			{ Name = "Star", Icon = "crown", Title = "NAMEPLATE STAR", Sub = "A star next to your name over your hero." },
-			{ Name = "How", Icon = "info", Title = "HOW TO JOIN", Sub = "Open the game's page on Roblox, tap the group, then Join. Rejoin SWARM." },
+			{ Name = "How", Icon = "info", Title = "HOW TO JOIN", Sub = "Tap the group on the game's page, then Join." } -- one line on portrait phones,
 		}
 		for i, r in ipairs(rows) do
 			local row = MetaUI.Row(ui.Body, { Name = r.Name, Order = i, Icon = r.Icon, Title = r.Title, Sub = r.Sub, Height = 60 })

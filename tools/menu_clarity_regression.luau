@@ -30,8 +30,9 @@ local ok, err = S.runMain(function()
 	-- the button subtitle was shortened to fit phones (cb71f89): "Scored · 1 try today"
 	assert(hasText(screen, "PLAY DAILY") and hasText(screen, "Scored"), "ready Daily should name its scored action")
 	assert(hasText(screen, "starts") and hasText(screen, "leave"), "Daily must explain when the try is consumed")
-	assert(hasText(screen, "last boss") and hasText(screen, "survival"), "Daily must explain both scoring ties")
-	assert(hasText(screen, "1. Play") and hasText(screen, "2. Clear") and hasText(screen, "3. Ties"), "Daily should guide players in three numbered steps")
+	-- Bright Arcade copy (a67fb8b): the scoring details name both ties, three rule rows guide the run
+	assert(hasText(screen, "last boss") and hasText(screen, "survived"), "Daily must explain both scoring ties")
+	assert(hasText(screen, "Shared route") and hasText(screen, "Clear ") and hasText(screen, "breaks ties"), "Daily should guide players in three rule rows")
 	profile.Daily.Used = true
 	daily.Refresh(profile)
 	assert(hasText(screen, "PRACTICE RUN") and hasText(screen, "No leaderboard score"), "practice must be explicit")

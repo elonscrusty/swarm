@@ -71,6 +71,9 @@ if role == "run" then
 		},
 	}
 	T.joinData[1] = ticketFor
+	-- the old lobby -> run server trip only exists with the SwarmV2 lobby switched off (the
+	-- basecamp's gates + Transfer replace it; a reserved server is otherwise a SwarmV2 match)
+	preview.require(game:GetService("ReplicatedStorage").SwarmV2.Lobby.LobbyConfig).Enabled = false
 end
 
 local ava = preview.addPlayer("Ava", role == "lobby" and 2 or 4)

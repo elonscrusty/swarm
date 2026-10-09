@@ -316,6 +316,12 @@ function RunEntry.Init(c: any, provider: Admission?)
 	else
 		local SwarmV2Server = script.Parent.Parent
 		RunEntry._SetAdmission(require(SwarmV2Server:WaitForChild("MatchAdmission")) :: any)
+		local LobbyConfig = require(SwarmV2Shared:WaitForChild("Lobby"):WaitForChild("LobbyConfig")) :: any
+		if role == "match" and LobbyConfig.Enabled == false then
+			-- the SwarmV2 lobby is switched off: reserved servers come from the old lobby's
+			-- RunServers trip, which runs them itself (no admission, no barrier)
+			role = "legacy"
+		end
 	end
 
 	-- after the run: home through MatchAdmission (rewards are already committed)

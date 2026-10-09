@@ -62,10 +62,22 @@ local function isGrounded(hum: Humanoid): boolean
 	return hum.FloorMaterial ~= Enum.Material.Air
 end
 
+-- The player is walking in the SwarmV2 basecamp (lobby track), not in a run.
+local function inCamp(): boolean
+	return player:GetAttribute("InRun") ~= true and workspace:GetAttribute("SwarmV2Lobby") == true
+end
+
 -- True when the hero may jump right now (ignores ground / coyote checks).
 function JumpController.CanJump(): boolean
 	if not M.JumpEnabled or JumpController.Suppress then
 		return false
+	end
+	if inCamp() then
+		-- the SwarmV2 basecamp: a normal walkable place, no run state applies
+		if controls and controls.IsEnabled and not controls.IsEnabled() then
+			return false
+		end
+		return baseSpeed > 0
 	end
 	if player:GetAttribute("InRun") ~= true or player:GetAttribute("Alive") == false or player:GetAttribute("Paused") == true then
 		return false
@@ -217,7 +229,7 @@ local function step(dt: number)
 	end
 
 	if controls and controls.SetJumpButton then
-		controls.SetJumpButton(player:GetAttribute("InRun") == true and player:GetAttribute("Alive") ~= false, allowed)
+		controls.SetJumpButton((player:GetAttribute("InRun") == true and player:GetAttribute("Alive") ~= false) or inCamp(), allowed)
 	end
 end
 

@@ -208,6 +208,12 @@ function Mock.api()
 		return p
 	end
 
+	-- Player:LoadCharacter / LoadCharacterWithHumanoidDescription build a plain avatar from
+	-- now on (the SwarmV2 basecamp spawns the players' own avatars); off by default.
+	function api.enableAvatars(on: boolean?)
+		R.avatarLoads = on ~= false
+	end
+
 	function api.playerGui()
 		return R.findChild(states[R.localPlayer], "PlayerGui")
 	end

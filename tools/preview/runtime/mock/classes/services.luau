@@ -76,6 +76,33 @@ R.defineClass("Players", {
 	},
 })
 
+-- A plain avatar for LoadCharacter* (preview.enableAvatars): replaces the old character.
+function R.buildAvatar(player)
+	local old = getProp(states[player], "Character")
+	if old then
+		old.Parent = nil
+	end
+	local model = R.create("Model")
+	model.Name = player.Name
+	local root = R.create("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1)
+	root.Transparency = 1
+	root.CFrame = CFrame.new(0, 3, 0)
+	root.Parent = model
+	local head = R.create("Part")
+	head.Name = "Head"
+	head.Size = Vector3.new(2, 1, 1)
+	head.CFrame = CFrame.new(0, 4.5, 0)
+	head.Parent = model
+	local hum = R.create("Humanoid")
+	hum.Parent = model
+	model.PrimaryPart = root
+	model.Parent = R.services.Workspace
+	player.Character = model
+	return model
+end
+
 local mouse = nil
 R.defineClass("Player", {
 	events = { "CharacterAdded", "CharacterRemoving", "CharacterAppearanceLoaded", "Chatted", "Idled", "OnTeleport", "SimulationRadiusChanged" },
@@ -121,8 +148,23 @@ R.defineClass("Player", {
 		IsFriendsWith = function()
 			return false
 		end,
-		LoadCharacter = function()
-			R.warn("Player:LoadCharacter() is ignored by the preview mock (no default avatar)")
+		-- Off by default (no default avatar); a scene opts in with preview.enableAvatars(), then
+		-- a plain blocky avatar (HumanoidRootPart, Head, Humanoid) is built at the origin.
+		LoadCharacter = function(player)
+			if not R.avatarLoads then
+				R.warn("Player:LoadCharacter() is ignored by the preview mock (no default avatar)")
+				return
+			end
+			R.buildAvatar(player)
+		end,
+		LoadCharacterWithHumanoidDescription = function(player, desc)
+			if not R.avatarLoads then
+				error("Player:LoadCharacterWithHumanoidDescription is off in the preview mock (preview.enableAvatars())", 2)
+			end
+			if desc == nil then
+				error("Argument 1 missing or nil", 2)
+			end
+			R.buildAvatar(player)
 		end,
 		HasAppearanceLoaded = function()
 			return true

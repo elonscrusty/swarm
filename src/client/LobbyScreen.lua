@@ -1146,6 +1146,11 @@ function LobbyScreen.Current(): string
 	return current
 end
 
+-- True while the old Home screen is on screen (never in basecamp mode).
+function LobbyScreen.HomeShown(): boolean
+	return ui.Frame ~= nil and ui.Frame.Visible and current == "Home" and ui.Home ~= nil and ui.Home.Visible
+end
+
 local maybeAskFirstRun: (p: { [string]: any }) -> ()
 
 -- Shows / hides the whole lobby (UIBuilder: not in a run ⇔ visible).

@@ -452,6 +452,10 @@ end
 	inLobby adds the VIP crown. Old characters are destroyed on purpose (not respawned).
 ]]
 spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean, runCharacterId: string?): Model?
+	if inLobby and lobbySpawnSuppressed then
+		-- the SwarmV2 basecamp (or a match server) owns lobby characters (Lobby.Avatars)
+		return player.Character
+	end
 	local data = ctx.DataService.GetData(player)
 	if not data or not player.Parent then
 		return nil
@@ -1937,6 +1941,9 @@ local function firstRunAllowed(player: Player): boolean
 	local cfg = (Config :: any).FirstRun
 	if not cfg or cfg.AutoStart ~= true or not isMode(cfg.Mode) then
 		return false
+	end
+	if lobbySpawnSuppressed then
+		return false -- the SwarmV2 basecamp starts runs through its gates (RunEntry), never the old auto start
 	end
 	local data = ctx.DataService.GetData(player)
 	if not data or data.TutorialDone == true or type(data.Stats) ~= "table" or (tonumber(data.Stats.Runs) or 0) > 0 then

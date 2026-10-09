@@ -5990,18 +5990,32 @@ updateSaveNotice = function(inRun: boolean)
 end
 
 local wasInRun: boolean? = nil
+local wasInCamp: boolean? = nil
+local campNet: Instance? = nil
+
+-- The SwarmV2 basecamp (lobby track) is running on this server: players walk there.
+local function basecampActive(): boolean
+	if not campNet or not campNet.Parent then
+		local net = game:GetService("ReplicatedStorage"):FindFirstChild("SwarmV2Net")
+		campNet = net and net:FindFirstChild("Lobby")
+	end
+	return campNet ~= nil and campNet:GetAttribute("Basecamp") == true
+end
 
 local function updateFrame(dt: number)
 	local state = Remotes.State()
 	local inRun = player:GetAttribute("InRun") == true
+	local inCamp = basecampActive()
 
-	if wasInRun ~= inRun then
+	if wasInRun ~= inRun or wasInCamp ~= inCamp then
 		wasInRun = inRun
+		wasInCamp = inCamp
 		Hud.SetVisible(inRun)
-		-- the lobby is a menu: no thumbstick / walking there
-		setBlocking("Lobby", not inRun)
+		-- the old lobby is a menu: no thumbstick / walking there (the basecamp is walkable)
+		setBlocking("Lobby", not inRun and not inCamp)
 		LobbyScreen.SetVisible(not inRun)
-		Showcase.SetVisible(not inRun)
+		-- the old dais hero is not in the basecamp
+		Showcase.SetVisible(not inRun and not inCamp)
 		updateScale()
 	end
 

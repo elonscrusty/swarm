@@ -83,6 +83,8 @@ end
 local function place(rp, pos: Vector3)
 	local y = rp.Root.Position.Y
 	rp.Root.CFrame = CFrame.new(pos.X, y, pos.Z)
+	-- a fixture move, not walking: the server's speed check starts from the new spot
+	rp.LastValidPos = rp.Root.Position
 end
 
 local function tough(rp)
@@ -188,14 +190,30 @@ end
 local elite = ES.Spawn("Brute", base + Vector3.new(-8, 0, 4), { Elite = true, Force = true })
 local far = ES.Spawn("Skeleton", base + Vector3.new(T.BurstRadius * 2.5, 0, 0), { Force = true })
 local eliteHP = elite and elite.HP
+-- the heroes' own weapons keep hitting the elite meanwhile: count only the combo's hits
+local comboEliteDamage, inCombo = 0, false
+local realDamage, realFire = ES.Damage, Combo.Fire
+ES.Damage = function(e, amount, ...)
+	if inCombo and e == elite then
+		comboEliteDamage += amount
+	end
+	return realDamage(e, amount, ...)
+end
+Combo.Fire = function(...)
+	inCombo = true
+	local okFire, whyFire = realFire(...)
+	inCombo = false
+	return okFire, whyFire
+end
 key(T.Key)
 advance(0.1)
+ES.Damage, Combo.Fire = realDamage, realFire
 check(state:GetAttribute("TeamComboUsed") == 1, "combo: F key fired it through the remote", state:GetAttribute("TeamComboUsed"))
 local dead = 0
 for _, e in ipairs(crowd) do if not e.Alive then dead += 1 end end
 check(#crowd >= 6 and dead == #crowd, "combo: the crowd in range falls", string.format("%d/%d", dead, #crowd))
 check(far and far.Alive, "combo: enemy out of range untouched")
-check(elite and elite.Alive and (eliteHP - elite.HP) <= elite.MaxHP * T.EliteShare + 0.01, "combo: elite capped", elite and string.format("%.0f of %.0f", eliteHP - elite.HP, elite.MaxHP))
+check(elite and elite.Alive and comboEliteDamage > 0 and comboEliteDamage <= elite.MaxHP * T.EliteShare + 0.01, "combo: elite capped", elite and string.format("%.0f of %.0f (all hits %.0f)", comboEliteDamage, elite.MaxHP, eliteHP - elite.HP))
 check(Combo.Meter() == 0, "combo: the meter empties")
 advance(0.2)
 local line = preview.playerGui().FeatureHud.Root.Announcer.Line

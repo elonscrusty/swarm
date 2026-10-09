@@ -40,6 +40,27 @@ function C.bootServer()
 	if Remotes then
 		C.try("Remotes.Setup", Remotes.Setup)
 	end
+	-- the SwarmV2 run remotes the real server makes at boot (Run.Dash.Init): the client's
+	-- DashClient waits for them
+	local net = ReplicatedStorage:FindFirstChild("SwarmV2Net")
+	if not net then
+		net = Instance.new("Folder")
+		net.Name = "SwarmV2Net"
+		net.Parent = ReplicatedStorage
+	end
+	local runNet = net:FindFirstChild("Run")
+	if not runNet then
+		runNet = Instance.new("Folder")
+		runNet.Name = "Run"
+		runNet.Parent = net
+	end
+	for _, name in ipairs({ "Dash", "DashAck", "Launch" }) do
+		if not runNet:FindFirstChild(name) then
+			local ev = Instance.new("RemoteEvent")
+			ev.Name = name
+			ev.Parent = runNet
+		end
+	end
 	if preview.args.meshes ~= "uploaded" and preview.args.meshes ~= "none" then
 		local forced = preview.forceMeshesUploaded()
 		if #forced > 0 then
