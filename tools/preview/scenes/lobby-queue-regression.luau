@@ -64,6 +64,9 @@ end
 function ds.IsReleased(p)
 	return ds.released[p] == true
 end
+function ds.IsReady(p) -- DataService.IsReady: loaded and not handed to a teleport
+	return ds.saves[p] ~= nil and ds.released[p] ~= true
+end
 function ds.Reclaim(p)
 	ds.released[p] = nil
 	table.insert(events, "reclaim:" .. p.UserId)
@@ -1166,6 +1169,12 @@ do
 	check("service: Buy of an owned class just selects it", ClassService.Select(a, "ruckus") == nil and ClassService.Buy(a, "toastmaster") == nil and ds.saves[a].Gold == 15000 and ds.saves[a].SelectedCharacter == "toastmaster")
 	local before = classChanges
 	check("service: re-selecting the same class is a no-op", ClassService.Select(a, "toastmaster") == nil and classChanges == before)
+	-- profile released for a teleport handoff: a change would never be saved, so it is refused
+	ds.released[a] = true
+	ds.saves[a].Gold = 40000
+	check("service: released profile → NOT_READY, nothing bought or selected", ClassService.Buy(a, "granny_boom") == "NOT_READY" and ClassService.Select(a, "ruckus") == "NOT_READY" and ds.saves[a].Gold == 40000 and not ClassOwnership.Owns(ds.saves[a], "granny_boom") and ds.saves[a].SelectedCharacter == "toastmaster")
+	ds.released[a] = nil
+	ds.saves[a].Gold = 15000
 	-- locked while travelling
 	QueueService.Join(a, "PublicA", "ui")
 	QueueService.SetReady(a, true)

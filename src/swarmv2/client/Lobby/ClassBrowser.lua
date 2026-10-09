@@ -993,6 +993,7 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 				NO_GOLD = "Not enough gold for " .. nameOf(pend.Id) .. ".",
 				GOAL_ONLY = nameOf(pend.Id) .. " is earned in runs; it cannot be bought.",
 				LOCKED = "Your class is locked while the run starts.",
+				NOT_READY = "Your save is busy for a moment. Try again.",
 				UNKNOWN_CLASS = "That class is not available.",
 			} :: any)[why] or "The server could not change your class."
 			local current = v.Selected or ClassCatalog.Default

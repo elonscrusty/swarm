@@ -5,6 +5,7 @@
 --   3) junk values (unknown size, wrong types) are refused and change nothing
 --   4) an older save without the new keys gets the defaults when it loads (Migrate)
 --   5) the server sends numbers only while the setting is on
+--   6) a profile released for a teleport handoff refuses settings (DataService.IsReady)
 -- PASS / FAIL lines; any FAIL fails the regression.
 local C = lib("common")
 local Players = game:GetService("Players")
@@ -43,6 +44,16 @@ save({ DamageNumberSize = "Huge", CombineNumbers = "yes" })
 check("an unknown size and a wrong type change nothing", data.Settings.DamageNumberSize == "Big" and data.Settings.CombineNumbers == false)
 save({ DamageNumberSize = 7, DamageNumbers = "on" })
 check("numbers for strings and strings for booleans are refused", data.Settings.DamageNumberSize == "Big" and data.Settings.DamageNumbers == true)
+
+-- a profile released for a teleport handoff (DataService.IsReady false): the change would never
+-- be saved, so the server refuses it; after a failed teleport (Reclaim) settings save again
+check("released for a teleport: the profile is not ready", DS.ReleaseForTeleport(me) and DS.IsReady(me) == false)
+save({ DamageNumberSize = "Small" })
+check("released for a teleport: SaveSettings changes nothing", data.Settings.DamageNumberSize == "Big")
+check("reclaimed after a failed teleport: ready again", DS.Reclaim(me) and DS.IsReady(me) == true)
+save({ DamageNumberSize = "Small" })
+check("reclaimed: SaveSettings is stored again", data.Settings.DamageNumberSize == "Small")
+save({ DamageNumberSize = "Big" })
 
 local old = DS.Migrate({ Version = Config.Data.SchemaVersion, Settings = { Music = 0.3, Sfx = 0.4, DamageNumbers = true } })
 check("an older save gets the defaults for the new keys and keeps its own", old.Settings.DamageNumberSize == "Normal" and old.Settings.CombineNumbers == true and old.Settings.DamageNumbers == true and old.Settings.Music == 0.3)

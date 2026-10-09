@@ -23,7 +23,9 @@
 	          scroll it and portrait shows it under the hero); the action button (gold
 	          SELECT <NAME> / UNLOCK • N GOLD, grey "REACH STAGE 4 TO UNLOCK"); SKINS: skin
 	          cards (swatch, name, OWNED / SKIN EQUIPPED / SOON / R$ pill, a check on the
-	          equipped one) and, for a skin not owned, its GET SKIN / COMING SOON button
+	          equipped one) and, for a skin not owned, its button with the real Roblox price
+	          ("R$ ..." while it loads, PRICE UNAVAILABLE when the lookup fails; no button
+	          when the skin has no pass set up yet)
 	Phones in landscape: the roster turns into two columns of tiles when rows get too short;
 	when the details don't fit, the action button is pinned at the bottom of the panel.
 	Portrait: character tabs on top (two rows of four), the hero in between, the details
@@ -114,6 +116,49 @@ local function skinPassId(skinId: string): number?
 		return id
 	end
 	return nil
+end
+
+-- Roblox's price of a skin pass. A button sells only with a real price: "R$ ..." while the
+-- lookup runs, PRICE UNAVAILABLE (disabled) when it fails or the pass is off sale (asked again
+-- after 30 s). onAnswer runs (deferred) when a lookup finishes.
+local passPrices: { [number]: number } = {}
+local passPriceFailedAt: { [number]: number } = {}
+local passPriceWaiting: { [number]: boolean } = {}
+local PRICE_RETRY_SECONDS = 30
+
+local function knownPassPrice(passId: number): (string?, string?)
+	if passPrices[passId] then
+		return "ready", "R$ " .. UIKit.formatNumber(passPrices[passId])
+	end
+	local failed = passPriceFailedAt[passId]
+	if failed and os.clock() - failed < PRICE_RETRY_SECONDS then
+		return "unavailable", "PRICE UNAVAILABLE"
+	end
+	return nil, nil
+end
+
+local function passPriceState(passId: number, onAnswer: () -> ()): (string, string)
+	local state, label = knownPassPrice(passId)
+	if state then
+		return state :: string, label :: string
+	end
+	if not passPriceWaiting[passId] then
+		passPriceWaiting[passId] = true
+		task.spawn(function()
+			local ok, info = pcall(function()
+				return MarketplaceService:GetProductInfo(passId, Enum.InfoType.GamePass)
+			end)
+			if ok and type(info) == "table" and type(info.PriceInRobux) == "number" and info.IsForSale ~= false then
+				passPrices[passId] = info.PriceInRobux
+				passPriceFailedAt[passId] = nil
+			else
+				passPriceFailedAt[passId] = os.clock()
+			end
+			passPriceWaiting[passId] = nil
+			task.defer(onAnswer)
+		end)
+	end
+	return "loading", "R$ ..."
 end
 
 local function skinName(skinId: string): string
@@ -552,9 +597,10 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 					ctx.Toast("This skin comes with the Starter Bundle.", C.TextMuted)
 				end
 			elseif passId then
-				MarketplaceService:PromptGamePassPurchase(player, passId)
-			else
-				ctx.Toast("That skin is coming soon!", C.TextMuted)
+				-- only with a real Roblox price (the button shows it)
+				if knownPassPrice(passId) == "ready" then
+					MarketplaceService:PromptGamePassPurchase(player, passId)
+				end
 			end
 		end,
 	})
@@ -1031,15 +1077,24 @@ ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d).
 			action.Instance.Visible = true
 			action.SetKind("Outline")
 			action.SetIcon("robux")
-			if skin and skin.Pass == "StarterPack" then
-				action.SetText(passId and "BUY PACK" or "COMING SOON")
-			elseif skin and (skin :: any).Pass == "StarterBundle" then
+			if skin and (skin :: any).Pass == "StarterBundle" then
 				action.SetText(StarterCard.Offered() and "STARTER BUNDLE" or "BUNDLE ONLY")
-				passId = StarterCard.Offered() and 1 or nil
+				action.SetEnabled(StarterCard.Offered())
+			elseif passId then
+				-- the real Roblox price on the button (the pack's price for a Starter Pack skin)
+				local state, label = passPriceState(passId, function()
+					if screen.Visible then
+						refresh()
+					end
+				end)
+				local pack = skin ~= nil and skin.Pass == "StarterPack"
+				action.SetText(state == "ready" and ((pack and "PACK " or "") .. label) or label)
+				action.SetEnabled(state == "ready")
 			else
-				action.SetText(passId and "BUY SKIN" or "COMING SOON")
+				-- no pass set up for this skin (id 0): nothing to sell, so no button; its card
+				-- already says SOON
+				action.Instance.Visible = false
 			end
-			action.SetEnabled(passId ~= nil)
 		end
 		ui.SkinRule.Size = UDim2.new(1, -(70 + (action.Instance.Visible and 182 or 0)), 0, 1)
 	end

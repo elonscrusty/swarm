@@ -428,8 +428,19 @@ local function inLobby(player: Player): boolean
 	return not ctx.RunManager.IsParticipant(player)
 end
 
+-- The profile a lobby action may change: loaded, still ours and not handed to a teleport
+-- (DataService.IsReady). A change made while the profile is released (teleport handoff) would
+-- stay in memory and never be saved, so those actions are refused instead.
+local function writableData(player: Player): { [string]: any }?
+	local ds = ctx.DataService
+	if ds.IsReady and not ds.IsReady(player) then
+		return nil
+	end
+	return ds.GetData(player)
+end
+
 local function onSelectCharacter(player: Player, characterId: any)
-	local data = ctx.DataService.GetData(player)
+	local data = writableData(player)
 	if not data or type(characterId) ~= "string" or not CharacterData.Characters[characterId] then
 		return
 	end
@@ -442,7 +453,7 @@ local function onSelectCharacter(player: Player, characterId: any)
 end
 
 local function onBuyCharacter(player: Player, characterId: any)
-	local data = ctx.DataService.GetData(player)
+	local data = writableData(player)
 	if not data or not inLobby(player) or type(characterId) ~= "string" then
 		return
 	end
@@ -474,7 +485,7 @@ end
 -- tap sent before the ProfileSync arrived carries the old level and is ignored, so a
 -- double tap never buys two levels.
 local function onBuyMeta(player: Player, upgradeId: any, expectedLevel: any)
-	local data = ctx.DataService.GetData(player)
+	local data = writableData(player)
 	-- only the account upgrades: the stat upgrades are bought per hero (onBuyHeroUpgrade)
 	if not data or not inLobby(player) or not MetaUpgradeData.IsAccount(upgradeId) or not MetaUpgradeData.Upgrades[upgradeId] then
 		return
@@ -506,7 +517,7 @@ end
 	double tap buys one level), the hero's mastery cap, the max level and the gold.
 ]]
 local function onBuyHeroUpgrade(player: Player, heroId: any, upgradeId: any, expectedLevel: any)
-	local data = ctx.DataService.GetData(player)
+	local data = writableData(player)
 	if not data or not inLobby(player) or type(heroId) ~= "string" or type(upgradeId) ~= "string" then
 		return
 	end
@@ -555,7 +566,7 @@ end
 GoldSystem._BuyHeroUpgrade = onBuyHeroUpgrade -- (tests)
 
 local function onEquipSkin(player: Player, characterId: any, skinId: any)
-	local data = ctx.DataService.GetData(player)
+	local data = writableData(player)
 	if not data or type(characterId) ~= "string" or type(skinId) ~= "string" then
 		return
 	end
@@ -584,7 +595,7 @@ end
 	clamped to 0-1 (NaN ignored), booleans must be booleans, unknown keys are ignored.
 ]]
 local function onSaveSettings(player: Player, settings: any)
-	local data = ctx.DataService.GetData(player)
+	local data = writableData(player)
 	if not data or type(settings) ~= "table" then
 		return
 	end
@@ -607,7 +618,7 @@ end
 local SMART_TIPS = { "Move", "Attack", "Gems", "LevelUp", "Chest", "Portal", "Boss" }
 
 local function onTutorial(player: Player, action: any, tipId: any)
-	local data = ctx.DataService.GetData(player)
+	local data = writableData(player)
 	if not data or type(action) ~= "string" then
 		return
 	end

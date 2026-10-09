@@ -97,6 +97,13 @@ local function fmt(n: number): string
 	return s
 end
 
+-- The save may be changed only while DataService.IsReady: during a teleport handoff the profile
+-- is released, and a change made then would stay in memory and never be saved.
+local function notReady(p: Player): boolean
+	local ds = deps.DataService
+	return ds ~= nil and ds.IsReady ~= nil and not ds.IsReady(p)
+end
+
 -- Records the answer and passes the code on (nil = worked).
 local function done(p: Player, action: string, classId: any, code: string?): string?
 	setAck(p, action, classId, code)
@@ -115,6 +122,10 @@ function ClassService.Select(p: Player, classId: any): string?
 	if Transfer.IsBusy(p) then
 		notify(p, "Your class is locked while you travel.", "warn")
 		return done(p, "Select", classId, "LOCKED")
+	end
+	if notReady(p) then
+		notify(p, "Your save is busy for a moment. Try again.", "warn")
+		return done(p, "Select", classId, "NOT_READY")
 	end
 	if ClassOwnership.Selected(data) == classId then
 		return done(p, "Select", classId, nil)
@@ -140,6 +151,10 @@ function ClassService.Buy(p: Player, classId: any): string?
 	if Transfer.IsBusy(p) then
 		notify(p, "Your class is locked while you travel.", "warn")
 		return done(p, "Buy", classId, "LOCKED")
+	end
+	if notReady(p) then
+		notify(p, "Your save is busy for a moment. Try again.", "warn")
+		return done(p, "Buy", classId, "NOT_READY")
 	end
 	local err = ClassOwnership.Buy(data, classId)
 	local info = ClassCatalog.Get(classId)
