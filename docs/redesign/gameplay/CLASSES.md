@@ -1,5 +1,11 @@
 # SWARM redesign: the four class kits
 
+> Continuation pack (2026-10-09): the weapon rows below (Level 1 / Level 12 / Evolution) are the old
+> 12-level system. With `RunConfig.Builds.Enabled` the signatures run on ranks 1-5 with the brief's
+> numbers, names (Scrap Shot, Toast Toss) and evolutions (Junkyard Cyclone, Toaststorm, Bubble Torrent,
+> Knitting Nightmare): see `BUILDS.md`. Another class's signature can be found by a player who owns that
+> class (weapon behaviour only). The kit passives below are stream C's to retune.
+
 Spec: `DESIGN.md` section 6. Code: `src/swarmv2/server/Run/ClassRegistry.lua`, `ClassKits.lua`,
 `src/swarmv2/shared/Run/ClassRoster.lua` and `RunConfig.lua` (section `Classes`, every kit number),
 weapon rows and evolutions in `src/shared/WeaponData.lua`, behaviours in

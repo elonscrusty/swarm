@@ -7,6 +7,9 @@
 -- run: render.sh synergy-sim --studio --devices pc,phone --max-time 200
 local C = lib("common")
 local Players = game:GetService("Players")
+-- [stream B] synergies belong to the old 12-level system (the continuation pack's rank system hides
+-- them: SynergyData.Hidden): this scene runs with RunConfig.Builds.Enabled off
+require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Builds.Enabled = false
 preview.forceMeshesUploaded()
 preview.startServer()
 preview.advance(1)

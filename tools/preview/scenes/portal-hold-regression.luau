@@ -5,6 +5,10 @@
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local friend = preview.addPlayer("HoldMate", 2)
+-- [stream B] the portal hold waits for a PROTECTED group panel (old 12-level system); the continuation
+-- pack's live choices never pause or protect (choice-regression), so this scene runs with
+-- RunConfig.Builds.Enabled off
+require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Builds.Enabled = false
 preview.startServer()
 preview.advance(1)
 local RM = preview.server("RunManager")

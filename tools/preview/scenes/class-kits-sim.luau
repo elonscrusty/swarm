@@ -91,10 +91,17 @@ for _, hero in ipairs(classes) do
 		rp.InvulnUntil = math.huge
 		local sig = SIGNATURE[hero]
 		check(hero .. ": starts with " .. sig, rp.Weapons[sig] ~= nil)
-		-- ClassOnly: never to another class
+		-- ClassOnly: another class's signature only when that class is owned (rank system,
+		-- continuation pack; the old 12-level system refuses it always)
 		for other, wid in pairs(SIGNATURE) do
 			if other ~= hero then
-				check(hero .. ": refuses " .. wid, LevelUp.AddWeapon(rp, wid) == false)
+				local entitled = LevelUp.Entitled ~= nil and LevelUp.Entitled(rp, wid) == true
+				local added = LevelUp.AddWeapon(rp, wid)
+				check(hero .. (entitled and ": takes the owned class's " or ": refuses ") .. wid, added == entitled)
+				if added then
+					rp.Weapons[wid] = nil -- keep the test loadout to the signature
+					table.remove(rp.WeaponOrder, table.find(rp.WeaponOrder, wid) or #rp.WeaponOrder)
+				end
 			end
 		end
 		-- a crowd around the hero so the weapons have targets

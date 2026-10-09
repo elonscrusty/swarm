@@ -8,6 +8,9 @@
 -- run: lune run tools/preview/runtime/main.luau -- --scene banish-regression
 --      --studio --device pc --max-time 200 --set headless=on
 local Players = game:GetService("Players")
+-- [stream B] this scene narrows the OLD card pool (old weapons / passives, the Gold Pouch fallback):
+-- it runs with the continuation pack's rank system off; builds-sim checks Banish on the rank pool
+require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Builds.Enabled = false
 preview.startServer()
 preview.advance(1)
 local me = Players.LocalPlayer

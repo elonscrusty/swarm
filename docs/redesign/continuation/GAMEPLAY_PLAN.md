@@ -77,8 +77,8 @@ goes into `rp.CommitInfo.NewUnlocks` for the results screen.
 ## Checklist (brief sections -> stream)
 
 - [ ] **A** 8 new class models: coach_crunch, doug_janitor, peter_parkour, barry_plotter, rambozo, swolverine, crash_cassidy, knuckles_mcgee
-- [ ] **B** rank 1-5 formula, crit, armor, intervals, hit ledgers, LOS targeting (0.15 s re-pick, 0.30 s hold), status caps (scorch, slow 40%, knockback 24, stagger immunity, elite / boss limits), secondary budget 10/s
-- [ ] **B** 15-weapon catalog, milestones at rank 3 and 5 for all 15, 4 evolutions (level 8+, rank 5 + passive rank 3), 8 loot passives, offers (weights 45/35/12/8, rarity 70/23/6/1, capacity), heal fallback, queue, 10 s deadline (first card on timeout), 1 reroll per panel, 2 free per run (+VIP existing), 1/2/3 keys
+- [x] **B** rank 1-5 formula, crit, armor, intervals, hit ledgers, LOS targeting (0.15 s re-pick, 0.30 s hold), status caps (scorch, slow 40%, knockback 24, stagger immunity, elite / boss limits), secondary budget 10/s
+- [x] **B** 15-weapon catalog, milestones at rank 3 and 5 for all 15, 4 evolutions (level 8+, rank 5 + passive rank 3), 8 loot passives, offers (weights 45/35/12/8, rarity 70/23/6/1, capacity), heal fallback, queue, 10 s deadline (first card on timeout), 1 reroll per panel, 2 free per run (+VIP existing), 1/2/3 keys (milestone behaviour of the 8 newer signatures: data only, stream C; see ../gameplay/BUILDS.md)
 - [ ] **C** 12 kits exactly as the brief: weapons, passives, movement hooks, HP modifiers, base speed (Granny 20)
 - [ ] **D** 15-minute run, beacon at 12:30 (rally 30 s, charge 60 s, r35, one living non-downed hero within 20 to activate), Basin Breaker (HP formula, 3 telegraphed attacks, 50% phase), victory / defeat, overtime ramp
 - [ ] **D** N scaling (HP / damage / spawn), time scaling, spawn rate, alive caps 55/95/145/200, roster (beetle, floating eye, root runner from min 2, stump brute from min 4, sap lobber from min 6, elites from min 5 at 5%), spawns 35-70 studs on reachable ground, stuck repath / despawn

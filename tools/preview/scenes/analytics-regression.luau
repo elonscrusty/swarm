@@ -201,14 +201,43 @@ end, 20)
 check("cleared wave 1 of the first run: First Wave Completed once", cleared and count(ben, "First Wave Completed") == 1, list(ben))
 local wid = brp.WeaponOrder[1]
 local evo = WeaponData.Weapons[wid].Evolution
-brp.Weapons[wid].Level = WeaponData.MaxLevel
-brp.Passives[evo.Passive] = PassiveData.MaxLevelOf(evo.Passive)
-if not table.find(brp.PassiveOrder, evo.Passive) then
-	table.insert(brp.PassiveOrder, evo.Passive)
+-- (rank system, [stream B]: evolutions need player level 8 and come only as a level-up card, never
+-- from a chest; the old system evolves from a chest)
+local rankedBuilds = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Builds.Enabled == true
+local function readyToEvolve(r, id)
+	local e = WeaponData.Weapons[id].Evolution
+	r.Weapons[id].Level = WeaponData.MaxLevelOf and WeaponData.MaxLevelOf(id) or WeaponData.MaxLevel
+	r.Passives[e.Passive] = PassiveData.MaxLevelOf(e.Passive)
+	if not table.find(r.PassiveOrder, e.Passive) then
+		table.insert(r.PassiveOrder, e.Passive)
+	end
+	r.Level = math.max(r.Level or 1, 8)
 end
-LU.OpenChest(brp)
+local function evolveByCard(r, id): boolean
+	for _ = 1, 8 do
+		LU.QueueLevels(r, 1)
+		preview.advance(2)
+		if type(r.Offer) == "table" then
+			for i, card in ipairs(r.Offer) do
+				if card.Type == "Evolve" then
+					preview.fireServerAs(r.Player, "LevelUpChoose", i, r.OfferSeq)
+					preview.advance(1)
+					return r.Weapons[id].Evolved == true
+				end
+			end
+			LU.Cancel(r)
+		end
+	end
+	return false
+end
+readyToEvolve(brp, wid)
+if rankedBuilds then
+	evolveByCard(brp, wid)
+else
+	LU.OpenChest(brp)
+end
 preview.advance(0.5)
-check("chest evolution", brp.Weapons[wid].Evolved == true)
+check(rankedBuilds and "card evolution (rank system)" or "chest evolution", brp.Weapons[wid].Evolved == true)
 check("first evolution: First Evolution once", count(ben, "First Evolution") == 1, list(ben))
 Analytics.OnEvolution(ben)
 check("a later evolution: nothing more (Discovered.Evolutions has one)", count(ben, "First Evolution") == 1, list(ben))
@@ -222,12 +251,7 @@ local mrp = RM.GetRunPlayer(me)
 protect(mrp)
 check("second run: Started Second Run, no new step 3", count(me, "Started Second Run") == 1 and count(me, "3:Started First Run") == 1, list(me))
 local mw = mrp.WeaponOrder[1]
-local mevo = WeaponData.Weapons[mw].Evolution
-mrp.Weapons[mw].Level = WeaponData.MaxLevel
-mrp.Passives[mevo.Passive] = PassiveData.MaxLevelOf(mevo.Passive)
-if not table.find(mrp.PassiveOrder, mevo.Passive) then
-	table.insert(mrp.PassiveOrder, mevo.Passive)
-end
+readyToEvolve(mrp, mw)
 local picked = false
 for _ = 1, 8 do
 	LU.QueueLevels(mrp, 1)

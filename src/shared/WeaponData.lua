@@ -37,6 +37,9 @@
 	the stats it uses in WeaponData.StatUse.
 ]]
 
+-- [stream B] the continuation pack's rank rules (RunConfig.Builds; the catalog section below)
+local BuildRules = require(script.Parent.Parent:WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("BuildRules"))
+
 local WeaponData = {}
 
 WeaponData.MaxLevel = 12
@@ -90,9 +93,40 @@ WeaponData.Order = {
 -- Held for a later update: ids built and tested but kept out of Order (none right now).
 WeaponData.HeldOrder = {} :: { string }
 
--- Class signature weapons (SwarmV2): each is owned by exactly one class (Weapon.ClassOnly) and
--- is in neither Order nor HeldOrder. They start with their class and are never offered to others.
-WeaponData.ClassOrder = { "ScrapToss", "ToastVolley", "BubbleBomb", "YarnBomb" } :: { string }
+-- Class signature weapons (SwarmV2): each belongs to exactly one class (Weapon.ClassOnly) and
+-- is in neither Order nor HeldOrder. They start with their class. Old 12-level system: never
+-- offered to another class. Rank system ([stream B], RunConfig.Builds.Enabled): another class may
+-- be offered it only when the player owns that class (LevelUpSystem; weapon behaviour only, never
+-- that class's passive or movement ability).
+WeaponData.ClassOrder = {
+	"ScrapToss", "ToastVolley", "BubbleBomb", "YarnBomb", -- the first four classes
+	"Dodgeball", "MopSweep", "ReturningSneakers", "SeedSlinger", -- coach_crunch, doug_janitor, peter_parkour, barry_plotter
+	"ConfettiMinigun", "ProteinClaws", "RicochetPuck", "GloveCombo", -- rambozo, swolverine, crash_cassidy, knuckles_mcgee
+} :: { string }
+
+-- [stream B] The continuation pack's catalog (rank system): the 12 class signatures and the 3
+-- legacy weapons every class may find. Every other weapon stays as data, never offered.
+WeaponData.LegacyCatalog = { "Whip", "MagicOrb", "Vortex" } :: { string }
+WeaponData.Catalog = {
+	"ScrapToss", "ToastVolley", "BubbleBomb", "YarnBomb", "Dodgeball", "MopSweep", "ReturningSneakers",
+	"SeedSlinger", "ConfettiMinigun", "ProteinClaws", "RicochetPuck", "GloveCombo",
+	"Whip", "MagicOrb", "Vortex",
+} :: { string }
+-- class id -> its signature weapon
+WeaponData.Signatures = {
+	ruckus = "ScrapToss",
+	toastmaster = "ToastVolley",
+	captain_croak = "BubbleBomb",
+	granny_boom = "YarnBomb",
+	coach_crunch = "Dodgeball",
+	doug_janitor = "MopSweep",
+	peter_parkour = "ReturningSneakers",
+	barry_plotter = "SeedSlinger",
+	rambozo = "ConfettiMinigun",
+	swolverine = "ProteinClaws",
+	crash_cassidy = "RicochetPuck",
+	knuckles_mcgee = "GloveCombo",
+} :: { [string]: string }
 
 
 -- Display names for stat diffs on level-up cards.
@@ -1290,8 +1324,8 @@ WeaponData.Weapons = {
 	-- bounces + 1. Loot Rush (ClassKits) adds a ring of scraps to a volley.
 	ScrapToss = {
 		Id = "ScrapToss",
-		Name = "Scrap Toss",
-		Description = "Flings scrap at the nearest enemy; it bounces on to another.",
+		Name = "Scrap Shot", -- continuation pack name (id stays "ScrapToss")
+		Description = "Fires scrap at the nearest enemy; it bounces on to another.",
 		Color = Color3.fromRGB(150, 135, 110),
 		Behavior = "ScrapToss",
 		ClassOnly = "ruckus",
@@ -1312,12 +1346,15 @@ WeaponData.Weapons = {
 			row(21, 0.65, 3, 1.2, 60, 4, 1.3, 7),
 			row(23, 0.6, 3, 1.2, 60, 4, 1.3, 8),
 		},
+		-- continuation pack evolution (was Junkyard Barrage + Gilded Purse; the old row stays for the
+		-- 12-level system): the final bounce creates one radius-5 0.35 B scrap pulse
 		Evolution = {
-			Id = "JunkyardBarrage",
-			Name = "Junkyard Barrage",
-			Passive = "GildedPurse",
-			Description = "Four heavy scraps per volley; each bounce hits 15% harder.",
+			Id = "JunkyardCyclone",
+			Name = "Junkyard Cyclone",
+			Passive = "PatchworkPadding",
+			Description = "The last bounce bursts into a whirling scrap pulse.",
 			Stats = row(32, 0.5, 4, 1.4, 68, 6, 1.4, 10),
+			Pulse = { Radius = 5, Coeff = 0.35 },
 		},
 	},
 
@@ -1325,8 +1362,8 @@ WeaponData.Weapons = {
 	-- one enemy within 4 s set it burning.
 	ToastVolley = {
 		Id = "ToastVolley",
-		Name = "Toast Volley",
-		Description = "Pops toast at the nearest enemies; slices ricochet to another.",
+		Name = "Toast Toss", -- continuation pack name (id stays "ToastVolley")
+		Description = "Launches toast at the nearest enemy; it ricochets to another.",
 		Color = Color3.fromRGB(225, 180, 105),
 		Behavior = "ToastVolley",
 		ClassOnly = "toastmaster",
@@ -1347,12 +1384,15 @@ WeaponData.Weapons = {
 			row(12, 0.48, 3, 1.0, 68, 4, 1.0, 4),
 			row(12.5, 0.46, 3, 1.0, 70, 4, 1.0, 4),
 		},
+		-- continuation pack evolution (was Double Decker + Ember Oil): a second 0.35 B toast follows
+		-- 0.12 s later
 		Evolution = {
-			Id = "DoubleDecker",
-			Name = "Double Decker",
-			Passive = "EmberOil",
-			Description = "Four scorched slices that ricochet four times.",
+			Id = "Toaststorm",
+			Name = "Toaststorm",
+			Passive = "RatchetTimer",
+			Description = "A second toast follows every throw.",
 			Stats = row(18, 0.42, 4, 1.2, 76, 5, 1.1, 5),
+			FollowUp = { Delay = 0.12, Coeff = 0.35 },
 		},
 	},
 
@@ -1383,12 +1423,15 @@ WeaponData.Weapons = {
 			row(22, 0.9, 3, 1.25, 46, 3, 1.4, 6),
 			row(24, 0.85, 3, 1.3, 46, 4, 1.4, 6),
 		},
+		-- continuation pack evolution (was Tidal Burst + Area): each burst leaves two small bubbles,
+		-- 0.25 B each to separate visible enemies within 8 studs, once per bubble
 		Evolution = {
-			Id = "TidalBurst",
-			Name = "Tidal Burst",
-			Passive = "Area",
-			Description = "Huge bubbles whose bursts hit as hard as the bubble itself.",
+			Id = "BubbleTorrent",
+			Name = "Bubble Torrent",
+			Passive = "CollectorsBell",
+			Description = "Every burst leaves two small bubbles that seek nearby enemies.",
 			Stats = row(34, 0.75, 3, 1.5, 48, 4, 1.5, 8),
+			SmallBubbles = { Count = 2, Coeff = 0.25, Range = 8 },
 		},
 	},
 
@@ -1418,21 +1461,314 @@ WeaponData.Weapons = {
 			row(24, 0.95, 3, 1.25, 36, 999, 0, 11),
 			row(26, 0.9, 3, 1.3, 36, 999, 0, 12),
 		},
+		-- continuation pack evolution (was Grand Knitwork + Duplicator): three radial 0.15 B yarn
+		-- fragments, each hitting once and never triggering other fragments
 		Evolution = {
-			Id = "GrandKnitwork",
-			Name = "Grand Knitwork",
-			Passive = "Duplicator",
-			Description = "Four giant yarn bombs with a wider, harder blast.",
+			Id = "KnittingNightmare",
+			Name = "Knitting Nightmare",
+			Passive = "SplinterBadge",
+			Description = "Every blast flings three yarn fragments outward.",
 			Stats = row(36, 0.75, 4, 1.5, 38, 999, 0, 14),
+			Fragments = { Count = 3, Coeff = 0.15, Range = 10, Speed = 40 },
 		},
 	},
 }
+
+------------------------------------------------------------------------------------------
+-- [stream B] The continuation pack's catalog: ranks 1-5 (RunConfig.Builds.Enabled)
+------------------------------------------------------------------------------------------
+--[[
+	Every catalog weapon has a `Rank` spec. Hit damage = B x coeff x (1 + 0.20 (r - 1)) x (1 + the
+	player's additive damage bonus); interval = Interval x 0.95^(r - 1) / (1 + attack speed), at least
+	0.25 s (BuildRules). Coefficients (Coeff, BounceCoeff, ...) are multiples of B. `Milestones[3]`
+	and `Milestones[5]` replace spec fields from that rank on (WeaponData.RankSpec merges them in
+	order) and carry the card `Text`. Behaviours (WeaponSystem Fire[...]):
+	  RankShot   straight projectiles at the nearest visible target (Amount, Spread), Pierce, Bounces
+	             to a different visible target within BounceRange for BounceCoeff (secondary)
+	  RankSwing  melee arc in front (Reach, Arc, MaxTargets), gentle facing assist, optional Slow
+	  RankBubble a bubble flying to the target: ImpactCoeff to the first enemy it touches, then a
+	             BurstCoeff burst (BurstRadius) after its ground bounce or the Fuse
+	  RankYarn   a yarn bomb thrown at the nearest visible target, bursting after Fuse (BlastRadius,
+	             MaxTargets)
+	  RankOrb    orbs circling the hero (OrbitRadius, RevPerSecond, Amount): Coeff per contact, each
+	             orb hits a target at most once per interval
+	  RankVortex a rift at a visible reachable target (Range): Coeff pulses every Tick for Duration,
+	             MaxTargets per pulse, Pull studs/s inward (ordinary enemies), one rift per owner
+	The 8 newer signatures run a placeholder behaviour (RankShot / RankSwing with the right
+	coefficient) until stream C gives them their own; their extra fields (Return*, Plant*, Charge*,
+	...) and milestone data are stored here for that.
+]]
+local RANK: { [string]: any } = {
+	-- Ruckus: 0.90 B scrap, 0.90 s, range 32, speed 70; bounces once (0.45 B) within 10 studs
+	ScrapToss = {
+		Behavior = "RankShot", Coeff = 0.90, Interval = 0.90, Range = 32, Speed = 70, Radius = 0.9,
+		Bounces = 1, BounceCoeff = 0.45, BounceRange = 10, Knockback = 5, Visual = 57,
+		Milestones = {
+			[3] = { Bounces = 2, Text = "Bounces twice" },
+			[5] = { ExtraShots = 1, ExtraCoeff = 0.40, Text = "Fires one more scrap (0.40 B)" },
+		},
+	},
+	-- Toastmaster: 0.65 B toast, 0.85 s, range 32, speed 65; ricochets once (0.35 B) within 10 studs
+	ToastVolley = {
+		Behavior = "RankShot", Coeff = 0.65, Interval = 0.85, Range = 32, Speed = 65, Radius = 0.8,
+		Bounces = 1, BounceCoeff = 0.35, BounceRange = 10, Knockback = 3, Visual = 58, EvoVisual = 62,
+		Milestones = {
+			[3] = { Bounces = 2, Text = "Ricochets twice" },
+			[5] = { FinalBurst = { Radius = 3, Coeff = 0.20 }, Text = "The last impact bursts (radius 3, 0.20 B)" },
+		},
+	},
+	-- Captain Croak: 0.20 B impact + radius-6 0.90 B burst, 1.20 s, range 28, speed 48, fuse 0.80 s
+	BubbleBomb = {
+		Behavior = "RankBubble", Coeff = 0.90, ImpactCoeff = 0.20, Interval = 1.20, Range = 28, Speed = 48,
+		Radius = 1.1, BurstRadius = 6, Fuse = 0.80, BounceTime = 0.15, Knockback = 4, Visual = 59, EvoVisual = 63,
+		Milestones = {
+			[3] = { BurstRadius = 7, Text = "Burst radius +1 stud" },
+			[5] = { SecondBubble = { Delay = 0.35, Share = 0.5 }, Text = "A second bubble follows at half damage" },
+		},
+	},
+	-- Granny Boom: 1.25 B yarn blast, 1.40 s, range 35, 1 s fuse, radius 8, at most 8 targets
+	YarnBomb = {
+		Behavior = "RankYarn", Coeff = 1.25, Interval = 1.40, Range = 35, Fuse = 1.0, BlastRadius = 8,
+		MaxTargets = 8, Knockback = 8, Visual = 60,
+		Milestones = {
+			[3] = { Fuse = 0.85, Text = "Fuse 0.85 s" },
+			[5] = { BlastRadius = 10, Text = "Blast radius 10" },
+		},
+	},
+	-- Coach Crunch: 0.85 B dodgeball, 1.00 s, range 35, speed 70; bounces once (0.40 B) within 10
+	Dodgeball = {
+		Behavior = "RankShot", Coeff = 0.85, Interval = 1.00, Range = 35, Speed = 70, Radius = 1.0,
+		Bounces = 1, BounceCoeff = 0.40, BounceRange = 10, Knockback = 6, Visual = 45,
+		Milestones = {
+			[3] = { Bounces = 2, Text = "Bounces twice" },
+			[5] = { SecondBall = { Delay = 0.3, Share = 0.5 }, Text = "A second ball follows at half damage" },
+		},
+	},
+	-- Doug the Janitor: 0.85 B mop sweep, 1.15 s, 10-stud arc (110 degrees assumed), max 6, 20% slow 2 s
+	MopSweep = {
+		Behavior = "RankSwing", Coeff = 0.85, Interval = 1.15, Reach = 10, Arc = 110, MaxTargets = 6,
+		Slow = { Share = 0.20, Seconds = 2 }, Knockback = 4,
+		Milestones = {
+			[3] = { Arc = 130, Text = "Sweep widens to 130 degrees" },
+			[5] = { MaxTargets = 8, Text = "Hits up to 8 enemies" },
+		},
+	},
+	-- Peter Parkour: shoe out 0.70 B (2 targets) and back 0.35 B (2 targets), 1.20 s, range 28
+	-- (placeholder: a straight shoe hitting OutTargets enemies; the return leg is stream C's)
+	ReturningSneakers = {
+		Behavior = "RankShot", Coeff = 0.70, ReturnCoeff = 0.35, Interval = 1.20, Range = 28, Speed = 45,
+		Radius = 1.0, Pierce = 2, OutTargets = 2, ReturnTargets = 2, Knockback = 3, Visual = 5,
+		Milestones = {
+			[3] = { OutTargets = 3, Pierce = 3, Text = "Hits 3 enemies on the way out" },
+			[5] = { ReturnTargets = 3, Text = "Hits 3 enemies on the way back" },
+		},
+	},
+	-- Barry Plotter: 0.25 B seed every 1.80 s, range 28; a plant (6 s, 0.25 B per second at the
+	-- nearest visible enemy within 20, cap 3) - placeholder: the seed impact only
+	SeedSlinger = {
+		Behavior = "RankShot", Coeff = 0.25, Interval = 1.80, Range = 28, Speed = 40, Radius = 0.8,
+		PlantCoeff = 0.25, PlantSeconds = 6, PlantFireEvery = 1.0, PlantRange = 20, PlantCap = 3,
+		Knockback = 0, Visual = 45,
+		Milestones = {
+			[3] = { PlantSeconds = 8, Text = "Plants last 8 s" },
+			[5] = { PlantCap = 4, Text = "Up to 4 plants" },
+		},
+	},
+	-- Rambozo: three 0.20 B pellets every 0.75 s, range 30 (all three can hit one target)
+	ConfettiMinigun = {
+		Behavior = "RankShot", Coeff = 0.20, Interval = 0.75, Range = 30, Speed = 80, Radius = 0.6,
+		Amount = 3, Spread = 4, SameTarget = true, Knockback = 1, Visual = 24,
+		Milestones = {
+			[3] = { Amount = 4, Text = "4 pellets per burst" },
+			[5] = { Amount = 5, Text = "5 pellets per burst" },
+		},
+	},
+	-- Swolverine: 0.65 B claw swipes every 0.75 s, 14-stud forward reach, max 3 targets, alternating
+	ProteinClaws = {
+		Behavior = "RankSwing", Coeff = 0.65, Interval = 0.75, Reach = 14, Arc = 100, MaxTargets = 3,
+		Alternate = true, Knockback = 4,
+		Milestones = {
+			[3] = { MaxTargets = 4, Text = "Hits up to 4 enemies" },
+			[5] = { ThirdPulse = { Every = 3, Radius = 4, Coeff = 0.20 }, Text = "Every 3rd swipe adds a pulse (radius 4, 0.20 B)" },
+		},
+	},
+	-- Crash Cassidy: 0.70 B puck every 1.00 s, range 38; bounces once (0.35 B) within 10
+	RicochetPuck = {
+		Behavior = "RankShot", Coeff = 0.70, Interval = 1.00, Range = 38, Speed = 75, Radius = 0.9,
+		Bounces = 1, BounceCoeff = 0.35, BounceRange = 10, Knockback = 5, Visual = 49,
+		Milestones = {
+			[3] = { Bounces = 2, Text = "Bounces twice" },
+			[5] = { Bounces = 3, Text = "Bounces three times" },
+		},
+	},
+	-- Knuckles McGee: 0.65 B punches at the nearest target within 8 studs every 0.65 s; the 6th punch
+	-- after 5 hits is a 1.40 B uppercut with a radius-4 0.30 B shockwave (3 more targets)
+	GloveCombo = {
+		Behavior = "RankSwing", Coeff = 0.65, Interval = 0.65, Reach = 8, Arc = 70, MaxTargets = 1,
+		ChargeAfter = 5, UppercutCoeff = 1.40, ShockRadius = 4, ShockCoeff = 0.30, ShockTargets = 3, Knockback = 4,
+		Milestones = {
+			[3] = { ChargeAfter = 4, Text = "Uppercut after 4 punches" },
+			[5] = { ChargeAfter = 3, Text = "Uppercut after 3 punches" },
+		},
+	},
+	-- Sword (legacy, id Whip): the brief's tuning (110 degrees, 10 studs, 0.95 s, 1.00 B, max 6),
+	-- the existing slash look and swing auto aim
+	Whip = {
+		Behavior = "RankSwing", Coeff = 1.00, Interval = 0.95, Reach = 10, Arc = 110, MaxTargets = 6, Knockback = 10,
+		Milestones = {
+			[3] = { Arc = 130, Text = "Swing widens to 130 degrees" },
+			[5] = { Reach = 12, Text = "Reach 12 studs" },
+		},
+	},
+	-- Magic Orb (legacy): orbits at 6 studs, one turn per second, 0.45 B per contact, a target at
+	-- most once per 0.75 s per orb (the existing Ward Shields orbit; the homing orb stays the old
+	-- 12-level system's)
+	MagicOrb = {
+		Behavior = "RankOrb", Coeff = 0.45, Interval = 0.75, OrbitRadius = 6, RevPerSecond = 1, Amount = 1,
+		Radius = 1.2, Knockback = 3, Visual = 1, EvoVisual = 6,
+		Milestones = {
+			[3] = { Amount = 2, Text = "Two orbs" },
+			[5] = { Amount = 3, Text = "Three orbs" },
+		},
+	},
+	-- Vortex (legacy, the existing rift): cast at a visible target within 28 every 4 s, radius 7,
+	-- 3 s, 0.25 B pulses every 0.75 s, at most 8 targets per pulse, 4 studs/s inward pull
+	Vortex = {
+		Behavior = "RankVortex", Coeff = 0.25, Interval = 4.0, Range = 28, VortexRadius = 7, Duration = 3,
+		Tick = 0.75, MaxTargets = 8, Pull = 4, Visual = 55, EvoVisual = 56,
+		Milestones = {
+			[3] = { VortexRadius = 9, Text = "Rift radius 9" },
+			[5] = { Duration = 4, Text = "Rift lasts 4 s" },
+		},
+	},
+}
+
+-- The eight newer class signatures (data entries; behaviours above are placeholders for stream C).
+local NEW_SIGNATURES: { { [string]: any } } = {
+	{ Id = "Dodgeball", Name = "Dodgeball", ClassOnly = "coach_crunch", Color = Color3.fromRGB(220, 80, 70),
+		Description = "Hurls a dodgeball at the nearest enemy; it bounces to another.", AmountLabel = "Balls" },
+	{ Id = "MopSweep", Name = "Mop Sweep", ClassOnly = "doug_janitor", Color = Color3.fromRGB(120, 170, 200),
+		Description = "Sweeps a wet mop arc in front of you and slows what it hits.", AmountLabel = "Sweeps" },
+	{ Id = "ReturningSneakers", Name = "Returning Sneakers", ClassOnly = "peter_parkour", Color = Color3.fromRGB(240, 150, 60),
+		Description = "Throws a sneaker that hits on the way out and on the way back.", AmountLabel = "Sneakers" },
+	{ Id = "SeedSlinger", Name = "Seed Slinger", ClassOnly = "barry_plotter", Color = Color3.fromRGB(110, 190, 80),
+		Description = "Plants seeds that grow into shooting plants.", AmountLabel = "Seeds" },
+	{ Id = "ConfettiMinigun", Name = "Confetti Minigun", ClassOnly = "rambozo", Color = Color3.fromRGB(240, 110, 200),
+		Description = "Sprays bursts of confetti pellets at the nearest enemy.", AmountLabel = "Pellets" },
+	{ Id = "ProteinClaws", Name = "Protein Claws", ClassOnly = "swolverine", Color = Color3.fromRGB(200, 200, 210),
+		Description = "Alternating claw swipes in front of you.", AmountLabel = "Swipes" },
+	{ Id = "RicochetPuck", Name = "Ricochet Puck", ClassOnly = "crash_cassidy", Color = Color3.fromRGB(60, 60, 70),
+		Description = "Slaps a puck at the nearest enemy; it ricochets to another.", AmountLabel = "Pucks" },
+	{ Id = "GloveCombo", Name = "Glove Combo", ClassOnly = "knuckles_mcgee", Color = Color3.fromRGB(220, 50, 50),
+		Description = "Punch combos at the nearest enemy, then a big uppercut.", AmountLabel = "Punches" },
+}
+
+-- RankSpec merged with its milestones up to rank r (a new table).
+local function mergedSpec(spec: any, r: number): any
+	local out = table.clone(spec)
+	out.Milestones = nil
+	for _, m in ipairs({ 3, 5 }) do
+		local ms = spec.Milestones and spec.Milestones[m]
+		if ms and r >= m then
+			for k, v in pairs(ms) do
+				if k ~= "Text" then
+					out[k] = v
+				end
+			end
+		end
+	end
+	return out
+end
+
+-- A 12-level-shaped stat row of rank r (row fields; the old system's readers keep working).
+local function rankRow(spec: any, r: number)
+	local s = mergedSpec(spec, r)
+	local speed = s.Speed or 0
+	local duration = (speed > 0 and s.Range) and (s.Range / speed) or (s.Duration or 0)
+	return row(
+		BuildRules.B() * s.Coeff * BuildRules.RankMult(r),
+		BuildRules.RankInterval(s.Interval, r),
+		s.Amount or 1,
+		1,
+		speed,
+		s.Pierce or 1,
+		duration,
+		s.Knockback or 0
+	)
+end
+
+local MAX_RANK = BuildRules.MaxRank()
+for _, d in ipairs(NEW_SIGNATURES) do
+	local spec = RANK[d.Id]
+	local levels = {}
+	for level = 1, WeaponData.MaxLevel do
+		-- old-system readers: level L reads rank ceil(5 L / 12) (kept as separate statements: the
+		-- offline preview's Luau build crashed on the nested one-line form in this big chunk)
+		local r = math.ceil(level * MAX_RANK / WeaponData.MaxLevel)
+		r = math.min(math.max(r, 1), MAX_RANK)
+		local levelRow = rankRow(spec, r)
+		table.insert(levels, levelRow)
+	end
+	d.Behavior = spec.Behavior
+	d.RankOnly = true -- no hand-made 12-level rows or evolution: the rank system's weapon
+	d.Params = { Radius = spec.Radius or 1, Visual = spec.Visual or 1, EvoVisual = spec.Visual or 1 }
+	d.Levels = levels
+	WeaponData.Weapons[d.Id] = d
+end
+for id, spec in pairs(RANK) do
+	WeaponData.Weapons[id].Rank = spec
+end
+
+-- True when this weapon runs on ranks now (rank system on and the weapon is in the catalog).
+function WeaponData.IsRanked(weaponId: string): boolean
+	local def = WeaponData.Weapons[weaponId]
+	return def ~= nil and def.Rank ~= nil and BuildRules.On()
+end
+
+-- Highest rank / level of a weapon in the live system.
+function WeaponData.MaxLevelOf(weaponId: string): number
+	return WeaponData.IsRanked(weaponId) and BuildRules.MaxRank() or WeaponData.MaxLevel
+end
+
+-- The rank spec of a catalog weapon at rank r with its milestones applied (nil off the catalog).
+-- Evolved weapons keep their rank-5 numbers; the evolution adds its own effect (def.Evolution).
+function WeaponData.RankSpec(weaponId: string, r: number): any
+	local def = WeaponData.Weapons[weaponId]
+	if not def or not def.Rank then
+		return nil
+	end
+	return mergedSpec(def.Rank, BuildRules.ClampRank(r))
+end
+
+-- The behaviour that fires this weapon now (Fire[...] in WeaponSystem).
+function WeaponData.BehaviorOf(weaponId: string): string
+	local def = WeaponData.Weapons[weaponId]
+	if not def then
+		return ""
+	end
+	if def.Rank and BuildRules.On() then
+		return def.Rank.Behavior
+	end
+	return def.Behavior
+end
+
+-- Milestone card text reached exactly at rank r (3 or 5), or nil.
+function WeaponData.MilestoneText(weaponId: string, r: number): string?
+	local def = WeaponData.Weapons[weaponId]
+	local m = def and def.Rank and def.Rank.Milestones and def.Rank.Milestones[r]
+	return m and m.Text or nil
+end
 
 -- Returns the stat row for a weapon at a level (evolved overrides the row).
 function WeaponData.GetStats(weaponId: string, level: number, evolved: boolean?)
 	local def = WeaponData.Weapons[weaponId]
 	if not def then
 		return nil
+	end
+	if def.Rank and BuildRules.On() then
+		-- rank system: `level` is the rank (1-5); an evolution keeps the rank-5 row and adds its
+		-- own effect (no extra numbers)
+		return rankRow(def.Rank, BuildRules.ClampRank(evolved and BuildRules.MaxRank() or level))
 	end
 	if evolved and def.Evolution then
 		return def.Evolution.Stats
@@ -1490,6 +1826,13 @@ WeaponData.StatUse = {
 	ToastVolley = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
 	BubbleBomb = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
 	YarnBomb = { damage = true, cooldown = true, amount = true, area = true, speed = true, knockback = true },
+	-- [stream B] rank-system behaviours (WeaponData Rank specs)
+	RankShot = { damage = true, cooldown = true, amount = true, speed = true, pierce = true, knockback = true },
+	RankSwing = { damage = true, cooldown = true, area = true, knockback = true },
+	RankBubble = { damage = true, cooldown = true, area = true, speed = true, knockback = true },
+	RankYarn = { damage = true, cooldown = true, area = true, knockback = true },
+	RankOrb = { damage = true, cooldown = true, amount = true, area = true, knockback = true },
+	RankVortex = { damage = true, cooldown = true, area = true, duration = true },
 }
 
 -- True when the weapon (id, level, evolved) uses stat-row key `stat`.
@@ -1531,6 +1874,72 @@ function WeaponData.AllowedFor(weaponId: string, classId: string?): boolean
 		return false
 	end
 	return def.ClassOnly == nil or def.ClassOnly == classId
+end
+
+-- [stream B] Rank system: may a player of class `classId` owning `owned` ({ [classId] = true })
+-- be offered / hold this weapon? Legacy catalog weapons: everyone. A signature: its own class, or
+-- a player who owns that class (weapon behaviour only).
+function WeaponData.AllowedWith(weaponId: string, classId: string?, owned: { [string]: boolean }?): boolean
+	local def = WeaponData.Weapons[weaponId]
+	if not def then
+		return false
+	end
+	local cls = def.ClassOnly
+	return cls == nil or cls == classId or (owned ~= nil and owned[cls] == true)
+end
+
+-- [stream B] Card lines of a catalog weapon going from rank `fromRank` (0 = new) to `toRank`, with
+-- the real numbers for this player (`bonus` = additive damage bonus, `attackSpeed`):
+--   { Label = "Rank", From = "1", To = "3" }, { Label = "Damage", From = "9", To = "12.6" },
+--   { Label = "Interval", ... }, { Label = "NEW", Text = "Rank 3: Bounces twice" }
+-- evolve = true: the evolution's own line.
+function WeaponData.RankLines(weaponId: string, fromRank: number, toRank: number, evolve: boolean?, bonus: number?, attackSpeed: number?): { { [string]: string } }
+	local def = WeaponData.Weapons[weaponId]
+	local out = {}
+	if not def or not def.Rank then
+		return out
+	end
+	local function dmg(r: number): string
+		local v = BuildRules.HitDamage(def.Rank.Coeff, r, bonus)
+		return math.abs(v - math.floor(v + 0.5)) < 0.05 and tostring(math.floor(v + 0.5)) or string.format("%.1f", v)
+	end
+	local function iv(r: number): string
+		return string.format("%.2fs", BuildRules.Interval(def.Rank.Interval, r, attackSpeed))
+	end
+	if evolve then
+		local evo = def.Evolution
+		if evo then
+			table.insert(out, { Label = "NEW", Text = evo.Name .. ": " .. evo.Description })
+		end
+		return out
+	end
+	if fromRank <= 0 then
+		table.insert(out, { Label = "Rank", To = tostring(toRank) })
+		table.insert(out, { Label = "Damage", To = dmg(toRank) })
+		table.insert(out, { Label = "Interval", To = iv(toRank) })
+	else
+		table.insert(out, { Label = "Rank", From = tostring(fromRank), To = tostring(toRank) })
+		table.insert(out, { Label = "Damage", From = dmg(fromRank), To = dmg(toRank) })
+		table.insert(out, { Label = "Interval", From = iv(fromRank), To = iv(toRank) })
+	end
+	for _, m in ipairs({ 3, 5 }) do
+		local text = WeaponData.MilestoneText(weaponId, m)
+		if text and m > fromRank and m <= toRank then
+			table.insert(out, { Label = "NEW", Text = string.format("Rank %d: %s", m, text) })
+		end
+	end
+	return out
+end
+
+-- [stream B] "Rank 3: Bounces twice" for the next milestone after rank r (nil when none is left).
+function WeaponData.NextMilestoneText(weaponId: string, r: number): string?
+	for _, m in ipairs({ 3, 5 }) do
+		local text = WeaponData.MilestoneText(weaponId, m)
+		if text and m > r then
+			return string.format("Rank %d: %s", m, text)
+		end
+	end
+	return nil
 end
 
 -- Perk unlocked at exactly `level` (nil if none).

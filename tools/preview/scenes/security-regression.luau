@@ -279,9 +279,20 @@ do
 	assert(not RM.IsFrozen(), "and never freezes a duo")
 	-- a chooser who drops out leaves no protection behind
 	LUS.QueueLevels(mrp, 1)
-	assert(mrp.Offer and mrp.Paused, "panel open")
+	-- [stream B] the continuation pack's rank system: a team-run choice is live (not paused, not
+	-- protected), so enemies keep chasing the chooser; the old system protects and they leave
+	local liveChoices = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Builds.Enabled == true
+	assert(mrp.Offer and (mrp.Paused or (liveChoices and mrp.LiveChoice)), "panel open")
+	if liveChoices then
+		local Spawner = preview.server("EnemySpawner")
+		local e = assert(Spawner.Spawn("Bat", mrp.Root.Position + Vector3.new(3, 0, 0), { Force = true, HP = 1e6 }))
+		preview.advance(0.3)
+		assert(e.Target == mrp, "a live chooser is not protected: the enemy next to them targets them")
+		Spawner.Despawn(e)
+		preview.log("PASS live choice: no protection, enemies keep their target")
+	end
 	-- SEC-02b (owner OK 2026-10-05): enemies leave a protected chooser for a free partner
-	do
+	if not liveChoices then
 		local Spawner = preview.server("EnemySpawner")
 		local e = assert(Spawner.Spawn("Bat", mrp.Root.Position + Vector3.new(3, 0, 0), { Force = true, HP = 1e6 }))
 		preview.advance(0.3)

@@ -123,6 +123,10 @@ def main():
     # redesign integration: basecamp avatar + camera, ClassService select / buy, gate -> local match on
     # Cliffwood with the class rig, results -> back at the bonfire, rewards once, a 2-player party
     checks += [("swarm-v2-flow", [])]
+    # continuation pack, stream B: rank builds + combat core (formulas, offers, rarity / category
+    # distributions, slots, evolutions, heal fallback, deadlines, rerolls, statuses, budget, line of
+    # sight); choice-regression also runs once with the old 12-level system switched back on
+    checks += [("builds-sim", []), ("choice-regression", ["builds=legacy"])]
 
     def run(check):
         scene, settings = check
