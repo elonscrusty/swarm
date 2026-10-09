@@ -273,7 +273,7 @@ check("E10 both committed once", rpMe ~= nil and rpMe.Committed == true and rpAv
 	and data.Stats.Runs == runsMe and avaData.Stats.Runs == runsAva)
 check("E11 the party is kept", PS.PartyOf(me) ~= nil and PS.PartyOf(me) == PS.PartyOf(ava))
 
-check("Z1 no step / handler errors logged", errorCount() == 0)
+check("Z1 no step or remote-handler failures logged", errorCount() == 0)
 
 local failed = 0
 for _, r in ipairs(results) do
