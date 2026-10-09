@@ -21,3 +21,18 @@
 - DONE (10bcc1e: Outcome + Duration) **Results:** the server sends no Outcome / Duration / Stats fields. The UI derives them from Won /
   Abandoned and ClassGoals; the brief wants server-confirmed outcome, duration and stats (F).
 - **Walkthrough / tutorial texts:** still mention the portal (H1 is on it).
+
+## Paused 2026-10-09 (owner asked to pause)
+
+Five final-pass fixes are merged:
+- lobby saves only while the profile is ready
+- skin buttons show the real Robux price
+- hidden old heroes are never bought, selected or upgraded
+- data, heroes and discovery regressions updated for the 12-class roster
+- the enemy journal counts shard kills
+- Basin Breaker sap wind-up 0.5 s
+
+Still open when work resumes:
+- the results footer phone layout and the portrait card/JUMP overlap. An unfinished edit was not kept.
+- the full regression suite on the combined game, and `docs/redesign/TEST_REPORT.md`
+- the final `build/Swarm.rbxlx` and the merge to `main`
