@@ -11,7 +11,10 @@
 	            of its character) moves itself: AssemblyLinearVelocity = dir * speed, horizontal only,
 	            for `duration`; a Leap also gets the vertical launch `vy` and ends on landing.
 	  Anti-tunnel  every frame a ray goes ahead of the hero (waist and feet); the dash stops
-	            RunConfig.Dash.WallMargin studs before a wall.
+	            RunConfig.Dash.WallMargin studs before a wall (a wall ends the forward travel; no
+	            pushing through, no wall boosts).
+	  Slopes    a ground dash never gains upward speed (no ramp launches, stream E1).
+	  No i-frames  a dash grants no protection (the server's damage rules know nothing of dashes).
 	  Ring      the DASH button's cooldown comes from the player attributes DashReadyAt (server time)
 	            and DashCd, both set by the server.
 
@@ -45,6 +48,7 @@ local active: {
 	Leap: boolean,
 	Start: number,
 	Vy: number,
+	StartVy: number, -- vertical speed when a ground dash began (it never gains more: no ramp launches)
 }? = nil
 local hooks: { (string, Vector3) -> () } = {}
 
@@ -153,7 +157,7 @@ local function start(kind: string, dir: Vector3, speed: number, duration: number
 	end
 	local now = os.clock()
 	local leap = kind == "Leap"
-	active = { Dir = dir, Speed = speed, Until = now + duration, Leap = leap, Start = now, Vy = vy }
+	active = { Dir = dir, Speed = speed, Until = now + duration, Leap = leap, Start = now, Vy = vy, StartVy = math.max(0, root.AssemblyLinearVelocity.Y) }
 	if controls then
 		controls.MoveOverride = dir
 	end
@@ -214,7 +218,14 @@ local function step(dt: number)
 		finish = true
 	end
 	local v = root.AssemblyLinearVelocity
-	root.AssemblyLinearVelocity = Vector3.new(a.Dir.X * speed, v.Y, a.Dir.Z * speed)
+	local vy = v.Y
+	if not a.Leap then
+		-- [stream E1] no upward impulse on slopes: a ground dash never rises faster than it did when
+		-- it started (that speed decays with gravity; RunConfig.Survival.Move.DashSlopeRise extra)
+		local capY = math.max(0, a.StartVy - workspace.Gravity * (now - a.Start)) + RunConfig.Survival.Move.DashSlopeRise
+		vy = math.min(vy, capY)
+	end
+	root.AssemblyLinearVelocity = Vector3.new(a.Dir.X * speed, vy, a.Dir.Z * speed)
 	if finish then
 		stop()
 	end

@@ -17,6 +17,12 @@
 	rp.DashAllow (studs/s the speed check allows), rp.DashDir, rp.DashKind, rp.DashReadyAt (os.clock).
 	Player attributes for the HUD: DashReadyAt (workspace:GetServerTimeNow() when ready), DashCd (seconds).
 
+	Rules (stream E1, RunConfig.Dash + RunConfig.Survival): 70 studs/s for 0.22 s, the 2.5 s cooldown
+	counted from the dash start, no invulnerability (RunManager.DamagePlayer knows nothing of
+	dashes), the requested flat direction else facing (the client picks, the server checks it is
+	a flat unit vector), a wall ends the forward travel and a ground dash gains no upward speed on
+	a slope (DashClient). The landing check below also measures falls (RunManager.OnFallLanding).
+
 	Server hooks (use :Connect(callback), which returns a connection with :Disconnect()):
 	  Dash.OnDash        callback(rp, kind: "Dash" | "Leap", dir: Vector3)
 	  Dash.OnLeapLanded  callback(rp)
@@ -72,7 +78,7 @@ local launchRemote: RemoteEvent? = nil
 local ackRemote: RemoteEvent? = nil
 
 local buckets: { [Player]: { tokens: number, last: number } } = {}
-type AirState = { AirSince: number?, Params: RaycastParams? }
+type AirState = { AirSince: number?, PeakY: number?, Params: RaycastParams? }
 local airStates: { [Player]: AirState } = {}
 
 -- Finds or creates a child (FindFirstChild before Instance.new, the lobby track may boot first).
@@ -108,15 +114,17 @@ local function finite(n: number): boolean
 	return n == n and n ~= math.huge and n ~= -math.huge
 end
 
--- Canonical class id of a run player ("" when unknown).
+-- Canonical class id of a run player ("" when unknown). [stream E1] The run's hero comes first:
+-- rp.CharacterId is set from the admitted class (never a client claim). The lobby's SwarmClass
+-- attribute (the basecamp selection, UI only) is only a last fallback: it can differ from the
+-- admitted class, and preferring it gave every class the default dash.
 function Dash.GetClassId(rp: any): string
 	local id = rp.ClassId
 	if type(id) ~= "string" or id == "" then
-		id = rp.Player and rp.Player:GetAttribute("SwarmClass")
+		id = rp.CharacterId
 	end
 	if type(id) ~= "string" or id == "" then
-		-- the run's hero (RunManager sets it from the admitted class; never a client claim)
-		id = rp.CharacterId
+		id = rp.Player and rp.Player:GetAttribute("SwarmClass")
 	end
 	return if type(id) == "string" then id else ""
 end
@@ -278,22 +286,36 @@ local function groundedNow(rp: any, st: AirState): boolean
 	return workspace:Raycast(root.Position, Vector3.new(0, -reach, 0), p) ~= nil
 end
 
+--[[
+	[stream E1] One landing, recognized once: the air state runs grounded -> airborne (AirSince, the
+	highest root height PeakY) -> grounded, and only that last transition is a landing. A teleport,
+	travel or out-of-bounds rescue sets rp.AirReset (RunManager.TeleportPlayer): the state starts
+	over, so the arrival is no landing (no fall damage, no landing ability). Falls hurt through
+	RunManager.OnFallLanding(rp, drop) (Survival.Fall); a leap / launch-pad arc never does.
+]]
 local function landingStep()
 	local now = os.clock()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		local player: Player = rp.Player
 		local st = airStates[player]
 		if not st then
-			st = { AirSince = nil, Params = nil }
+			st = { AirSince = nil, PeakY = nil, Params = nil }
 			airStates[player] = st
 		end
 		local root: BasePart? = rp.Root
-		if rp.Returned or not rp.Alive or not root or not root.Parent or root.Anchored then
+		if rp.AirReset then
+			rp.AirReset = nil
 			st.AirSince = nil
+			st.PeakY = nil
+		elseif rp.Returned or not rp.Alive or not root or not root.Parent or root.Anchored then
+			st.AirSince = nil
+			st.PeakY = nil
 		elseif groundedNow(rp, st) then
 			local since = st.AirSince
 			if since then
+				local drop = (st.PeakY or root.Position.Y) - root.Position.Y
 				st.AirSince = nil
+				st.PeakY = nil
 				local airtime = now - since
 				local leaping = rp.LeapUntil ~= nil and now <= rp.LeapUntil
 				if leaping and airtime >= D.LeapLandMinAirtime then
@@ -303,9 +325,15 @@ local function landingStep()
 				if airtime >= D.LandMinAirtime then
 					Dash.OnLanded:Fire(rp, airtime)
 				end
+				if not leaping and ctx.RunManager.OnFallLanding then
+					ctx.RunManager.OnFallLanding(rp, drop)
+				end
 			end
 		elseif not st.AirSince then
 			st.AirSince = now
+			st.PeakY = root.Position.Y
+		else
+			st.PeakY = math.max(st.PeakY or root.Position.Y, root.Position.Y)
 		end
 		if rp.LeapUntil and now > rp.LeapUntil then
 			rp.LeapUntil = nil

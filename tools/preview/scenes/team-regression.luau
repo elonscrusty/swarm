@@ -436,8 +436,9 @@ end
 check(toMates == 3, "spectate: teammates see REVIVE ME at the body", toMates)
 check(not SpectateC.AskRevive(), "spectate: REVIVE ME rate limited")
 check(not Ping.Send(ava, "ReviveMe"), "spectate: a living player cannot send REVIVE ME")
--- revived: the bar goes, the camera comes home
-run(4, function() place(a, base + Vector3.new(2, 0, 0)); place(b, base + Vector3.new(-30, 0, 10)) end)
+-- revived: the bar goes, the camera comes home (stream E1: the teammate holds interact for 3 s)
+run(4, function() place(a, base + Vector3.new(2, 0, 0)); place(b, base + Vector3.new(-30, 0, 10)); preview.fireServerAs(ava, "ReviveHold", true) end)
+preview.fireServerAs(ava, "ReviveHold", false)
 check(me:GetAttribute("Alive") == true, "spectate: partner revive works")
 run(1.5)
 check(not SpectateC.Active() and not preview.playerGui().Spectate.Enabled, "spectate: bar gone after the revive")
