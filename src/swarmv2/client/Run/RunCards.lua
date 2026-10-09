@@ -69,6 +69,8 @@ local touches: { [any]: { At: number, Pos: Vector2, Moved: number } } = setmetat
 local ring: any = nil
 local keyBadges: { [number]: Frame } = {}
 local rerollKey = ""
+local emptySlots = 0 -- missing card slots the server reported (payload.Empty): drawn as quiet placeholders
+local emptyText = ""
 
 ------------------------------------------------------------------------------------------
 -- Payload -> card (pure, also used by the tests)
@@ -388,6 +390,21 @@ local function buildCard(c: any, index: number, count: number, w: number): Frame
 	return holder
 end
 
+-- A quiet placeholder for a slot the server had nothing to put in (payload.Empty / EmptyText): the
+-- first one says why in the server's words, the others just say there is nothing more. Not a button.
+local function buildEmpty(order: number, w: number, first: boolean)
+	local holder = new("Frame", { Name = "Empty" .. order, BackgroundTransparency = 1, Size = UDim2.fromOffset(w, cardH), LayoutOrder = order, Active = false })
+	local plate = new("Frame", { Name = "Plate", BackgroundColor3 = RunTheme.NavyDeep, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, -3), ZIndex = 2, Active = false }, holder)
+	corner(plate, RunTheme.Radius.Panel)
+	stroke(plate, RunTheme.NavyEdge, 2, 0.45)
+	local inner = new("Frame", { Name = "Inner", BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 12), Size = UDim2.new(1, -24, 1, -24), ZIndex = 3, Active = false }, plate)
+	UIKit.list(inner, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center })
+	W.Text(inner, "EMPTY SLOT", { Name = "Title", Size = 14, Font = "Label", Align = "Center", Box = UDim2.new(1, 0, 0, 20), LayoutOrder = 1, Fit = 10, Color = RunTheme.CreamMuted })
+	W.Text(inner, first and emptyText or "Nothing else to offer here.", { Name = "Why", Size = 16, Font = "Body", Align = "Center", Box = UDim2.new(1, 0, 0, 64), LayoutOrder = 2, Fit = 11, Color = RunTheme.CreamMuted, Wrap = true, VAlign = "Top" })
+	holder.Parent = ui.Cards
+	return holder
+end
+
 local function clearCards()
 	table.clear(keyBadges)
 	for _, c in ipairs(ui.Cards:GetChildren()) do
@@ -407,7 +424,7 @@ function RunCards.Layout()
 		return
 	end
 	local v = kit.VirtualSize()
-	local count = math.max(1, #cards)
+	local count = math.max(1, #cards + emptySlots)
 	local cw = cardWidth()
 	local panelH = HEAD_H + cardH + 10
 	ui.Cards.Size = UDim2.new(1, -16, 0, cardH)
@@ -451,6 +468,11 @@ function RunCards.Layout()
 	for _, it in pairs(items) do
 		it.Holder.Size = UDim2.fromOffset(cw, cardH)
 	end
+	for _, c in ipairs(ui.Cards:GetChildren()) do
+		if c:IsA("Frame") and string.sub(c.Name, 1, 5) == "Empty" then
+			c.Size = UDim2.fromOffset(cw, cardH)
+		end
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -491,6 +513,9 @@ local function titleFor(o: any): string
 	if total and remaining and total > 1 then
 		base ..= string.format("  ·  %d OF %d", total - remaining + 1, total)
 	end
+	if o.Kind == "PassiveOnly" then
+		base ..= "  ·  PASSIVES"
+	end
 	return base .. "  ·  PICK ONE"
 end
 
@@ -519,6 +544,8 @@ function RunCards.Show(payload: any)
 			table.insert(cards, RunCards.Normalize(c, i))
 		end
 	end
+	emptySlots = math.clamp(math.floor(tonumber(payload.Empty) or 0), 0, math.max(0, 3 - #cards))
+	emptyText = str(payload.EmptyText) or "Nothing left to offer."
 	picked = false
 	rerollPendingUntil = 0
 	rerollKey = ""
@@ -536,6 +563,9 @@ function RunCards.Show(payload: any)
 	end
 	for i, c in ipairs(cards) do
 		buildCard(c, i, #cards, cw)
+	end
+	for k = 1, emptySlots do
+		buildEmpty(#cards + k, cw, k == 1)
 	end
 	ui.Title.Text = titleFor(payload)
 	local left = offerSeconds(payload)
@@ -604,6 +634,13 @@ local function armed(input: any): boolean
 	end
 	if os.clock() < armAt then
 		return false
+	end
+	if input and input.UserInputType == Enum.UserInputType.Keyboard then
+		-- jump (Space), Enter and the movement keys never confirm a card: only 1 / 2 / 3 do
+		local code = input.KeyCode
+		if not (code == Enum.KeyCode.One or code == Enum.KeyCode.Two or code == Enum.KeyCode.Three or code == Enum.KeyCode.KeypadOne or code == Enum.KeyCode.KeypadTwo or code == Enum.KeyCode.KeypadThree or code == CFG.RerollKey) then
+			return false
+		end
 	end
 	if input and input.UserInputType == Enum.UserInputType.Touch then
 		return touchOk(input)
@@ -678,7 +715,7 @@ function RunCards.Update(_dt: number)
 	end
 	W.Set(ui.Seconds, tostring(math.ceil(left)))
 	if not picked then
-		local status = player:GetAttribute("Downed") == true and "Paused while you are down" or "Combat continues"
+		local status = player:GetAttribute("Downed") == true and "Paused while you are down" or (offer.Live == false and "Game paused while you choose" or "Combat continues")
 		local pending = tonumber(player:GetAttribute("PendingChoices")) or 0
 		if pending > 1 then
 			status ..= string.format("  ·  %d more waiting", pending - 1)

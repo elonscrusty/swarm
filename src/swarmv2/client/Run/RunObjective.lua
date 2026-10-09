@@ -99,8 +99,8 @@ function RunObjective.Build(parent: Instance, layer: Instance?)
 	end
 	ui.Word = W.Text(face, "SURVIVE", { Name = "Word", Size = 20, Font = "Heading", Position = UDim2.fromOffset(112, 4), Box = UDim2.new(1, -112 - 96, 0, 26), Fit = 13, Color = RunTheme.Cream })
 	ui.Value = W.Text(face, "", { Name = "Value", Size = 22, Font = "Number", Align = "Right", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 2), Box = UDim2.fromOffset(92, 28), Fit = 13, Color = RunTheme.Gold })
-	ui.Detail = W.Text(face, "", { Name = "Detail", Size = 16, Font = "Body", Position = UDim2.fromOffset(12, 30), Box = UDim2.new(1, -24, 0, 22), Fit = 12, Color = RunTheme.CreamMuted })
-	ui.Progress = W.Bar(face, { Name = "Progress", Size = UDim2.new(1, -24, 0, 5), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, -6), Color = RunTheme.Cyan })
+	ui.Detail = W.Text(face, "", { Name = "Detail", Size = 16, Font = "Body", Position = UDim2.fromOffset(12, 28), Box = UDim2.new(1, -24, 0, 21), Fit = 12, Color = RunTheme.CreamMuted })
+	ui.Progress = W.Bar(face, { Name = "Progress", Size = UDim2.new(1, -24, 0, 4), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, -4), Color = RunTheme.Cyan })
 	ui.Progress.Frame.Visible = false
 
 	-- boss bar
@@ -110,6 +110,9 @@ function RunObjective.Build(parent: Instance, layer: Instance?)
 	ui.BossName = W.Text(bface, "BOSS", { Name = "Name", Size = 20, Font = "Heading", Position = UDim2.fromOffset(40, 3), Box = UDim2.new(1, -40 - 110, 0, 26), Fit = 13, Color = RunTheme.Cream })
 	ui.BossPhase = W.Text(bface, "PHASE 2", { Name = "Phase", Size = 14, Font = "Label", Align = "Right", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 5), Box = UDim2.fromOffset(100, 22), Fit = 10, Color = RunTheme.Danger, Visible = false })
 	ui.BossBar = W.Bar(bface, { Name = "HP", Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 10, 1, -28), Color = RunTheme.Health, Trail = true, Label = 14 })
+	-- the numbers sit at the right end so the 50% phase notch never crosses them
+	ui.BossBar.Label.TextXAlignment = Enum.TextXAlignment.Right
+	ui.BossBar.Label.Size = UDim2.new(1, -12, 1, 0)
 	-- the 50% phase notch sits on the bar but is not clipped by it (a child of the panel face)
 	ui.BossMark = new("Frame", { Name = "PhaseMark", BackgroundColor3 = RunTheme.Cream, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(3, 28), ZIndex = 6, Active = false }, bface)
 

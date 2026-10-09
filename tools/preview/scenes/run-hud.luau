@@ -53,19 +53,30 @@ end
 local WeaponData = C.shared("WeaponData")
 local PassiveData = C.shared("PassiveData")
 local weapons, passives = {}, {}
-for i, id in ipairs({ "Whip", "Garlic", "Knives", "MagicOrb" }) do
+-- rows like the server's SendInventory in the rank system: Level + Rank + MaxRank, Slot, Protected (the
+-- signature), effective Damage / Interval and the Evolution requirement text (--set evolved=off: the
+-- signature has not evolved yet, so the BUILD panel shows the recipe)
+local evolvedOn = preview.args.evolved ~= "off"
+for i, id in ipairs({ "ScrapToss", "Whip", "MagicOrb", "Vortex" }) do
 	local def = WeaponData.Weapons[id]
 	if def and i <= (preview.args.weapons and tonumber(preview.args.weapons) or 4) then
-		table.insert(weapons, { Id = id, Name = def.Name, Rank = ({ 5, 3, 2, 1 })[i], Evolved = i == 1 and def.Evolution ~= nil, Damage = 12 + i * 3, Interval = 1.4 - i * 0.1 })
+		local rank = ({ 5, 3, 2, 1 })[i]
+		local evo = def.Evolution
+		local pdef = evo and PassiveData.Passives[evo.Passive]
+		table.insert(weapons, {
+			Id = id, Name = def.Name, Level = rank, Rank = rank, MaxLevel = 5, MaxRank = 5, Slot = i, Protected = i == 1 or nil,
+			Evolved = i == 1 and evo ~= nil and evolvedOn, Damage = 12 + i * 3, Interval = 1.4 - i * 0.1,
+			Evolution = evo and pdef and string.format("Evolves into %s: rank 5 + %s rank 3, level 8+", evo.Name, pdef.Name) or nil,
+		})
 	end
 end
-for i, id in ipairs({ "Might", "Armor", "Heart" }) do
+for i, id in ipairs({ "PatchworkPadding", "Might", "Heart" }) do
 	local def = PassiveData.Passives[id]
 	if def then
-		table.insert(passives, { Id = id, Name = def.Name, Rank = ({ 3, 1, 4 })[i] })
+		table.insert(passives, { Id = id, Name = def.Name, Level = ({ 3, 1, 4 })[i], MaxLevel = 5 })
 	end
 end
-C.fire("Inventory", { Weapons = weapons, Passives = passives, WeaponSlots = 4, PassiveSlots = 4, Rerolls = 1, Skips = 0 })
+C.fire("Inventory", { Weapons = weapons, Passives = passives, WeaponSlots = 4, PassiveSlots = 4, Rerolls = 1, Skips = 0, Ranked = true })
 
 -- the contract attributes
 local state = {}
@@ -172,7 +183,11 @@ elseif view == "cards" then
 		Seconds = tonumber(preview.args.left) or 8.2,
 		RerollsLeft = tonumber(preview.args.rerolls) or 2,
 		Group = team > 1,
-		Choices = {
+		Kind = preview.args.kind or "Any",
+		Live = preview.args.live ~= "off",
+		Empty = tonumber(preview.args.empty),
+		EmptyText = tonumber(preview.args.empty) and "Only 1 upgrade left for your build." or nil,
+		Choices = table.move({
 			{ Type = "WeaponUp", Id = "Whip", Name = "Rusty Sword", Category = "WeaponUpgrade", Rarity = "Rare", RankFrom = 2, RankTo = 3, Slot = 1,
 				Lines = { { Label = "Damage", From = "14", To = "17" }, { Label = "Swings", From = "1", To = "2" }, { Label = "Interval", From = "1.40 s", To = "1.33 s" } },
 				Synergy = "Blood Pact with Heart" },
@@ -180,7 +195,7 @@ elseif view == "cards" then
 				Lines = { { Label = "Armor", From = "0", To = "6" } } },
 			{ Type = "Evolve", Id = "Whip", Name = "Bloodblade", Category = "Evolution", Rarity = "Evolution", Slot = 1,
 				Lines = { { Text = "Sword becomes Bloodblade" }, { Label = "Damage", From = "30", To = "52" } } },
-		},
+		}, 1, 3 - (tonumber(preview.args.empty) or 0), 1, {}),
 	})
 	C.settle(1.4)
 elseif view == "results" then

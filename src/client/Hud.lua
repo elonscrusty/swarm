@@ -849,6 +849,23 @@ local function evolutionLine(wp, passives): string?
 	if passiveId == "" or not pdef then
 		return nil
 	end
+	-- [stream F] the rank system: "Evolves into Junkyard Cyclone: Scrap Shot rank 5 + Patchwork Padding
+	-- rank 3, level 8+ (you: Patchwork Padding rank 1)". Only the recipes the server offers.
+	local Builds = RunConfig.Builds
+	if tonumber(wp.Rank) and type(Builds) == "table" and type(Builds.Evolutions) == "table" then
+		if not table.find(Builds.Evolutions, wp.Id) then
+			return nil
+		end
+		local need = tonumber(wp.EvoPassiveRank) or Builds.EvolutionPassiveRank
+		local have = 0
+		for _, p in ipairs(passives) do
+			if p.Id == passiveId then
+				have = rankOf(p, PassiveData.MaxLevelOf(passiveId))
+			end
+		end
+		local progress = have >= need and ("you have " .. pdef.Name .. " rank " .. have) or (have > 0 and ("you: " .. pdef.Name .. " rank " .. have) or ("you: no " .. pdef.Name))
+		return string.format("Evolves into %s: %s rank %d + %s rank %d, level %d+ (%s)", def.Evolution.Name, def.Name, Builds.EvolutionWeaponRank, pdef.Name, need, Builds.EvolutionLevel, progress)
+	end
 	local need = tonumber(wp.EvoPassiveRank) or math.min(3, PassiveData.MaxLevelOf(passiveId))
 	local have = 0
 	for _, p in ipairs(passives) do
@@ -900,6 +917,9 @@ local function refreshDetails()
 		local stats = weaponStatLine(wp)
 		local evoLine = evolutionLine(wp, passives)
 		local extra = evoLine and (evoLine .. (about ~= "" and stats ~= "" and ("\n" .. about) or "")) or (stats ~= "" and about or nil)
+		if wp.Protected == true then
+			extra = "Signature weapon: always slot 1, never replaced." .. (extra and ("\n" .. extra) or "")
+		end
 		detailRow(list, nextOrder(), weaponIconId(wp.Id, wp.Evolved), name, rankText, stats ~= "" and stats or about, wp.Evolved == true or rank >= max, extra, wp.Evolved and 1 or rank / math.max(1, max))
 	end
 	detailHeader(list, nextOrder(), string.format("PASSIVES  %d / %d", #passives, capP))
@@ -915,7 +935,70 @@ local function refreshDetails()
 		end
 		detailRow(list, nextOrder(), ps.Id, (def and def.Name) or ps.Id, rankText, total, rank >= max, def and def.Note or nil, rank / math.max(1, max))
 	end
-	if EvolutionPreview.On() then
+	local Builds = RunConfig.Builds
+	local rankedInv = inv ~= nil and (inv.Ranked == true or (weapons[1] ~= nil and tonumber(weapons[1].Rank) ~= nil))
+	if EvolutionPreview.On() and rankedInv and type(Builds) == "table" and type(Builds.Evolutions) == "table" then
+		-- [stream F] the rank system: weapon rank 5 + the partner passive at rank 3 + player level 8, for the
+		-- four signature recipes (Builds.Evolutions); ready ones first
+		local myLevel = tonumber(player:GetAttribute("Level")) or 0
+		local slotsFree = #weapons < capW
+		local rows = {}
+		for _, wid in ipairs(Builds.Evolutions) do
+			local def = WeaponData.Weapons[wid]
+			local evo = def and def.Evolution
+			local pdef = evo and PassiveData.Passives[evo.Passive]
+			if evo and pdef then
+				local wp, pp
+				for _, w in ipairs(weapons) do
+					if w.Id == wid then
+						wp = w
+					end
+				end
+				for _, p in ipairs(passives) do
+					if p.Id == evo.Passive then
+						pp = p
+					end
+				end
+				if not (wp and wp.Evolved) and (wp ~= nil or (pp ~= nil and slotsFree)) then
+					local wr = wp and rankOf(wp, WeaponData.MaxLevel) or 0
+					local pr = pp and rankOf(pp, PassiveData.MaxLevelOf(evo.Passive)) or 0
+					local wOk, pOk, lOk = wr >= Builds.EvolutionWeaponRank, pr >= Builds.EvolutionPassiveRank, myLevel >= Builds.EvolutionLevel
+					local missing = {}
+					if not wOk then
+						table.insert(missing, wp and string.format("%s rank %d → %d", def.Name, wr, Builds.EvolutionWeaponRank) or string.format("%s (not owned)", def.Name))
+					end
+					if not pOk then
+						table.insert(missing, pp and string.format("%s rank %d → %d", pdef.Name, pr, Builds.EvolutionPassiveRank) or string.format("%s rank %d (not owned)", pdef.Name, Builds.EvolutionPassiveRank))
+					end
+					if not lOk then
+						table.insert(missing, string.format("level %d → %d", myLevel, Builds.EvolutionLevel))
+					end
+					table.insert(rows, {
+						EvoId = evo.Id,
+						Name = evo.Name,
+						Recipe = string.format("%s rank %d + %s rank %d, level %d+", def.Name, Builds.EvolutionWeaponRank, pdef.Name, Builds.EvolutionPassiveRank, Builds.EvolutionLevel),
+						Met = (wOk and 1 or 0) + (pOk and 1 or 0) + (lOk and 1 or 0),
+						Ready = wOk and pOk and lOk,
+						Missing = table.concat(missing, ", "),
+					})
+				end
+			end
+		end
+		table.sort(rows, function(a, b)
+			if a.Ready ~= b.Ready then
+				return a.Ready
+			end
+			if a.Met ~= b.Met then
+				return a.Met > b.Met
+			end
+			return a.Name < b.Name
+		end)
+		detailHeader(list, nextOrder(), #rows > 0 and string.format("EVOLUTIONS  %d", #rows) or "EVOLUTIONS  none in reach yet")
+		for _, r in ipairs(rows) do
+			local status = r.Ready and "Ready! Look for the EVOLUTION card, or open a chest." or ("Missing: " .. r.Missing)
+			detailRow(list, nextOrder(), r.EvoId, r.Name, r.Ready and "READY" or string.format("%d / 3", r.Met), r.Recipe, false, status, r.Met / 3, r.Ready)
+		end
+	elseif EvolutionPreview.On() then
 		-- EvolutionPreview (docs/next/EVOLUTION_PREVIEW.md): every evolution this build can
 		-- reach, its recipe and what is still missing (WeaponData only; ready ones first)
 		local slotsFree = #weapons < capW

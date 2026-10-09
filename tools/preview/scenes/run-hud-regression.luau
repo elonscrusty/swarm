@@ -207,17 +207,28 @@ setS("RunClock", 300)
 local WeaponData = C.shared("WeaponData")
 local PassiveData = C.shared("PassiveData")
 local function sendInventory(weapons, passives)
-	C.fire("Inventory", { Weapons = weapons, Passives = passives, WeaponSlots = 4, PassiveSlots = 4, Rerolls = 1, Skips = 0 })
+	C.fire("Inventory", { Weapons = weapons, Passives = passives, WeaponSlots = 4, PassiveSlots = 4, Rerolls = 1, Skips = 0, Ranked = true })
 end
-local function weapon(id: string, rank: number, evolved: boolean?)
+-- rows like the server's SendInventory in the rank system (Level = Rank, MaxRank, Slot, Protected, Damage,
+-- Interval, the Evolution requirement text); passives carry Level / MaxLevel only
+local function weapon(id: string, rank: number, evolved: boolean?, slot: number?)
 	local def = WeaponData.Weapons[id]
-	return { Id = id, Name = def and def.Name or id, Rank = rank, Evolved = evolved == true, Damage = 12 + rank * 3, Interval = 1.4 - rank * 0.05 }
+	local evo = def and def.Evolution
+	local pdef = evo and PassiveData.Passives[evo.Passive]
+	return {
+		Id = id, Name = def and def.Name or id, Level = rank, Rank = rank, MaxLevel = 5, MaxRank = 5, Slot = slot or 1, Protected = (slot or 1) == 1 or nil,
+		Evolved = evolved == true, Damage = 12 + rank * 3, Interval = 1.4 - rank * 0.05,
+		Evolution = evo and pdef and string.format("Evolves into %s: rank 5 + %s rank 3, level 8+", evo.Name, pdef.Name) or nil,
+	}
 end
 local function passive(id: string, rank: number)
 	local def = PassiveData.Passives[id]
-	return { Id = id, Name = def and def.Name or id, Rank = rank }
+	return { Id = id, Name = def and def.Name or id, Level = rank, MaxLevel = 5 }
 end
-sendInventory({ weapon("Whip", 5, true), weapon("Garlic", 3), weapon("Knives", 2), weapon("MagicOrb", 1) }, { passive("Might", 3), passive("Armor", 1), passive("Heart", 4) })
+local function startBuild()
+	sendInventory({ weapon("ScrapToss", 5, true, 1), weapon("Whip", 3, false, 2), weapon("MagicOrb", 2, false, 3), weapon("Vortex", 1, false, 4) }, { passive("PatchworkPadding", 3), passive("Might", 1), passive("Heart", 4) })
+end
+startBuild()
 settle(2)
 
 ------------------------------------------------------------------------------------------
@@ -393,20 +404,26 @@ section("inventory", function()
 	end
 	check(shown == UI.MaxRank, "five rank pips under a tile (" .. shown .. ")")
 	-- details: ranks, stats and the evolution requirement of a weapon that has not evolved
-	sendInventory({ weapon("Whip", 5, false), weapon("Garlic", 3) }, { passive("Heart", 1) })
+	setP("Level", 6)
+	sendInventory({ weapon("ScrapToss", 5, false, 1), weapon("Whip", 3, false, 2) }, { passive("PatchworkPadding", 1) })
 	settle(0.5)
 	Hud.SetBuildOpen(true)
 	settle(0.8)
 	local list = ui.BuildList
 	check(list ~= nil and textHas(list, "RANK 5"), "inventory panel lists ranks")
+	check(list ~= nil and textHas(list, "SIGNATURE WEAPON"), "inventory panel marks the protected signature weapon")
 	check(list ~= nil and textHas(list, "EVOLVES INTO"), "inventory panel shows the evolution requirement")
-	check(list ~= nil and textHas(list, "HEART"), "evolution requirement names the passive and what you have")
+	check(list ~= nil and textHas(list, "PATCHWORK PADDING RANK 3, LEVEL 8%+"), "evolution requirement in rank words: partner passive rank 3, level 8+")
+	check(list ~= nil and textHas(list, "PATCHWORK PADDING RANK 1"), "evolution requirement says what you have")
+	check(list ~= nil and not textHas(list, " LV 12") and not textHas(list, "LV 12 "), "no 12-level wording left in the build panel")
+	check(list ~= nil and textHas(list, "LEVEL 6 → 8"), "EVOLUTIONS list shows the missing player level")
 	press(Enum.KeyCode.Tab)
 	check(not Hud.BuildOpen(), "Tab closes the inventory")
 	press(Enum.KeyCode.Tab)
 	check(Hud.BuildOpen(), "Tab opens the inventory")
 	Hud.SetBuildOpen(false)
-	sendInventory({ weapon("Whip", 5, true), weapon("Garlic", 3), weapon("Knives", 2), weapon("MagicOrb", 1) }, { passive("Might", 3), passive("Armor", 1), passive("Heart", 4) })
+	setP("Level", 14)
+	startBuild()
 	settle(0.5)
 end)
 
@@ -746,6 +763,41 @@ section("cards", function()
 		check(#chosen == n + 1 and chosen[#chosen][1] == pair[2], "key " .. pair[2] .. " picks card " .. pair[2])
 		RunCards.Close()
 	end
+	-- Space (jump) and Enter never confirm a card, whichever way they arrive
+	C.fire("LevelUpOffer", payload({ OfferId = 25 }))
+	settle(0.7)
+	local nSpace = #chosen
+	UIS.InputBegan:_fire(key(Enum.KeyCode.Space), false)
+	settle(0.1)
+	RunCards.Choose(1, key(Enum.KeyCode.Space))
+	RunCards.Choose(2, key(Enum.KeyCode.Return))
+	settle(0.1)
+	check(#chosen == nSpace and RunCards.IsOpen(), "Space (jump) and Enter never confirm a card")
+	RunCards.Close()
+	-- the server's Empty / EmptyText (fewer options than slots), Live = false (solo, paused), Kind = PassiveOnly
+	local base = payload()
+	C.fire("LevelUpOffer", payload({ OfferId = 27, Choices = { base.Choices[1], base.Choices[2] }, Empty = 1, EmptyText = "Only 2 upgrades left for your build.", Live = false, Kind = "PassiveOnly" }))
+	settle(0.7)
+	local panelE = RunCards.Elements().Panel
+	local nCards, nEmpty = 0, 0
+	for _ in pairs(RunCards.Elements().Cards) do
+		nCards += 1
+	end
+	for _, c in ipairs(panelE:GetDescendants()) do
+		if c:IsA("Frame") and string.sub(c.Name, 1, 5) == "Empty" then
+			nEmpty += 1
+		end
+	end
+	check(nCards == 2 and nEmpty == 1, "two options + one quiet placeholder for the missing slot (" .. nCards .. " cards, " .. nEmpty .. " placeholders)")
+	check(textHas(panelE, "ONLY 2 UPGRADES LEFT FOR YOUR BUILD"), "the placeholder shows the server's EmptyText")
+	check(textHas(panelE, "GAME PAUSED WHILE YOU CHOOSE"), "Live = false: the cards say the game is paused")
+	check(textHas(panelE, "PASSIVES"), "Kind = PassiveOnly: the title says passives")
+	local rows = 0
+	for _, it in pairs(RunCards.Elements().Cards) do
+		rows += (it.Hit.Selectable and 1 or 0)
+	end
+	check(rows == 2, "placeholders are not selectable")
+	RunCards.Close()
 	-- touch: an early tap is ignored, a later whole tap picks
 	C.fire("LevelUpOffer", payload({ OfferId = 30 }))
 	settle(0.1)
