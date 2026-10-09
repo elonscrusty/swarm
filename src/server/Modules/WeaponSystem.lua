@@ -1232,7 +1232,16 @@ local function stepPatches(dt: number, now: number)
 		if not e.Alive or e.Uid ~= b.Uid or now >= b.Until or not b.Owner.Alive then
 			burns[e] = nil
 		elseif now >= b.Next then
-			b.Next = now + b.Tick
+			if b.Ticks then
+				-- [stream B] scorch: exact ticks on the run clock (3 s / 0.5 s = 6), then it ends
+				b.Next += b.Tick
+				b.Ticks -= 1
+				if b.Ticks <= 0 then
+					b.Until = now
+				end
+			else
+				b.Next = now + b.Tick
+			end
 			if burnReady(b.Weapon, e, b.Tick, now) then
 				killSource = b.Weapon
 				damageEnemy(b.Owner, e, b.Damage, nil, 0, b.NoProc)
@@ -3407,15 +3416,18 @@ function WeaponSystem.ApplyScorch(rp, e, mult: number?, weapon: any?): boolean
 		src = rp.ScorchSource or {}
 		rp.ScorchSource = src
 	end
+	local ticks = math.max(1, math.floor(Combat.ScorchSeconds / tick + 0.5))
 	local b = burns[e]
 	if b and b.Uid == e.Uid and now < b.Until then
-		b.Until = now + Combat.ScorchSeconds
+		-- refresh: the full duration again from now (ticks keep their rhythm), strongest source kept
+		b.Until = now + Combat.ScorchSeconds + tick
+		b.Ticks = ticks
 		if dmg > b.Damage then
 			b.Damage, b.Owner, b.Weapon = dmg, rp, src
 		end
 		return false
 	end
-	burns[e] = { Uid = e.Uid, Until = now + Combat.ScorchSeconds, Next = now + tick, Tick = tick, Damage = dmg, Owner = rp, Weapon = src, NoProc = true, Scorch = true }
+	burns[e] = { Uid = e.Uid, Until = now + Combat.ScorchSeconds + tick, Next = now + tick, Tick = tick, Ticks = ticks, Damage = dmg, Owner = rp, Weapon = src, NoProc = true, Scorch = true }
 	return true
 end
 
