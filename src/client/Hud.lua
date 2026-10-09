@@ -1721,7 +1721,7 @@ local function layout()
 			end
 			if buildHi - buildLo >= 300 then
 				bw = math.min(bw, buildHi - buildLo)
-				buildCx = math.clamp(W / 2, buildLo + bw / 2, buildHi - bw / 2)
+				buildCx = math.max(buildLo + bw / 2, math.min(W / 2, buildHi - bw / 2)) -- (not clamp: rounding can cross min and max)
 			end
 			ui.Build.AnchorPoint = Vector2.new(0.5, 0.5)
 			ui.Build.Position = UDim2.fromOffset(math.floor(buildCx), math.floor(top + (bottom - top) / 2))

@@ -978,9 +978,14 @@ section("cards", function()
 	local function popScale(id: number): number
 		RunCards.Close()
 		C.fire("LevelUpOffer", payload({ OfferId = id }))
-		preview.advance(0.04, 30)
-		local sc2 = RunCards.Elements().Panel:FindFirstChildWhichIsA("UIScale")
-		return sc2 and sc2.Scale or 1
+		-- the lowest scale the panel shows over its first few frames (a pop starts below 1 and eases up)
+		local lowest = 1
+		for _ = 1, 8 do
+			preview.advance(0.02, 60)
+			local sc2 = RunCards.Elements().Panel:FindFirstChildWhichIsA("UIScale")
+			lowest = math.min(lowest, sc2 and sc2.Scale or 1)
+		end
+		return lowest
 	end
 	Settings.Set("ReducedEffects", false)
 	local withMotion = popScale(70)
