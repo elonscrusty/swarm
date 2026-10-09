@@ -100,6 +100,11 @@ function R.buildAvatar(player)
 	model.PrimaryPart = root
 	model.Parent = R.services.Workspace
 	player.Character = model
+	-- like Roblox's LoadCharacter: the old character is destroyed (its connections go with it),
+	-- after CharacterRemoving fired for it (the swap above)
+	if old and old ~= model then
+		R.destroy(old)
+	end
 	return model
 end
 
