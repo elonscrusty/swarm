@@ -15,8 +15,8 @@
 	    the rest the takeoff direction (MobileControls.AirFilter).
 	  * Jump height: one source. The takeoff speed is sqrt(2 * workspace.Gravity * apex)
 	    (SurvivalRules.JumpVelocity, apex RunConfig.Movement.JumpApex = 9, per class
-	    JumpApexByClass); the Humanoid's own JumpPower is kept equal to it (UseJumpPower), so the
-	    jump state never adds a different impulse.
+	    JumpApexByClass by the run hero's CharacterId); the Humanoid's own JumpPower is kept equal
+	    to it (UseJumpPower), so the jump state never adds a different impulse.
 	  * No jumping in the lobby, while downed, while the run is frozen (SwarmState
 	    attributes Frozen / LevelUpPause), while the player is Paused, or while
 	    MobileControls is disabled by a panel.
@@ -134,7 +134,8 @@ end
 -- The jump velocity of the local hero: sqrt(2 * gravity * apex) for its class.
 function JumpController.JumpPower(): number
 	local apex = RunConfig.Movement.JumpApex
-	local id = player:GetAttribute("SwarmClass")
+	-- the run's hero (CharacterId, set by the server from the admitted class), else the lobby pick
+	local id = player:GetAttribute("InRun") == true and player:GetAttribute("CharacterId") or player:GetAttribute("SwarmClass")
 	if type(id) == "string" then
 		apex = RunConfig.Movement.JumpApexByClass[id] or apex
 	end

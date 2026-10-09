@@ -436,6 +436,12 @@ do
 	local moved = ((rMe.Root.Position - p0) * Vector3.new(1, 0, 1)).Magnitude
 	check("the speed check allows a dash's travel", moved > D.Speed * D.Duration)
 end
+-- the dash variant follows the run's admitted hero, never the lobby's SwarmClass pick
+local DashMod = preview.require(game:GetService("ServerScriptService").SwarmV2.Run.Dash)
+local oldPick = me:GetAttribute("SwarmClass")
+me:SetAttribute("SwarmClass", "ruckus")
+check("dash variant from the run hero, not the lobby pick", DashMod.GetClassId({ CharacterId = "granny_boom", Player = me }) == "granny_boom")
+me:SetAttribute("SwarmClass", oldPick)
 dashRemote:FireServer(Vector3.new(1, 0, 0))
 preview.advance(0.02)
 check("a second dash inside the cooldown is refused", os.clock() < rMe.DashReadyAt and rMe.DashUntil < os.clock())

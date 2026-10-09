@@ -114,15 +114,17 @@ local function finite(n: number): boolean
 	return n == n and n ~= math.huge and n ~= -math.huge
 end
 
--- Canonical class id of a run player ("" when unknown).
+-- Canonical class id of a run player ("" when unknown). [stream E1] The run's hero comes first:
+-- rp.CharacterId is set from the admitted class (never a client claim). The lobby's SwarmClass
+-- attribute (the basecamp selection, UI only) is only a last fallback: it can differ from the
+-- admitted class, and preferring it gave every class the default dash.
 function Dash.GetClassId(rp: any): string
 	local id = rp.ClassId
 	if type(id) ~= "string" or id == "" then
-		id = rp.Player and rp.Player:GetAttribute("SwarmClass")
+		id = rp.CharacterId
 	end
 	if type(id) ~= "string" or id == "" then
-		-- the run's hero (RunManager sets it from the admitted class; never a client claim)
-		id = rp.CharacterId
+		id = rp.Player and rp.Player:GetAttribute("SwarmClass")
 	end
 	return if type(id) == "string" then id else ""
 end
