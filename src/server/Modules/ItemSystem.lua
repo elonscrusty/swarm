@@ -32,6 +32,7 @@ local ItemData = require(game:GetService("ReplicatedStorage").Shared.ItemData)
 local Palette = require(game:GetService("ReplicatedStorage").Shared.Palette)
 local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponData)
 local PassiveData = require(game:GetService("ReplicatedStorage").Shared.PassiveData)
+local RunConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
 local Fx = require(script.Parent.Fx)
 
 local ItemSystem = {}
@@ -95,6 +96,22 @@ function ItemSystem.Refresh(rp)
 	ctx.LevelUpSystem.RecomputeStats(rp)
 	ctx.WeaponSystem.OnInventoryChanged(rp)
 	ItemSystem.UpdateShieldMax(rp)
+end
+
+--[[
+	[stream E2] Redesign (DECISIONS C6 / C7): chests no longer hold the old run items. True
+	when a chest reward is a passive choice instead (RunConfig.Economy.Chests.HideItems with
+	the economy on AND stream B's LevelUpSystem.QueueChoice present). Until QueueChoice lands
+	this stays false and chests keep the item reward, so runs work today. ItemData itself is
+	kept untouched (saves, DEV, other reward sources).
+]]
+function ItemSystem.ChestItemsHidden(): boolean
+	local E = (RunConfig :: any).Economy
+	if not (E and E.Enabled == true and E.Chests and E.Chests.HideItems == true) then
+		return false
+	end
+	local LU = ctx and ctx.LevelUpSystem
+	return LU ~= nil and type(LU.QueueChoice) == "function"
 end
 
 -- Rolls an item id from a Config.Chests.Weights table with the player's luck.

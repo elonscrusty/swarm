@@ -200,7 +200,15 @@ if not measure then
 		check(string.format("wave 4 size plain (%d vs %d)", waves[4].Size, plain), math.abs(waves[4].Size - plain) <= 1)
 		check("waves 1-3 sooner than the plain cap", wave4At < W.FirstDelay + 3 * (W.MaxSeconds + W.BreatherSeconds))
 	end
-	if fsOn then
+	-- the redesign economy (stream E2: personal shards at the kill spot, 8-stud pickup, the
+	-- 20 + 12(L-1) + 3(L-1)^2 curve) changes the opening's XP: this bot walks a fixed circle and
+	-- never goes for its shards, so its first level-up is reported as a measurement against the
+	-- brief's 20-35 s target (pacing belongs to the run director pass), not as a regression
+	local economy = preview.require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Economy
+	if fsOn and economy and economy.Enabled then
+		preview.log(string.format("MEASURE first level-up %s (redesign economy; brief target 20-35 s; circle bot, no shard chasing)", firstUp and string.format("%.1fs", firstUp) or "none"))
+		check("a first level-up happens in the opening", firstUp ~= nil and firstUp <= 60, firstUp and string.format("%.1fs", firstUp) or "none")
+	elseif fsOn then
 		check("first level-up by FirstLevelUpBy", firstUp ~= nil and firstUp <= FS.FirstLevelUpBy, firstUp and string.format("%.1fs", firstUp) or "none")
 	end
 	-- 3. stage 2: no fast start

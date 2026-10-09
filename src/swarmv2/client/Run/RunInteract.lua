@@ -337,7 +337,7 @@ local function chestLines(t: { [string]: any }, state: Instance): (string, strin
 	if price <= 0 and cost then
 		price = cost
 	end
-	local gold = tonumber(state:GetAttribute("TeamRunGold")) or tonumber(player:GetAttribute("RunGold")) or 0
+	local gold = LootUI and LootUI.WalletOf and t.Model and LootUI.WalletOf(t.Model) or tonumber(state:GetAttribute("TeamRunGold")) or tonumber(player:GetAttribute("RunGold")) or 0
 	if price <= 0 then
 		return "Open chest", "Free", true
 	end

@@ -152,6 +152,15 @@ end
 levelUps()
 rp.InvulnUntil = math.huge
 Gold.AddRunGold(rp, 100000)
+-- redesign economy (stream E2): chests are paid from the team run gold at the shared chest
+-- price; the cursed chest's item is checked, so chests keep their item reward here
+if Gold.AddTeamGold then
+	Gold.AddTeamGold(100000)
+end
+local Economy = preview.require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Economy
+if Economy and Economy.Chests then
+	Economy.Chests.HideItems = false
+end
 advance(0.5)
 
 -- 1) cursed chest --------------------------------------------------------------------
@@ -159,7 +168,8 @@ check(MB.Get() == nil, "stage 1 has no champion (MinStage 2)")
 local cursed = cursedChest()
 check(cursed ~= nil, "a cursed chest is placed (Chance 1)")
 if cursed then
-	local base = ItemData.StagePrice(Config.Chests.Cost[cursed.Type], 1, Config.Chests.CostExponent)
+	-- (a team chest shows the shared team price; otherwise this stage's price)
+	local base = cursed.TeamChest and Gold.ChestCost() or ItemData.StagePrice(Config.Chests.Cost[cursed.Type], 1, Config.Chests.CostExponent)
 	check(cursed.Price == base and cursed.Model:GetAttribute("Price") == base, string.format("cursed %s keeps its price (%d = %d)", cursed.Type, cursed.Price, base))
 	check(cursed.Model:GetAttribute("Tradeoff") == CC.TradeoffText() and string.find(cursed.Model:GetAttribute("Tradeoff"), "Curse") ~= nil, "the curse is on the prompt before the hold: " .. tostring(cursed.Model:GetAttribute("Tradeoff")))
 	check(cursed.Weights == Config.CursedChest.Weights[cursed.Type], "cursed chest rolls the better table")

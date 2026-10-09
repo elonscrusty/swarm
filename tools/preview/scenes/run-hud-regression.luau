@@ -515,7 +515,7 @@ section("interact", function()
 	folder.Parent = workspace
 	local chest = Instance.new("Model")
 	chest.Name = "InteractChest"
-	for k, v in pairs({ Pos = root.Position + Vector3.new(4, 0, 2), LootKind = "Chest", State = "Ready", Price = 140, LootId = 91, Hold = 0.4 }) do
+	for k, v in pairs({ Pos = root.Position + Vector3.new(4, 0, 2), LootKind = "Chest", State = "Ready", Price = 140, LootId = 91, Hold = 0.4, TeamGold = true }) do
 		chest:SetAttribute(k, v)
 	end
 	chest.Parent = folder

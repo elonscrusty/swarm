@@ -74,7 +74,10 @@ local function clearStage(rp, pick: boolean?)
 			end
 		end
 		if pick and rp.Offer then
-			LUS.Cancel(rp, true)
+			-- pick the first card like a player: with the redesign economy (stream E2) the
+			-- boss's XP is granted directly on its death, so levels arrive before the surge
+			-- and a cancelled-but-banked panel would reopen (and freeze the solo world) at once
+			preview.fireServerAs(me, "LevelUpChoose", 1, rp.OfferSeq)
 		end
 		preview.advance(0.5)
 	end

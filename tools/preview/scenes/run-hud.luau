@@ -141,7 +141,7 @@ elseif view == "interact" then
 	folder.Parent = workspace
 	local chest = Instance.new("Model")
 	chest.Name = "Chest1"
-	for k, v in pairs({ Pos = centre + Vector3.new(4, 0, 2), LootKind = "Chest", State = "Ready", Price = 140, LootId = 11, Hold = 0.4 }) do
+	for k, v in pairs({ Pos = centre + Vector3.new(4, 0, 2), LootKind = "Chest", State = "Ready", Price = 140, LootId = 11, Hold = 0.4, TeamGold = true }) do
 		chest:SetAttribute(k, v)
 	end
 	chest.Parent = folder
