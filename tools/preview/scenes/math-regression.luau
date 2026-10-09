@@ -333,12 +333,22 @@ RM.Heal(rp, -25)
 RM.Heal(rp, -math.huge)
 check("C6 heal ignores NaN / negative", rp.HP == 60 and rp.Alive, tostring(rp.HP))
 
--- C7 damage formula: max(MinDamagePerHit, raw x DamageTaken - armor), invalid ignored
+-- C7 damage formula: max(MinDamagePerHit, raw x DamageTaken - armor), invalid ignored; with the rank
+-- system the armor is A / (100 + A) less, A clamped 0..100 (stream E1 uses BuildRules.ArmorMult)
+-- (stream E1: every landed hit opens the shared 0.35 s hit protection; cleared between the checks)
+local function armorHit(raw: number, st): number
+	if Ranked then
+		local a = math.clamp(st.Armor, 0, CombatCfg.ArmorMax)
+		return math.max(P.MinDamagePerHit, raw * st.DamageTaken * (1 - a / (100 + a)))
+	end
+	return math.max(P.MinDamagePerHit, raw * st.DamageTaken - st.Armor)
+end
 rp.InvulnUntil = 0
+rp.HitProtectUntil = 0
 rp.HP = 100
 local s = rp.Stats
 RM.DamagePlayer(rp, 20, "test")
-local expect = math.max(P.MinDamagePerHit, 20 * s.DamageTaken - s.Armor)
+local expect = armorHit(20, s)
 check("C7a hit = raw x DamageTaken - armor", near(rp.HP, 100 - expect), string.format("HP %.2f expect %.2f", rp.HP, 100 - expect))
 local h = rp.HP
 RM.DamagePlayer(rp, 0 / 0, "nan")
@@ -346,8 +356,9 @@ RM.DamagePlayer(rp, -10, "neg")
 RM.DamagePlayer(rp, math.huge, "inf")
 check("C7b NaN / negative / inf damage ignored", rp.HP == h, tostring(rp.HP))
 rp.Stats.Armor = 1000
+rp.HitProtectUntil = 0
 RM.DamagePlayer(rp, 5, "armor")
-check("C7c armor never below the minimum hit", near(rp.HP, h - P.MinDamagePerHit), tostring(rp.HP))
+check("C7c armor never below the minimum hit (rank system: capped at A = 100, half damage)", near(rp.HP, h - armorHit(5, rp.Stats)), tostring(rp.HP))
 LU.RecomputeStats(rp)
 
 -- C8 enemy damage: NaN / zero never touch HP
@@ -535,6 +546,7 @@ RM.DamagePlayer(rp, 500, "second") -- same frame
 check("E1 two lethal hits in one frame use one extra life", rp.Alive and rp.RevivesLeft == 0 and near(afterFirst, rp.Stats.MaxHP * P.ReviveHPFraction) and rp.HP == afterFirst,
 	string.format("alive %s lives %d HP %.1f", tostring(rp.Alive), rp.RevivesLeft, rp.HP))
 rp.InvulnUntil = 0
+rp.HitProtectUntil = 0 -- (stream E1: E1's hits opened the shared hit protection this frame)
 rp.HP = 5
 rp.Items = {}
 RM.DamagePlayer(rp, 500, "lethal")

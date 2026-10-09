@@ -58,7 +58,8 @@ assert(journal.Drops.Slime.XP and journal.Drops.Slime.Chest and not journal.Drop
 local migrated = Data.Migrate({ Journal = { Enemies = { Slime = true, fake = true }, Drops = { Bat = { Bomb = true, fake = true } } } })
 assert(migrated.Journal.Enemies.Slime and migrated.Journal.Enemies.Bat and migrated.Journal.Drops.Bat.Bomb and not migrated.Journal.Enemies.fake and not migrated.Journal.Drops.Bat.fake)
 rp.InvulnUntil = 0
-for i = 1, 9 do RM.DamagePlayer(rp, 1, "Hit " .. i) end
+-- (stream E1: every hit starts the shared 0.35 s hit protection; cleared here to land nine in a row)
+for i = 1, 9 do rp.HitProtectUntil = 0; RM.DamagePlayer(rp, 1, "Hit " .. i) end
 assert(#rp.DamageHistory == 6 and rp.DamageHistory[1].Cause == "Hit 4", "history bounded to six recent hits")
 local hp = rp.HP
 RM.DamagePlayer(rp, math.huge, "bad")

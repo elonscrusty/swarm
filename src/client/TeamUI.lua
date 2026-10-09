@@ -74,10 +74,22 @@ local rosterKey = ""
 local markers: { [Player]: Marker } = {}
 local worldRings: { [Player]: WorldRing } = {}
 local worldFolder: Folder? = nil
--- Reviving is standing beside the fallen teammate (owner decision): no hold button, no
--- key. Kept for LootUI's E / X key gate (UIBuilder passes it as CanRevive).
+-- [stream E1] Reviving is holding interact beside a downed teammate (continuation pack:
+-- SwarmV2 Run.ReviveHoldClient sends it). LootUI's E / X key gate asks this (UIBuilder passes
+-- it as CanRevive): with a downed teammate in reach, interact revives instead of opening a chest.
+local reviveHold: any = nil
 function TeamUI.CanRevive(): boolean
-	return false
+	if reviveHold == nil then
+		local folder = script.Parent.Parent:FindFirstChild("SwarmV2Client")
+		local run = folder and folder:FindFirstChild("Run")
+		local mod = run and run:FindFirstChild("ReviveHoldClient")
+		if not (mod and mod:IsA("ModuleScript")) then
+			return false
+		end
+		local ok, m = pcall(require, mod)
+		reviveHold = ok and m or false
+	end
+	return reviveHold ~= false and reviveHold.HasTarget() == true
 end
 
 ------------------------------------------------------------------------------------------

@@ -65,7 +65,7 @@ RunConfig.Camera = {
 RunConfig.Movement = {
 	JumpApex = 9, -- studs, JumpPower = sqrt(2 * gravity * apex)
 	JumpApexByClass = { toastmaster = 12 } :: { [string]: number },
-	AirControl = 0.7, -- share of the live stick that steers in the air (the rest is the takeoff direction)
+	AirControl = 0.65, -- [stream E1] share of the live stick that steers in the air (the rest is the takeoff direction)
 }
 
 RunConfig.Dash = {
@@ -343,7 +343,55 @@ RunConfig.Combat = {
 	SplinterCount = 2,
 }
 RunConfig.Director = {} -- [stream D] run clock, beacon, boss, enemy pressure
-RunConfig.Survival = {} -- [stream E1] downed, revive, protection, falls, movement feel
+-- [stream E1] downed, revive, protection, falls, disconnects, movement feel
+-- (server RunManager "HP, death, revive" / fallRescue / speedCheck / reconnect sections, Dash.lua
+-- landings; client JumpController, MobileControls, DashClient, ReviveHoldClient; pure maths in
+-- SurvivalRules.lua). Base move speed stays Config.Player.BaseSpeed (22), jump height
+-- RunConfig.Movement.JumpApex (9) and air steering RunConfig.Movement.AirControl (0.65).
+RunConfig.Survival = {
+	Downed = {
+		BleedSeconds = 20, -- downed this long (while the world runs), then eliminated
+		ReviveSeconds = 3, -- a living teammate holds interact this long, uninterrupted
+		ReviveRange = 8, -- studs between the reviver's and the downed hero's roots
+		ReviveHPShare = 0.25, -- revived with this share of max HP
+		ReviveProtectSeconds = 1, -- no damage this long after a teammate revive (ReviveProtectUntil)
+		HoldFreshSeconds = 0.6, -- a held revive the client stopped refreshing counts as released
+		HoldRate = 12, -- "ReviveHold" remote calls per second per player
+		HoldRefresh = 0.25, -- the client re-sends a held revive this often
+	},
+	-- one shared protection window after an ordinary incoming hit (any attacker, any kind but falls
+	-- and rescues); it never stacks per attacker (HitProtectUntil)
+	HitProtectSeconds = 0.35,
+	-- an open upgrade / reward panel grants no protection (live menus never pause the world)
+	MenuProtection = false,
+	Fall = {
+		SafeDrop = 18, -- studs from the highest point of the fall: no damage below this
+		PerStud = 0.02, -- share of max HP per stud past SafeDrop
+		MaxShare = 0.35, -- most damage of one landing
+	},
+	Rescue = {
+		MaxHPShare = 0.10, -- an out-of-bounds rescue costs at most this share of max HP (never downs)
+		LockoutSeconds = 3, -- no damage this long after a rescue (rescue costs included)
+	},
+	Disconnect = {
+		WindowSeconds = 60, -- a living hero who drops keeps their state this long
+		ReturnProtectSeconds = 2, -- no damage this long after coming back
+	},
+	Move = {
+		AccelSeconds = 0.18, -- standing to full speed (client move driver)
+		DecelSeconds = 0.15, -- full speed to standing after release
+		BufferSeconds = 0.10, -- a jump pressed this long before landing still jumps
+		CoyoteSeconds = 0.10, -- a jump this long after walking off an edge still jumps
+		JumpCooldown = 0.2, -- minimum time between two jumps (no double jumps)
+		-- no jump this long after a landing (a press buffered into it fires when it ends); the Spring
+		-- Stitch passive shortens it (Player attribute LandLockReduce, stream B)
+		LandLockSeconds = 0.12,
+		HorizontalCap = 34, -- studs/s, outside dashes and explicit class boosts (RunManager.SetSpeedBoost)
+		ServerTolerance = 1.3, -- server speed check slack on top of the allowed speed (lag, pushes)
+		SpeedAllowance = 6, -- studs per check window on top of that
+		DashSlopeRise = 0, -- upward studs/s a ground dash may gain (no ramp launches)
+	},
+}
 RunConfig.Economy = {} -- [stream E2] XP shards, team run gold, chests, class goals
 RunConfig.UI = require(script.Parent.RunUIConfig) -- [stream F] run HUD layout and screens (own file: RunUIConfig.lua)
 

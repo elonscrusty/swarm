@@ -9,7 +9,9 @@
 
 	The default Roblox control scripts are disabled (StarterPlayer movement modes are
 	"Scriptable" in default.project.json); this module calls Humanoid:Move every frame
-	with a direction relative to the camera (CameraController.GroundAxes).
+	with a direction relative to the camera (CameraController.GroundAxes). During a run the
+	direction goes through the move driver first (SurvivalRules.StepMove: full speed in about
+	0.18 s, a release stops in 0.15 s; RunConfig.Survival.Move).
 ]]
 
 local Players = game:GetService("Players")
@@ -18,6 +20,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
 local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Theme"))
+local SurvivalRules = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("SurvivalRules"))
 local CameraController = require(script.Parent.CameraController)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Icons = require(script.Parent.Icons)
@@ -39,6 +42,8 @@ MobileControls.OnJump = nil :: (() -> ())?
 MobileControls.OnDash = nil :: (() -> ())?
 -- While set, the hero is moved along this world direction instead of the stick (a dash).
 MobileControls.MoveOverride = nil :: Vector3?
+-- Set by JumpController: true while the hero is in the air.
+MobileControls.Airborne = nil :: (() -> boolean)?
 
 local player = Players.LocalPlayer
 local enabled = true
@@ -47,6 +52,7 @@ local stickOrigin = Vector2.zero
 local stickVector = Vector2.zero -- x right, y down (screen space), length 0..1
 local keys: { [Enum.KeyCode]: boolean } = {}
 local gamepadVector = Vector2.zero
+local smoothed = Vector3.zero -- the move vector after the accel / decel driver (runs only)
 
 local gui: ScreenGui
 local base: Frame
@@ -640,11 +646,13 @@ function MobileControls.Init()
 		local char = player.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		if not hum then
+			smoothed = Vector3.zero
 			return
 		end
 		local override = MobileControls.MoveOverride
 		if override then
 			-- a dash moves the hero along its own direction, whatever the stick says
+			smoothed = override
 			hum:Move(override, false)
 			return
 		end
@@ -658,6 +666,14 @@ function MobileControls.Init()
 		local air = MobileControls.AirFilter
 		if air then
 			world = air(world, dt)
+		end
+		-- [stream E1] run move driver: full speed in ~0.18 s, a release stops in 0.15 s
+		-- (RunConfig.Survival.Move); the analog move vector scales the humanoid's walk speed
+		if player:GetAttribute("InRun") == true then
+			smoothed = SurvivalRules.StepMove(smoothed, world, dt)
+			world = smoothed
+		else
+			smoothed = world
 		end
 		hum:Move(world, false)
 	end)
