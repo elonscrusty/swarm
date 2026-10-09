@@ -6,7 +6,7 @@ Uploaded pictures live in `src/shared/IconData.lua` (filled by `tools/gen_icon_d
 If a picture cannot load, Icons draws the vector icon (or a framed glyph) underneath.
 Preload list for ContentProvider: `Icons.PreloadList()`.
 
-Entries: 311. Problems: 0.
+Entries: 349. Problems: 0.
 
 ## Weapons
 
@@ -41,6 +41,18 @@ Level-up cards, HUD weapon bar, character screen (start weapon), chest rewards, 
 | `WarHorn` | War Horn | level-up card, HUD bar, results | rbxassetid://109619643736979 | working (image) |
 | `SpiritWisps` | Spirit Wisps | level-up card, HUD bar, results | rbxassetid://116994583705814 | working (image) |
 | `Vortex` | Vortex | level-up card, HUD bar, results | rbxassetid://74005103594271 | working (image) |
+| `ScrapToss` | Scrap Shot | level-up card, HUD bar, results | rbxassetid://73412804789563 | working (image) |
+| `ToastVolley` | Toast Toss | level-up card, HUD bar, results | rbxassetid://88747586762793 | working (image) |
+| `BubbleBomb` | Bubble Bomb | level-up card, HUD bar, results | rbxassetid://103052618282830 | working (image) |
+| `YarnBomb` | Yarn Bomb | level-up card, HUD bar, results | rbxassetid://132805311426529 | working (image) |
+| `Dodgeball` | Dodgeball | level-up card, HUD bar, results | rbxassetid://136893516104375 | working (image) |
+| `MopSweep` | Mop Sweep | level-up card, HUD bar, results | rbxassetid://127824662207692 | working (image) |
+| `ReturningSneakers` | Returning Sneakers | level-up card, HUD bar, results | rbxassetid://130483583144595 | working (image) |
+| `SeedSlinger` | Seed Slinger | level-up card, HUD bar, results | rbxassetid://118578998800514 | working (image) |
+| `ConfettiMinigun` | Confetti Minigun | level-up card, HUD bar, results | rbxassetid://114205853306109 | working (image) |
+| `ProteinClaws` | Protein Claws | level-up card, HUD bar, results | rbxassetid://126994238291124 | working (image) |
+| `RicochetPuck` | Ricochet Puck | level-up card, HUD bar, results | rbxassetid://139350770658219 | working (image) |
+| `GloveCombo` | Glove Combo | level-up card, HUD bar, results | rbxassetid://75270107454550 | working (image) |
 
 ## Weapon evolutions
 
@@ -75,6 +87,10 @@ EVOLUTION cards, HUD bar once evolved, results build.
 | `TitansRoar` | Titan's Roar | evolution card, HUD bar, results | rbxassetid://89735784208199 | working (image) |
 | `WispChoir` | Wisp Choir | evolution card, HUD bar, results | rbxassetid://134215168328609 | working (image) |
 | `Singularity` | Singularity | evolution card, HUD bar, results | rbxassetid://71157032438542 | working (image) |
+| `JunkyardCyclone` | Junkyard Cyclone | evolution card, HUD bar, results | rbxassetid://98429516218264 | working (image) |
+| `Toaststorm` | Toaststorm | evolution card, HUD bar, results | rbxassetid://107428412308859 | working (image) |
+| `BubbleTorrent` | Bubble Torrent | evolution card, HUD bar, results | rbxassetid://111760102882389 | working (image) |
+| `KnittingNightmare` | Knitting Nightmare | evolution card, HUD bar, results | rbxassetid://112084062395493 | working (image) |
 
 ## Passives (upgrades)
 
@@ -97,6 +113,14 @@ Level-up cards, HUD passive row, results build. Vacuum = pickup radius.
 | `Fletching` | Fletching | level-up card, HUD passive row, results | rbxassetid://98689586490863 | working (image) |
 | `Precision` | Precision | level-up card, HUD passive row, results | rbxassetid://98037335035662 | working (image) |
 | `Renewal` | Renewal | level-up card, HUD passive row, results | rbxassetid://120768913650728 | working (image) |
+| `PocketDynamo` | Pocket Dynamo | level-up card, HUD passive row, results | rbxassetid://78068054212117 | working (image) |
+| `RatchetTimer` | Ratchet Timer | level-up card, HUD passive row, results | rbxassetid://121641437355866 | working (image) |
+| `TrailSneakers` | Trail Sneakers | level-up card, HUD passive row, results | rbxassetid://109411248001511 | working (image) |
+| `PatchworkPadding` | Patchwork Padding | level-up card, HUD passive row, results | rbxassetid://107044021844138 | working (image) |
+| `CollectorsBell` | Collector's Bell | level-up card, HUD passive row, results | rbxassetid://106874872848611 | working (image) |
+| `LuckyButton` | Lucky Button | level-up card, HUD passive row, results | rbxassetid://87533542256483 | working (image) |
+| `SpringStitch` | Spring Stitch | level-up card, HUD passive row, results | rbxassetid://102511309385953 | working (image) |
+| `SplinterBadge` | Splinter Badge | level-up card, HUD passive row, results | rbxassetid://131707742567080 | working (image) |
 | `GiantsBane` | Giant's Bane | level-up card, HUD passive row, results | rbxassetid://114533736757106 | working (image) |
 | `Thornhide` | Thornhide | level-up card, HUD passive row, results | rbxassetid://136143539357678 | working (image) |
 | `BloodRune` | Blood Rune | level-up card, HUD passive row, results | rbxassetid://129842947931988 | working (image) |
@@ -166,6 +190,25 @@ Class icons: hero_<Id> picture (Icons.Character), drawn hat / helmet under it. S
 | `Crossbow` | Archer [Archer] | character select, lobby, team HUD, results | rbxassetid://119446419342461 | working (image) |
 | `music` | Bard [Bard] | character select, lobby, team HUD, results | rbxassetid://93438969773483 | working (image) |
 | `Stoneskin` | Golem [Golem] | character select, lobby, team HUD, results | rbxassetid://71553394202877 | working (image) |
+
+## Classes (continuation pack, class icon)
+
+Class heads rendered from the class meshes (blender/icons_v2.py): art/icons/heroes/hero_<classId>.png, uploaded by tools/upload_art.py into ArtData.
+
+| Key | Name | Where it appears | Asset | Status |
+|---|---|---|---|---|
+| `hero_ruckus` | Ruckus [ruckus] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://112507522832301 | working (image) |
+| `hero_toastmaster` | Toastmaster [toastmaster] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://90866790710377 | working (image) |
+| `hero_captain_croak` | Captain Croak [captain_croak] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://123899108654442 | working (image) |
+| `hero_granny_boom` | Granny Boom [granny_boom] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://91672764766050 | working (image) |
+| `hero_coach_crunch` | Coach Crunch [coach_crunch] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://113702678570768 | working (image) |
+| `hero_doug_janitor` | Doug the Janitor [doug_janitor] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://81329528664022 | working (image) |
+| `hero_peter_parkour` | Peter Parkour [peter_parkour] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://97953557244973 | working (image) |
+| `hero_barry_plotter` | Barry Plotter [barry_plotter] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://97968681228007 | working (image) |
+| `hero_rambozo` | Rambozo [rambozo] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://135667325371764 | working (image) |
+| `hero_swolverine` | Swolverine [swolverine] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://137439243767384 | working (image) |
+| `hero_crash_cassidy` | Crash Cassidy [crash_cassidy] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://98039915763424 | working (image) |
+| `hero_knuckles_mcgee` | Knuckles McGee [knuckles_mcgee] | class select, lobby, party, team HUD, results (Icons.Character) | rbxassetid://110840168906711 | working (image) |
 
 ## Locked / state icons
 
@@ -317,6 +360,7 @@ Every icon name written in src (screens that use it).
 |---|---|---|---|---|
 | `EmberOil` | EmberOil | SynergyData | rbxassetid://112910906183463 | working (image) |
 | `Garlic` | Garlic | SigilData | rbxassetid://75185524104987 | working (image) |
+| `Heal` | Heal | RunCards | rbxassetid://81721198350930 | working (image) |
 | `Hellfire` | Hellfire | SynergyData | rbxassetid://87778137198245 | working (image) |
 | `Thornhide` | Thornhide | SynergyData | rbxassetid://136143539357678 | working (image) |
 | `VolatileSpore` | VolatileSpore | StoreCatalog | rbxassetid://71812106664176 | working (image) |
@@ -346,21 +390,22 @@ Every icon name written in src (screens that use it).
 | `arena_Ruins` | arena_Ruins | MenuArenas | rbxassetid://87279179042437 | working (image) |
 | `arena_Snow` | arena_Snow | MenuArenas | rbxassetid://127255296709894 | working (image) |
 | `arena_Swamp` | arena_Swamp | MenuArenas | rbxassetid://71073285544360 | working (image) |
-| `arrowFast` | arrowFast | StoreCatalog | rbxassetid://109874903136437 | working (image) |
-| `arrowRight` | arrowRight | UIBuilder | drawn: DRAW.arrowRight | working (drawn) |
-| `bars` | bars | MenuMore, MenuStats, UIBuilder | drawn: DRAW.bars | working (drawn) |
+| `arrowFast` | arrowFast | MenuInvite, StoreCatalog | rbxassetid://109874903136437 | working (image) |
+| `arrowRight` | arrowRight | RunDowned, RunObjective, UIBuilder | drawn: DRAW.arrowRight | working (drawn) |
+| `bag` | bag | MenuBar | drawn: DRAW.bag | working (drawn) |
+| `bars` | bars | MenuBar, MenuMore, MenuStats, TeamPings, UIBuilder | drawn: DRAW.bars | working (drawn) |
 | `boot` | boot | SigilData | drawn: DRAW.boot | working (drawn) |
-| `calendar` | calendar | LobbyScreen, MenuDaily, MenuLeaderboards, MenuMore, NextGoal | rbxassetid://140237512578895 | working (image) |
-| `castle` | castle | LobbyScreen, MenuMore, StageUI, UIBuilder | rbxassetid://140592768688922 | working (image) |
-| `check` | check | BugReportUI, LobbyScreen, MenuCharacters, MenuCurses, MenuHeroPower, MenuParty, MenuStore, MenuUpgrades, UIBuilder | rbxassetid://83669026873947 | working (image) |
-| `chest` | chest | AchievementData, LobbyScreen, MenuMore | rbxassetid://102564255284031 | working (image) |
+| `calendar` | calendar | LobbyScreen, MenuLeaderboards, MenuMore, NextGoal, QuestData | rbxassetid://140237512578895 | working (image) |
+| `castle` | castle | LobbyScreen, MenuMore, QuestData, StageUI, UIBuilder | rbxassetid://140592768688922 | working (image) |
+| `check` | check | BugReportUI, LobbyScreen, MenuCharacters, MenuCurses, MenuHeroPower, MenuParty, MenuPlay, MenuStore, MenuUpgrades, QueuePanel, ResultsExtras, UIBuilder | rbxassetid://83669026873947 | working (image) |
+| `chest` | chest | AchievementData, LobbyScreen, MenuMore, QuestData | rbxassetid://102564255284031 | working (image) |
 | `chevronLeft` | chevronLeft | DevInbox, LobbyFun, LootUI, UIKit | drawn: DRAW.chevronLeft | working (drawn) |
-| `chevronRight` | chevronRight | DevInbox, MenuDaily, MenuStore, UIKit | drawn: DRAW.chevronRight | working (drawn) |
-| `chevronsUp` | chevronsUp | Hud, MenuCharacters, MenuLeaderboards, MenuStats, MenuUpgrades, NextGoal, UIBuilder | rbxassetid://78081015628207 | working (image) |
+| `chevronRight` | chevronRight | DevInbox, MenuDaily, MenuStore, UIBuilder, UIKit | drawn: DRAW.chevronRight | working (drawn) |
+| `chevronsUp` | chevronsUp | Hud, MenuCharacters, MenuLeaderboards, MenuStats, MenuUpgrades, NextGoal, QuestData, UIBuilder | rbxassetid://78081015628207 | working (image) |
 | `clock` | clock | MenuLeaderboards, MenuPlaytime | rbxassetid://75400395089147 | working (image) |
-| `close` | close | BugReportUI, DevInbox, DevPanel, Hud, MenuCurses, MenuParty, UIBuilder, WeaponMastery | rbxassetid://70434531884861 | working (image) |
+| `close` | close | BugReportUI, DevInbox, DevPanel, ExploreUI, Kit, LevelUpBanish, MenuCurses, MenuParty, PingWheel, UIBuilder, WeaponMastery | rbxassetid://70434531884861 | working (image) |
 | `coin` | coin | LootUI, MenuCharacters, MenuUpgrades, SigilData, UIBuilder | drawn: DRAW.coin | working (drawn) |
-| `crown` | crown | LobbyScreen, MenuLeaderboards, MenuStats, MenuTitles, NextGoal, StoreCatalog | rbxassetid://111893393943562 | working (image) |
+| `crown` | crown | MenuGroup, MenuLeaderboards, MenuStats, MenuTitles, NextGoal, QueuePanel, ResultsExtras, StoreCatalog | rbxassetid://111893393943562 | working (image) |
 | `curse` | curse | LobbyScreen | rbxassetid://74035374082108 | working (image) |
 | `curse_EliteSurge` | curse_EliteSurge | CurseData | rbxassetid://109626819548762 | working (image) |
 | `curse_Famine` | curse_Famine | CurseData | rbxassetid://123582363527310 | working (image) |
@@ -368,34 +413,34 @@ Every icon name written in src (screens that use it).
 | `curse_Frenzy` | curse_Frenzy | CurseData | rbxassetid://90865939305392 | working (image) |
 | `curse_GlassCannon` | curse_GlassCannon | CurseData | rbxassetid://123368947276541 | working (image) |
 | `curse_Horde` | curse_Horde | CurseData | rbxassetid://89057345345263 | working (image) |
-| `cycle` | cycle | DevInbox, LobbyScreen, MenuLastRun, MenuLeaderboards, MenuParty, UIBuilder | rbxassetid://90356733787113 | working (image) |
-| `flag` | flag | LootUI, MenuMore, StoreCatalog | rbxassetid://73966774795104 | working (image) |
-| `gear` | gear | LobbyScreen, MenuMore, UIBuilder | rbxassetid://120365123104494 | working (image) |
-| `gift` | gift | MenuMore, MenuSeason, MenuStreak, MenuUpgrades, StoreCatalog | drawn: DRAW.gift | working (drawn) |
+| `cycle` | cycle | DamageOptionsUI, DevInbox, LobbyScreen, MenuLastRun, MenuLeaderboards, MenuParty, UIBuilder | rbxassetid://90356733787113 | working (image) |
+| `flag` | flag | LootUI, MenuBar, MenuInvite, MenuMore, MenuQuests, StoreCatalog | rbxassetid://73966774795104 | working (image) |
+| `gear` | gear | LobbyScreen, MenuBar, MenuMore, UIBuilder | rbxassetid://120365123104494 | working (image) |
+| `gift` | gift | MenuComeback, MenuMore, MenuQuests, MenuSeason, MenuStore, MenuStreak, MenuUpgrades, StarterCard, StoreCatalog | drawn: DRAW.gift | working (drawn) |
 | `heart` | heart | Hud, SigilData, StoreCatalog, UIBuilder | rbxassetid://123589421698122 | working (image) |
-| `helmet` | helmet | LobbyScreen, StoreCatalog, UIBuilder | drawn: DRAW.helmet | working (drawn) |
-| `hourglass` | hourglass | SigilData | rbxassetid://109069769495719 | working (image) |
-| `info` | info | MenuDaily, MenuLeaderboards, MenuMore, UIBuilder | rbxassetid://103918068813917 | working (image) |
-| `lobby_Gold` | lobby_Gold | Hud, LobbyScreen, MenuStreak | drawn: DRAW.lobby_Gold | working (drawn) |
-| `lobby_Party` | lobby_Party | LobbyScreen, MenuMore | drawn: DRAW.lobby_Party | working (drawn) |
+| `helmet` | helmet | LobbyScreen, MenuStarter, StoreCatalog | drawn: DRAW.helmet | working (drawn) |
+| `hourglass` | hourglass | ResultsExtras, SigilData, TeamUI | rbxassetid://109069769495719 | working (image) |
+| `info` | info | MenuDaily, MenuGroup, MenuLeaderboards, MenuMore, MenuParty, UIBuilder | rbxassetid://103918068813917 | working (image) |
+| `lobby_Gold` | lobby_Gold | Hud, LobbyScreen, MenuComeback, MenuGroup, MenuStarter, MenuStreak, UIBuilder | drawn: DRAW.lobby_Gold | working (drawn) |
+| `lobby_Party` | lobby_Party | LobbyScreen | drawn: DRAW.lobby_Party | working (drawn) |
 | `lock` | lock | MenuCharacters | rbxassetid://105021639149224 | working (image) |
 | `magnet` | magnet | SigilData | drawn: DRAW.magnet | working (drawn) |
-| `medal` | medal | MenuMore, MenuTitles | rbxassetid://94150226778052 | working (image) |
+| `medal` | medal | MenuGroup, MenuInvite, MenuMore, MenuStarter, MenuTitles, QuestData | rbxassetid://94150226778052 | working (image) |
 | `opt_Armory` | opt_Armory | CurseData | rbxassetid://129016540628353 | working (image) |
 | `opt_HeadStart` | opt_HeadStart | CurseData | rbxassetid://114146454738968 | working (image) |
 | `pause` | pause | Hud | rbxassetid://87478904157418 | working (image) |
-| `people2` | people2 | MenuPlay, StoreCatalog | rbxassetid://99261197198661 | working (image) |
-| `people3` | people3 | MenuParty, MenuPlay | rbxassetid://120267348933030 | working (image) |
-| `person` | person | LobbyScreen, MenuPlay, SigilData | rbxassetid://121089730776711 | working (image) |
-| `play` | play | LobbyScreen, MenuCharacters, MenuDaily, MenuParty, MenuPlay, MenuStore, MenuWeekly, UIBuilder | rbxassetid://110446088893473 | working (image) |
-| `plus` | plus | LobbyScreen | drawn: DRAW.plus | working (drawn) |
-| `podium` | podium | MenuDaily, MenuMore, MenuWeekly | rbxassetid://97909009656138 | working (image) |
-| `portal` | portal | AchievementData, MenuLeaderboards, MenuStats, StageUI | rbxassetid://126782693482750 | working (image) |
+| `people2` | people2 | MenuMore, MenuPlay, QuestData, StoreCatalog | rbxassetid://99261197198661 | working (image) |
+| `people3` | people3 | MenuMore, MenuParty, MenuPlay, PartyLines | rbxassetid://120267348933030 | working (image) |
+| `person` | person | LobbyScreen, MenuPlay, QuestData, SigilData | rbxassetid://121089730776711 | working (image) |
+| `play` | play | LobbyScreen, MenuCharacters, MenuDaily, MenuParty, MenuPlay, MenuStore, MenuWeekly, QueuePanel, ResumeCard, UIBuilder | rbxassetid://110446088893473 | working (image) |
+| `plus` | plus | LobbyScreen, MenuParty | drawn: DRAW.plus | working (drawn) |
+| `podium` | podium | MenuBar, MenuDaily, MenuMore, MenuWeekly | rbxassetid://97909009656138 | working (image) |
+| `portal` | portal | AchievementData, MenuLeaderboards, MenuStats, QuestData, StageUI | rbxassetid://126782693482750 | working (image) |
 | `pouch` | pouch | SigilData | drawn: DRAW.pouch | working (drawn) |
 | `revive` | revive | AchievementData, CurseData, MenuStats, TeamUI, UIBuilder | rbxassetid://140117129153655 | working (image) |
 | `reward_ChestGolden` | reward_ChestGolden | MenuUpgrades | rbxassetid://110492912481290 | working (image) |
 | `reward_ChestLarge` | reward_ChestLarge | CurseData, UIBuilder | rbxassetid://75154548726207 | working (image) |
-| `robux` | robux | MenuCharacters, MenuStore, MenuUpgrades | drawn: DRAW.robux | working (drawn) |
+| `robux` | robux | MenuCharacters, MenuStarter, MenuStore, MenuUpgrades | drawn: DRAW.robux | working (drawn) |
 | `shield` | shield | SigilData, SynergyData | drawn: DRAW.shield | working (drawn) |
 | `shop_DoubleGold` | shop_DoubleGold | MenuUpgrades | rbxassetid://107076568977243 | working (image) |
 | `shop_GoldPouch` | shop_GoldPouch | MenuUpgrades | rbxassetid://128564365976726 | working (image) |
@@ -403,21 +448,21 @@ Every icon name written in src (screens that use it).
 | `shop_VIP` | shop_VIP | MenuUpgrades | rbxassetid://139070340595205 | working (image) |
 | `shrine` | shrine | LootUI | rbxassetid://118314946884299 | working (image) |
 | `skip` | skip | Tutorial, UIBuilder | rbxassetid://122329290826883 | working (image) |
-| `skull` | skull | Hud, MenuMore, MenuStats | rbxassetid://107475273995957 | working (image) |
-| `sparkle` | sparkle | LootUI, MenuCharacters, MenuStats, MenuUpgrades, PhotoMode, SigilData, StoreCatalog, SynergyData, UIBuilder | rbxassetid://111611145817346 | working (image) |
-| `stat_BestTime` | stat_BestTime | MenuStats | rbxassetid://121618866572998 | working (image) |
-| `stat_Gold` | stat_Gold | MenuStats, MenuUpgrades | rbxassetid://124444379030175 | working (image) |
+| `skull` | skull | Hud, MenuMore, MenuStats, QuestData, RunObjective | rbxassetid://107475273995957 | working (image) |
+| `sparkle` | sparkle | LootUI, MenuCharacters, MenuComeback, MenuPlay, MenuStats, MenuUpgrades, PhotoMode, QuestData, SigilData, StoreCatalog, SynergyData, UIBuilder | rbxassetid://111611145817346 | working (image) |
+| `stat_BestTime` | stat_BestTime | MenuStats, QuestData | rbxassetid://121618866572998 | working (image) |
+| `stat_Gold` | stat_Gold | MenuStats, MenuUpgrades, QuestData | rbxassetid://124444379030175 | working (image) |
 | `stat_Heroes` | stat_Heroes | MenuStats | rbxassetid://95663358686896 | working (image) |
-| `stat_Kills` | stat_Kills | MenuLeaderboards, MenuStats | rbxassetid://94828074051240 | working (image) |
+| `stat_Kills` | stat_Kills | MenuLeaderboards, MenuStats, QuestData | rbxassetid://94828074051240 | working (image) |
 | `stat_Runs` | stat_Runs | MenuStats | rbxassetid://73659202222948 | working (image) |
 | `stat_Skins` | stat_Skins | MenuStats | rbxassetid://72401824586935 | working (image) |
-| `stat_Upgrades` | stat_Upgrades | MenuStats | rbxassetid://106738447593494 | working (image) |
+| `stat_Upgrades` | stat_Upgrades | MenuStats, QuestData | rbxassetid://106738447593494 | working (image) |
 | `stat_WinRate` | stat_WinRate | MenuStats | rbxassetid://94897019228978 | working (image) |
-| `stat_Wins` | stat_Wins | MenuStats | rbxassetid://99714951476710 | working (image) |
-| `sword` | sword | MenuMore | drawn: DRAW.sword | working (drawn) |
-| `trophy` | trophy | HomeBoard, MenuLeaderboards, MenuMore, StoreCatalog | rbxassetid://93769712875963 | working (image) |
-| `userPlus` | userPlus | LobbyScreen, MenuParty | rbxassetid://120028255241411 | working (image) |
-| `warning` | warning | MenuMore, MenuWeekly, UIBuilder | rbxassetid://102963920348478 | working (image) |
+| `stat_Wins` | stat_Wins | MenuStats, QuestData | rbxassetid://99714951476710 | working (image) |
+| `sword` | sword | MenuMore, QuestData | drawn: DRAW.sword | working (drawn) |
+| `trophy` | trophy | HomeBoard, MenuDaily, MenuLeaderboards, MenuMore, QuestData, StoreCatalog | rbxassetid://93769712875963 | working (image) |
+| `userPlus` | userPlus | LobbyScreen, MenuInvite, MenuMore, MenuParty | rbxassetid://120028255241411 | working (image) |
+| `warning` | warning | MenuMore, MenuWeekly, ResultsExtras, UIBuilder | rbxassetid://102963920348478 | working (image) |
 
 ## Controls without an icon
 
