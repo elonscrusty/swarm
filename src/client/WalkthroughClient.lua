@@ -3,9 +3,16 @@
 	The client side of the interactive first-run walkthrough (server Walkthrough.lua,
 	Config.Features.Walkthrough, docs/next/WALKTHROUGH.md). The server owns the steps and
 	writes them on the local player:
-	  Walkthrough   "Move" | "Fight" | "Gems" | "Upgrade" | "Chest" | "Go" (nil = none)
+	  Walkthrough   "Move" | "Dash" | "Fight" | "Gems" | "Upgrade" | "Chest" | "Beacon" on a
+	                Cliffwood beacon run; "Move" | "Fight" | "Gems" | "Upgrade" | "Chest" | "Go"
+	                on the old stage loop (nil = none)
+	  WalkMode      "Beacon" on a beacon run (nil on the old stage loop)
 	  WalkCount / WalkTotal   Fight progress ("2/5")
 	  WalkTarget    the world point of the step (the ring, the nearest enemy, the chest)
+	  WalkFree      the Chest step's chest is the free gift chest (first walkthrough only)
+	The lines name the controls of the device in hand (InputPrompts.Mode): WASD / Space /
+	Shift / right-drag on a computer, the stick / JUMP / DASH / swipe on a touch screen, the
+	sticks / A / B on a gamepad.
 
 	This module shows each step's short line in the tutorial speech bubble
 	(TutorialBubble.lua, owned by Tutorial.lua while the walkthrough runs), aims its pointer
@@ -44,7 +51,7 @@ local markerAt: Vector3? = nil
 local markerRing = false
 local clock = 0
 
-local ICONS = { Move = "boot", Fight = "sword", Gems = "gem", Upgrade = "chevronsUp", Chest = "chest", Go = "portal" }
+local ICONS = { Move = "boot", Dash = "arrowFast", Fight = "sword", Gems = "gem", Upgrade = "chevronsUp", Chest = "chest", Go = "portal", Beacon = "flag" }
 
 local function step(): string?
 	if (Config :: any).Features.Walkthrough ~= true then
@@ -54,30 +61,61 @@ local function step(): string?
 	return type(s) == "string" and s ~= "" and s or nil
 end
 
-local function holdWord(): string
-	local key = InputPrompts.HoldKey()
+local HOLD_KEY = { Touch = "", Mouse = "E", Gamepad = "X" } -- the interact key per device (LootUI)
+
+local function holdWord(mode: string?): string
+	local key = if mode then (HOLD_KEY[mode] or "") else InputPrompts.HoldKey()
 	return key ~= "" and ("Hold " .. key) or "Hold the button"
 end
 
--- The step's line (tiny and friendly; the device in hand decides the move / hold words).
-local function lineFor(s: string): string
+local function beaconRun(): boolean
+	return player:GetAttribute("WalkMode") == "Beacon"
+end
+
+-- The step's line (tiny and friendly; the device in hand decides the control words).
+-- forceMode: "Touch" | "Mouse" | "Gamepad" instead of the device in hand (tests).
+local function lineFor(s: string, forceMode: string?): string
+	local mode = forceMode or InputPrompts.Mode()
+	local beacon = beaconRun()
 	if s == "Move" then
-		local mode = InputPrompts.Mode()
+		if beacon then
+			if mode == "Touch" then
+				return "Drag on the left to walk, swipe on the right to look. Walk into the gold ring!"
+			elseif mode == "Gamepad" then
+				return "Left stick to walk, right stick to look. Walk into the gold ring!"
+			end
+			return "WASD to walk, right-drag to look. Walk into the gold ring!"
+		end
 		if mode == "Touch" then
 			return "Drag to walk into the gold ring!"
 		elseif mode == "Gamepad" then
 			return "Use the left stick to walk into the gold ring!"
 		end
 		return "Use WASD to walk into the gold ring!"
+	elseif s == "Dash" then
+		if mode == "Touch" then
+			return "Tap JUMP to hop, DASH to zoom ahead. Try a dash!"
+		elseif mode == "Gamepad" then
+			return "A jumps, B dashes. Try a dash!"
+		end
+		return "Space jumps, Shift dashes. Try a dash!"
 	elseif s == "Fight" then
 		local n, total = tonumber(player:GetAttribute("WalkCount")) or 0, tonumber(player:GetAttribute("WalkTotal")) or 5
 		return string.format("Your weapon attacks by itself. Beat the bugs! %d/%d", math.min(n, total), total)
 	elseif s == "Gems" then
-		return "Pick up the blue gems!"
+		return beacon and "Grab your blue XP shards!" or "Pick up the blue gems!"
 	elseif s == "Upgrade" then
 		return "Pick an upgrade!"
 	elseif s == "Chest" then
-		return "Open the chest! " .. holdWord()
+		if beacon then
+			if player:GetAttribute("WalkFree") == true then
+				return "Kills earn team gold for chests. This one's free: " .. holdWord(forceMode) .. "!"
+			end
+			return "Kills earn team gold. Open a chest when you have enough: " .. holdWord(forceMode)
+		end
+		return "Open the chest! " .. holdWord(forceMode)
+	elseif s == "Beacon" then
+		return "Survive and grow strong! At 12:30 a beacon appears: light it and beat the boss."
 	elseif s == "Go" then
 		return "Waves are coming! Find the portal and stand in its ring."
 	end
@@ -331,6 +369,12 @@ end
 function WalkthroughClient.Build(root: Frame, k: { [string]: any })
 	rootFrame = root
 	kit = k
+end
+
+-- For tests: the line of step `s` for the local player's walkthrough attributes, worded for
+-- `mode` ("Touch" | "Mouse" | "Gamepad"; default: the device in hand).
+function WalkthroughClient.LineFor(s: string, mode: string?): string
+	return lineFor(s, mode)
 end
 
 -- For tests: the step on screen, its line and the world marker folder.

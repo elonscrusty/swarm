@@ -253,8 +253,12 @@ if parts.A then
 	check("A3 ordinary HP at N=4, t=10: 2B x 1.9 x 1.7", near(F.EnemyHP(2, 4, 10), 20 * 1.9 * 1.7), F.EnemyHP(2, 4, 10))
 	check("A4 contact damage at N=1, t=0: 0.05 H0 = 6", near(F.EnemyDamage(0.05, 1, 0), 6), F.EnemyDamage(0.05, 1, 0))
 	check("A5 contact damage at N=4, t=10: 6 x 1.3 x 1.25", near(F.EnemyDamage(0.05, 4, 10), 6 * 1.3 * 1.25), F.EnemyDamage(0.05, 4, 10))
-	check("A6 boss HP N=1, t=13.5: 200B x 1 x 1.945", near(F.BossHP(1, 13.5), 2000 * 1.945), F.BossHP(1, 13.5))
-	check("A7 boss HP N=4, t=13.5: 200B x 3.4 x 1.945", near(F.BossHP(4, 13.5), 2000 * 3.4 * 1.945), F.BossHP(4, 13.5))
+	-- HPB: the brief's initial 200, tuned against late-run DPS through RunConfig.Director.Boss.HPB
+	-- (stream H, docs/redesign/continuation/PACING_PERF.md); the formula's shape stays the brief's
+	local hpb = Dir.Boss.HPB
+	check(string.format("A6 boss HP N=1, t=13.5: %dB x 1 x 1.945", hpb), near(F.BossHP(1, 13.5), hpb * 10 * 1.945), F.BossHP(1, 13.5))
+	check(string.format("A7 boss HP N=4, t=13.5: %dB x 3.4 x 1.945", hpb), near(F.BossHP(4, 13.5), hpb * 10 * 3.4 * 1.945), F.BossHP(4, 13.5))
+	check("A7b boss HP coefficients: HPB tuned 150-300, party 0.80, minute 0.07 (the brief's shape)", hpb >= 150 and hpb <= 300 and Dir.Boss.HPPerExtra == 0.80 and Dir.Boss.HPPerMinute == 0.07, hpb)
 	check("A8 spawn rate t=0 N=1: 0.60/s", near(F.SpawnRate(0, 1), 0.60), F.SpawnRate(0, 1))
 	check("A9 spawn rate t=10 N=4: 2.0 x 2.35", near(F.SpawnRate(10, 4), 2.0 * 2.35), F.SpawnRate(10, 4))
 	check("A10 overtime: x1 at 15:00, x1.2 at 17:00, capped x1.5 at 25:00", near(F.Overtime(15), 1) and near(F.Overtime(17), 1.2) and near(F.Overtime(25), 1.5) and near(F.Overtime(40), 1.5),
@@ -298,6 +302,17 @@ if parts.A then
 		end
 	end
 	check("A23 no old enemy type in the Cliffwood roster", old == 0)
+	-- [stream H] the opening (Spawn.Opening, a proposal on top of the brief's rate): x Start at 0:00,
+	-- rising linearly to x1 at Seconds, never above x1, and x1 from then on (the brief's formula)
+	local O = Dir.Spawn.Opening
+	if O and (O.Seconds or 0) > 0 then
+		local mid = O.Start + (1 - O.Start) * 0.5
+		check("A24 opening ramp: x Start at 0:00, linear, x1 from Seconds", near(Spawner.OpeningMult(0), O.Start) and near(Spawner.OpeningMult(O.Seconds / 2), mid)
+			and near(Spawner.OpeningMult(O.Seconds), 1) and near(Spawner.OpeningMult(600), 1),
+			string.format("%.2f / %.2f / %.2f", Spawner.OpeningMult(0), Spawner.OpeningMult(O.Seconds / 2), Spawner.OpeningMult(O.Seconds)))
+	else
+		check("A24 no opening ramp: x1 from the start", near(Spawner.OpeningMult(0), 1))
+	end
 end
 
 
@@ -414,7 +429,17 @@ if parts.B then
 		end
 	end)
 	local S = Spawner.DirectorStats
-	check("B5 the director spawns from the start", S.Spawned > 5, S.Spawned)
+	-- (the opening ramp spawns fewer in the first minute: FirstEnemies + the ramped rate)
+	local O = Dir.Spawn.Opening
+	local want = 0
+	if O and (O.Seconds or 0) > 0 then
+		local T = math.min(20, O.Seconds)
+		want = (O.FirstEnemies or 0) + F.SpawnRate(0, 1) * (O.Start * T + (1 - O.Start) * T * T / (2 * O.Seconds))
+	else
+		want = F.SpawnRate(0, 1) * 20
+	end
+	check("B5 the director spawns from the start (about the opening's share of 20 s)", S.Spawned >= math.floor(want * 0.6) and S.Spawned >= 2,
+		string.format("%d spawned, about %.1f expected", S.Spawned, want))
 	check("B6 spawns 35-70 studs from their hero", S.MinDist >= 35 - 0.01 and S.MaxDist <= 70 + 0.01, string.format("%.1f..%.1f", S.MinDist, S.MaxDist))
 	check("B7 never within 35 studs of any hero", S.MinToAnyHero >= 35 - 0.01, string.format("%.1f", S.MinToAnyHero))
 	check("B8 enemies on walkable ground", samples > 0 and unwalk == 0 and offGround == 0, string.format("%d samples, %d unwalkable, %d off the ground", samples, unwalk, offGround))
@@ -620,7 +645,7 @@ if parts.B then
 		boss = Spawner.Boss
 		check("B29 at 100% the Basin Breaker spawns, RunStage Boss", boss ~= nil and boss.Type == "BasinBoss" and st:GetAttribute("RunStage") == "Boss" and st:GetAttribute("BossName") == "Basin Breaker" and not decreased,
 			string.format("charge %.2f, stage %s", Beacon.Charge(), tostring(st:GetAttribute("RunStage"))))
-		check("B30 its HP = 200B x [1 + 0.8 (N-1)] x [1 + 0.07 t] at its spawn (N=1)", boss ~= nil and boss.SpawnN == 1 and near(boss.MaxHP, F.BossHP(1, boss.SpawnMinute), 1e-6)
+		check("B30 its HP = HPB x B x [1 + 0.8 (N-1)] x [1 + 0.07 t] at its spawn (N=1)", boss ~= nil and boss.SpawnN == 1 and near(boss.MaxHP, F.BossHP(1, boss.SpawnMinute), 1e-6)
 			and st:GetAttribute("BossMaxHP") == math.ceil(boss.MaxHP), boss and string.format("%.0f at %.2f min", boss.MaxHP, boss.SpawnMinute) or "-")
 		Beacon.ForceCharge(1)
 		run(2)
@@ -712,7 +737,15 @@ if parts.B then
 		end
 		table.clear(bossLog)
 		table.clear(warns)
-		run(30, stayClose, 20)
+		-- the hero's shots keep landing (point-blank ones too): hold the boss in phase 2 so the
+		-- recoveries can be read and the victory below is still the boss's own death
+		run(30, function()
+			stayClose()
+			local b = Spawner.Boss
+			if b and b.Alive and b.HP < b.MaxHP * 0.3 then
+				b.HP = b.MaxHP * 0.45
+			end
+		end, 20)
 		local p2, p2ok, timers = false, true, {}
 		local allowed = { 1.1 * 0.85, 1.0 * 0.85, 0.9 * 0.85, 1.4 * 0.85 }
 		for _, b in ipairs(bossLog) do

@@ -4947,6 +4947,12 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 	if p.Cancelled then
 		return true
 	end
+	-- [stream H] a straight shot is tested where it appears before its first move: an enemy
+	-- already touching the hero (inside the 1.5-stud muzzle offset plus one frame's travel)
+	-- was skipped and point-blank shots never hit it (pacing-sim; worse on a slow frame)
+	if p.Age == 0 and p.Kind == "Straight" and not p.Hostile and collideEnemies(p, now) then
+		return true
+	end
 	p.Age += dt
 	if p.Age >= p.Life then
 		if p.X and Arm.expire(p) then

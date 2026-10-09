@@ -25,6 +25,9 @@
 --                 hero during each boss phase (the dense boss-plus-swarm case)
 --       endless   an Endless run moved to stage --set stage=12 (DEV next stage), the real
 --                 spawner at its Endless multipliers
+--       cliffwood the redesign's beacon run (alone, not with "all"): 4 heroes with maximum
+--                 builds and 200 enemies on Cliffwood for --set seconds=120, spikes, then
+--                 --set cycles=10 run / return cycles (scenes/lib/perfcliff.luau)
 --     these use the real spawner (the normal MaxLive) instead of the benchmark ring, and
 --     add live counts per phase: server hazards, client telegraphs, CombatFx parts.
 local Players = game:GetService("Players")
@@ -49,6 +52,14 @@ local function want(name: string): boolean
 	return scenario == "all" or string.find("," .. scenario .. ",", "," .. name .. ",", 1, true) ~= nil
 end
 local normalMaxLive = Config.Enemies.MaxLive
+
+-- the redesign's worst case: 4 heroes with maximum builds and 200 enemies on the Cliffwood
+-- beacon run (scenes/lib/perfcliff.luau; its own players, server boot and report)
+if scenario == "cliffwood" then
+	local failed = lib("perfcliff").run()
+	preview.log(failed == 0 and "PASS perf-sim cliffwood" or ("FAIL perf-sim cliffwood (" .. tostring(failed) .. ")"))
+	return
+end
 
 -- room for the benchmark swarm (the real game caps MaxLive at 200)
 Config.Enemies.PoolSize = math.max(Config.Enemies.PoolSize, maxN + 10)

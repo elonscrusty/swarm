@@ -13,7 +13,8 @@
 	gold. Credited once per eligible kill by enemy kind (CreditKill: Normal 3, Tough 6,
 	Elite 20); it pays for chests only (BuyChest: round(40 x 1.35^k), at most 400, k = chests
 	bought this run). SwarmState attributes TeamRunGold and ChestCost show both. It starts at
-	0 with every run (BeginRun sees a new run id) and is cleared in the lobby. With the
+	Economy.Gold.StartGold with every run (BeginRun sees a new run id) and is cleared in the
+	lobby. With the
 	redesign economy on, chests no longer spend the personal escrow below; that escrow, its
 	settlement (kill gold, survival gold, bonuses, pass multipliers, loss retention) is
 	unchanged.
@@ -82,10 +83,12 @@ local function publishTeam()
 	end
 end
 
--- A new run (runId) or the lobby (nil): balance 0, no chests bought.
+-- A new run (runId): the opening balance (Economy.Gold.StartGold, a proposal: 0 = none), no
+-- chests bought. The lobby (nil): 0.
 function GoldSystem.ResetTeamGold(runId: string?)
 	team.RunId = runId
-	team.Gold = 0
+	local start = runId ~= nil and tonumber(econ().Gold.StartGold) or 0
+	team.Gold = (start and start > 0 and start < math.huge) and math.floor(start) or 0
 	team.Bought = 0
 	publishTeam()
 end

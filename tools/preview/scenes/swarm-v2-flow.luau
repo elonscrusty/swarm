@@ -10,6 +10,7 @@
 --      rewards committed exactly once (Stats.Runs +1, gold settled once), can queue again
 --   E  a 2-player party (Invite / Accept, the Party gate) enters together, each with their own class,
 --      and both come back to the camp
+--   F  (--set cycles=N) the leak check: N solo queue -> run -> camp cycles, counts per cycle
 -- Lune sim, NOT Studio. Prints PASS/FAIL lines; any FAIL fails tools/run_regressions.py.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -272,6 +273,83 @@ check("E9 both back at the bonfire", bothBack, select(2, atBonfire(me)) .. " / "
 check("E10 both committed once", rpMe ~= nil and rpMe.Committed == true and rpAva ~= nil and rpAva.Committed == true
 	and data.Stats.Runs == runsMe and avaData.Stats.Runs == runsAva)
 check("E11 the party is kept", PS.PartyOf(me) ~= nil and PS.PartyOf(me) == PS.PartyOf(ava))
+
+------------------------------------------------------------------------------------------
+-- F. (--set cycles=N, default off) the leak check: N solo queue -> run -> results -> camp
+-- cycles through the real gate, countdown and RunEntry, with the client running; instances,
+-- connections (by signal), waiting threads and the Lua heap in the camp after each cycle
+------------------------------------------------------------------------------------------
+local cycles = tonumber(preview.args.cycles) or 0
+if cycles > 0 then
+	if PS.PartyOf(me) then
+		preview.fireServerAs(me, "Party", "Leave")
+		advance(0.5)
+	end
+	local rows = {}
+	for c = 1, cycles do
+		fireAs(me, "QueueAction", "Join", gate)
+		fireAs(me, "QueueAction", "Ready", true)
+		local inRun = waitFor(LobbyConfig.CountdownSeconds + 8, function()
+			return RM.GetRunPlayer(me) ~= nil and st:GetAttribute("Phase") == "Running"
+		end)
+		local r = RM.GetRunPlayer(me)
+		if r then
+			r.InvulnUntil = math.huge
+		end
+		advance(8, 10)
+		pickLevels()
+		RM.EndRun(false)
+		local home = waitFor(30, function()
+			return me:GetAttribute("InRun") ~= true and (atBonfire(me))
+		end)
+		pcall(preview.fireServerAs, me, "ReturnToLobby", "menu")
+		advance(3, 10)
+		local inTree, all = preview.liveInstances()
+		local lc = preview.liveCounts()
+		local row = { Tree = inTree, All = all, Conns = lc.connections, Waiting = lc.waiting, Tweens = lc.tweens, Heap = collectgarbage("count") / 1024, BySignal = lc.byFn or lc.bySignal, Ok = inRun and home }
+		local prev = rows[#rows]
+		table.insert(rows, row)
+		local delta = {}
+		if prev then
+			for name, n in pairs(row.BySignal) do
+				local d = n - (prev.BySignal[name] or 0)
+				if d ~= 0 then
+					table.insert(delta, string.format("%s %+d", name, d))
+				end
+			end
+			for name, n in pairs(prev.BySignal) do
+				if row.BySignal[name] == nil then
+					table.insert(delta, string.format("%s %+d", name, -n))
+				end
+			end
+			table.sort(delta)
+		end
+		preview.log(string.format("F cycle %2d %s: tree %6d  all %6d  conns %5d  waiting %4d  tweens %3d  heap %6.1f MB  [%s]",
+			c, (inRun and home) and "ok" or "STUCK", inTree, all, lc.connections, lc.waiting, lc.tweens, row.Heap, table.concat(delta, ", ")))
+	end
+	local okAll = true
+	for _, row in ipairs(rows) do
+		okAll = okAll and row.Ok
+	end
+	check("F1 every queue -> run -> camp cycle completed", okAll and #rows == cycles)
+	-- growth from the third cycle on (the first ones warm pools and caches)
+	local a, b = rows[math.min(3, #rows)], rows[#rows]
+	if a and b and #rows >= 4 then
+		local grew = {}
+		for name, n in pairs(b.BySignal) do
+			local d = n - (a.BySignal[name] or 0)
+			if d ~= 0 then
+				table.insert(grew, string.format("%s %+d", name, d))
+			end
+		end
+		table.sort(grew)
+		local span = #rows - math.min(3, #rows)
+		check(string.format("F2 connections flat from cycle 3 to %d (<= 2 per cycle)", #rows), b.Conns - a.Conns <= 2 * span,
+			string.format("%+d [%s]", b.Conns - a.Conns, table.concat(grew, ", ")))
+		check(string.format("F3 instances in the tree flat from cycle 3 to %d (<= 40 per cycle)", #rows), b.Tree - a.Tree <= 40 * span, string.format("%+d", b.Tree - a.Tree))
+		check(string.format("F4 waiting threads flat from cycle 3 to %d (<= 5 per cycle)", #rows), b.Waiting - a.Waiting <= 5 * span, string.format("%+d", b.Waiting - a.Waiting))
+	end
+end
 
 check("Z1 no step or remote-handler failures logged", errorCount() == 0)
 

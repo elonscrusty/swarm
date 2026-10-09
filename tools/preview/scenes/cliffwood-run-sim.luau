@@ -438,20 +438,36 @@ for ci, cls in ipairs(classes) do
 	end
 	check(cls .. ": XP gems rest on the ground", gemSamples > 0 and gemOff == 0, string.format("%d of %d off", gemOff, gemSamples))
 
-	-- a dash through the server handler (class variant), then the client's move
+	-- a dash through the server handler (class variant), then the client's move. No level-up
+	-- during it: a solo level choice freezes the world, and a frozen hero may not travel (the
+	-- speed check snaps the dash back), which is right but not what this check is about
 	rootFree(rp)
 	advance(3, 10) -- past any earlier cooldown
 	pickLevels()
 	rootFree(rp)
+	local xpNeeded = rp.XPNeeded
+	rp.XPNeeded = 1e12
 	local from = rp.Root.Position
 	local dashDef = Dash.GetDef(cls)
 	local reach = dashDef.Kind == "Leap" and (dashDef.Horizontal or 31) or dashDef.Speed * dashDef.Duration
 	local dir: Vector3? = nil
+	-- a line clear of cliffs AND of colliders (a tree or rock in the way ends the dash at it:
+	-- the brief's wall stop, not a snap-back; the dressing differs run to run)
+	local EnemyAI = preview.server("EnemyAI")
+	local function lineClear(d: Vector3): boolean
+		for k = 1, 8 do
+			local p = from + d * (reach * k / 8)
+			if EnemyAI.IsBlocked(p.X, p.Z, 1.5) then
+				return false
+			end
+		end
+		return true
+	end
 	for k = 0, 15 do
 		local a = k * math.pi / 8
 		local d = Vector3.new(math.cos(a), 0, math.sin(a))
 		local to = from + d * reach
-		if HG.IsWalkable(to.X, to.Z) and HG.CanStep(from.X, from.Z, to.X, to.Z) then
+		if HG.IsWalkable(to.X, to.Z) and HG.CanStep(from.X, from.Z, to.X, to.Z) and lineClear(d) then
 			dir = d
 			break
 		end
@@ -480,6 +496,7 @@ for ci, cls in ipairs(classes) do
 				string.format("moved %.1f of %.1f, %.1f from the end, ground %.1f", flatDist(now, from), reach, flatDist(now, want), g0))
 		end
 	end
+	rp.XPNeeded = xpNeeded
 
 	-- a launch pad
 	local pad = arena.LaunchPads and arena.LaunchPads[1]

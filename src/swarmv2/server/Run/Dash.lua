@@ -78,7 +78,7 @@ local launchRemote: RemoteEvent? = nil
 local ackRemote: RemoteEvent? = nil
 
 local buckets: { [Player]: { tokens: number, last: number } } = {}
-type AirState = { AirSince: number?, PeakY: number?, Params: RaycastParams? }
+type AirState = { AirSince: number?, PeakY: number?, Params: RaycastParams?, FilterFor: Instance? }
 local airStates: { [Player]: AirState } = {}
 
 -- Finds or creates a child (FindFirstChild before Instance.new, the lobby track may boot first).
@@ -281,7 +281,13 @@ local function groundedNow(rp: any, st: AirState): boolean
 		p.RespectCanCollide = true
 		st.Params = p
 	end
-	p.FilterDescendantsInstances = { root.Parent :: Instance }
+	-- [stream H] the filter list is set once per character, not rebuilt LandCheckHz times a
+	-- second per player (a new table and a filter copy each check)
+	local char = root.Parent :: Instance
+	if st.FilterFor ~= char then
+		st.FilterFor = char
+		p.FilterDescendantsInstances = { char }
+	end
 	local reach = root.Size.Y / 2 + hum.HipHeight + D.GroundProbe
 	return workspace:Raycast(root.Position, Vector3.new(0, -reach, 0), p) ~= nil
 end
@@ -299,7 +305,7 @@ local function landingStep()
 		local player: Player = rp.Player
 		local st = airStates[player]
 		if not st then
-			st = { AirSince = nil, PeakY = nil, Params = nil }
+			st = { AirSince = nil, PeakY = nil, Params = nil, FilterFor = nil }
 			airStates[player] = st
 		end
 		local root: BasePart? = rp.Root

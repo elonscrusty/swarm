@@ -1,35 +1,50 @@
 --[[
 	Walkthrough.lua
 	The interactive first-run walkthrough (Config.Features.Walkthrough, Config.Walkthrough,
-	docs/next/WALKTHROUGH.md). A server step machine that WAITS for the player:
+	docs/next/WALKTHROUGH.md). A server step machine that WAITS for the player.
 
-	  Move     a gold ground ring ~RingDistance studs away in open ground; no enemies yet.
-	           Done when the hero stands in it.
-	  Fight    EnemyCount weak, slow enemies around the hero; done when all are beaten.
-	  Gems     their gems: done when the first level-up opens (a top-up gem is dropped
-	           when the floor gems are not enough for that level).
+	On a Cliffwood beacon run (StageManager.IsDirector; the live game) the steps are:
+	  Move     a gold ground ring ~RingDistance studs away in open ground (the client line
+	           teaches walking and the camera for the device in hand). Done in the ring.
+	  Dash     jump and dash (Space / Shift, A / B, JUMP / DASH): done on a server-validated
+	           dash (rp.DashUntil moves), or after its timeout.
+	  Fight    DirectorEnemyCount weak, slow beetles around the hero; the weapons attack by
+	           themselves. Done when all are beaten.
+	  Gems     their personal XP shards: done when the first level choice opens (a top-up
+	           shard is dropped when the floor shards are not enough for that level).
 	  Upgrade  done when a card is picked (skipped when no level is waiting).
-	  Chest    a free chest ~ChestDistance studs away (LootSystem.AddFeatureChest, normal
-	           reward, opened exactly once by the loot system); done when it is opened.
-	  Go       "Waves are coming!": the held waves and the portal reveal are released; the
-	           walkthrough ends GoSeconds later.
+	  Chest    chests are paid with the team's run gold from kills; the account's first
+	           walkthrough places a free gift chest ~ChestDistance studs away (a replay's chest
+	           is a normal team chest at the shared price). Done when it is opened.
+	  Beacon   the objective: survive, grow strong, light the beacon at 12:30, beat the boss.
+	           The walkthrough ends GoSeconds later.
+	The director's spawns are held only for a short opening: until the Fight step starts or
+	OpeningHold seconds of run time, whichever comes first (the walkthrough never holds the
+	director beyond that).
+
+	On the old stage loop (other arenas, Daily Challenges with old arenas) the steps are the
+	original Move, Fight, Gems, Upgrade, Chest, Go ("Waves are coming!", portal): the held
+	waves and the portal reveal are released at Go.
 
 	Who: RunManager.beginRun calls Consider for each run player before Stats.Runs counts the
 	run. Only Solo, Standard, no curses / Endless / Daily, not DEV-tainted, tips on, the
 	first-run flow on (Config.FirstRun.AutoStart), and either the account's very first run
 	(Stats.Runs 0, TutorialDone false) or Settings > Replay tips (save WalkthroughReplay).
-	It is marked done (save WalkthroughDone) when it starts, so it never runs twice.
+	It is marked done (save WalkthroughDone) when it starts, so it never runs twice. It is
+	skippable: Settings > Show tips off (or SKIP TIPS) ends it at once.
 
-	Holds: EnemySpawner.SetHold("Walkthrough", on) keeps the first wave back; StageManager
-	asks HoldsReveal() before the stage-1 portal reveal. Both let go at Go, or whenever the
-	walkthrough ends early (death, leaving, run end, DEV tools, tips switched off).
+	Holds: EnemySpawner.SetHold("Walkthrough", on) keeps the spawns back (see above);
+	StageManager asks HoldsReveal() before the stage-1 portal reveal (old stage loop only).
+	Both let go whenever the walkthrough ends early (death, leaving, run end, DEV tools,
+	tips switched off).
 
 	Timers: each step auto-completes after Config.Walkthrough.Timeouts[step] seconds of
 	run time (only while RunManager.IsSimulating: pause, panels and travel stop it).
 
 	Client view (player attributes, WalkthroughClient.lua): Walkthrough = step name or nil,
 	WalkCount / WalkTotal (Fight progress), WalkTarget (Vector3 the bubble and the world
-	marker point at, or nil).
+	marker point at, or nil), WalkFree (the Chest step's chest is the free gift chest),
+	WalkMode = "Beacon" on a beacon run (nil on the old stage loop).
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -37,9 +52,18 @@ local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Walkthrough = {}
 
 local ctx
-local arena: any = nil -- the current stage's arena (LootSystem.OnBuilt)
+local MapBuilder = require(script.Parent.MapBuilder)
 
-local STEPS = { "Move", "Fight", "Gems", "Upgrade", "Chest", "Go" }
+local arenaSeen: any = nil -- the last stage arena LootSystem.OnBuilt reported (old stage loop)
+
+-- The arena the run is on now: the map builder's current one (a beacon run's BuildStage skips
+-- the OnBuilt hooks), else the last one LootSystem reported.
+local function currentArena(): any
+	return MapBuilder.GetArena() or arenaSeen
+end
+
+local STEPS = { "Move", "Fight", "Gems", "Upgrade", "Chest", "Go" } -- the old stage loop
+local BEACON_STEPS = { "Move", "Dash", "Fight", "Gems", "Upgrade", "Chest", "Beacon" } -- a beacon run
 local HOLD = "Walkthrough"
 
 -- the one active walkthrough (Solo only) or nil
@@ -59,6 +83,12 @@ local function flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
 end
 
+-- A Cliffwood beacon run (StageManager's run director)?
+local function beaconRun(): boolean
+	local SM = ctx and ctx.StageManager
+	return SM ~= nil and SM.IsDirector ~= nil and SM.IsDirector() == true
+end
+
 local function heroPos(rp): Vector3?
 	local root = rp and rp.Root
 	if root and root.Parent then
@@ -74,9 +104,19 @@ local function setAttr(rp, name: string, value: any)
 	end
 end
 
+-- The ground height at (x, z) (the height grid on Cliffwood, else the flat arena's).
+local function groundY(x: number, z: number, fallback: number): number
+	local HG = ctx.HeightGrid
+	if HG and HG.IsActive() then
+		return HG.GroundY(x, z)
+	end
+	return fallback
+end
+
 -- Open ground at `dist` studs from `from` (EnemyAI obstacles, inside the arena, away from
 -- other loot); tries 16 angles from a random start, then shorter rings.
 local function openSpot(from: Vector3, dist: number, clearance: number): Vector3
+	local arena = currentArena()
 	local c = arena and arena.Center or Config.ArenaOrigin
 	local half = (arena and arena.Half or Config.Arenas.Size / 2) - clearance - 4
 	local loot = ctx.LootSystem.Objects()
@@ -100,12 +140,19 @@ local function openSpot(from: Vector3, dist: number, clearance: number): Vector3
 					end
 				end
 			end
+			if ok and ctx.HeightGrid and ctx.HeightGrid.IsActive() then
+				-- a map with height: walkable ground the hero can walk to (no ledge, no cliff top)
+				local HG = ctx.HeightGrid
+				ok = HG.IsWalkable(x, z) and HG.IsWalkable(x + clearance * 0.5, z) and HG.IsWalkable(x - clearance * 0.5, z)
+					and HG.IsWalkable(x, z + clearance * 0.5) and HG.IsWalkable(x, z - clearance * 0.5)
+					and math.abs(HG.GroundY(x, z) - HG.GroundY(from.X, from.Z)) <= 4
+			end
 			if ok then
-				return Vector3.new(x, c.Y, z)
+				return Vector3.new(x, groundY(x, z, c.Y), z)
 			end
 		end
 	end
-	return Vector3.new(from.X, c.Y, from.Z) + Vector3.new(dist * 0.4, 0, 0)
+	return Vector3.new(from.X, groundY(from.X, from.Z, c.Y), from.Z) + Vector3.new(dist * 0.4, 0, 0)
 end
 
 ------------------------------------------------------------------------------------------
@@ -147,8 +194,12 @@ end
 local enter: (string) -> ()
 
 local function releaseHolds()
-	if ctx.EnemySpawner.SetHold then
+	if ctx.EnemySpawner.SetHold and ctx.EnemySpawner.Holds and ctx.EnemySpawner.Holds[HOLD] then
 		ctx.EnemySpawner.SetHold(HOLD, false, cfg().ReleaseWaveDelay)
+	end
+	local w = active
+	if w then
+		w.Released = true
 	end
 end
 
@@ -157,6 +208,8 @@ local function clearAttrs(rp)
 	setAttr(rp, "WalkCount", nil)
 	setAttr(rp, "WalkTotal", nil)
 	setAttr(rp, "WalkTarget", nil)
+	setAttr(rp, "WalkFree", nil)
+	setAttr(rp, "WalkMode", nil)
 end
 
 -- Ends the walkthrough (finished or cut short); leaves no hold behind.
@@ -165,8 +218,8 @@ local function finish(reason: string)
 	if not w then
 		return
 	end
-	active = nil
 	releaseHolds()
+	active = nil
 	-- its enemies stay (they are normal enemies by now); its chest stays openable
 	clearAttrs(w.Rp)
 	table.insert(log, { Step = "End", How = reason })
@@ -175,9 +228,12 @@ end
 local function spawnFoes(w)
 	local C = cfg()
 	local hp = heroPos(w.Rp) or Config.ArenaOrigin
-	local n = math.max(1, math.floor(C.EnemyCount or 5))
+	local n = math.max(1, math.floor((w.Beacon and C.DirectorEnemyCount) or C.EnemyCount or 5))
+	-- a beacon run's walkthrough bugs are the Cliffwood roster's beetle (the director's look)
+	local typeId = (w.Beacon and C.DirectorEnemyType) or C.EnemyType or "Slime"
 	w.Foes = {}
 	local offset = math.random() * math.pi * 2
+	local arena = currentArena()
 	local c = arena and arena.Center or Config.ArenaOrigin
 	local half = (arena and arena.Half or Config.Arenas.Size / 2) - 6
 	for i = 1, n do
@@ -187,7 +243,7 @@ local function spawnFoes(w)
 			local x = math.clamp(hp.X + math.cos(a) * d, c.X - half, c.X + half)
 			local z = math.clamp(hp.Z + math.sin(a) * d, c.Z - half, c.Z + half)
 			if not ctx.EnemyAI.IsBlocked(x, z, 1.6) or try == 5 then
-				local e = ctx.EnemySpawner.Spawn(C.EnemyType or "Slime", Vector3.new(x, c.Y, z), { HP = C.EnemyHP or 4, Force = true })
+				local e = ctx.EnemySpawner.Spawn(typeId, Vector3.new(x, groundY(x, z, c.Y), z), { HP = C.EnemyHP or 4, Force = true })
 				if e then
 					e.Speed *= C.EnemySpeedMult or 0.45
 					e.Damage *= C.EnemyDamageMult or 0.3
@@ -251,7 +307,7 @@ local function spawnChest(w)
 	-- free on the account's first walkthrough only; a replay's chest has the normal price,
 	-- so Replay tips can't be used for a free chest every run
 	local free = w.First == true
-	local ok, obj = pcall(ctx.LootSystem.AddFeatureChest, arena, C.ChestType or "Small", at, free)
+	local ok, obj = pcall(ctx.LootSystem.AddFeatureChest, currentArena(), C.ChestType or "Small", at, free)
 	if not ok or not obj then
 		warn("[Walkthrough] chest failed: " .. tostring(obj))
 		return
@@ -283,7 +339,12 @@ enter = function(step: string)
 	if step == "Move" then
 		local hp = heroPos(rp) or Config.ArenaOrigin
 		w.Target = openSpot(hp, C.RingDistance or 15, C.RingClearance or 5)
+	elseif step == "Dash" then
+		w.Dash0 = rp.DashUntil or 0
 	elseif step == "Fight" then
+		if w.Beacon then
+			releaseHolds() -- the director's opening hold ends here at the latest
+		end
 		w.Level0 = rp.Level
 		spawnFoes(w)
 		setAttr(rp, "WalkTotal", w.Total)
@@ -299,22 +360,24 @@ enter = function(step: string)
 		end
 	elseif step == "Chest" then
 		spawnChest(w)
-	elseif step == "Go" then
+		setAttr(rp, "WalkFree", w.First == true)
+	elseif step == "Go" or step == "Beacon" then
 		releaseHolds()
-		w.Reveal = false -- the portal reveal follows now (StageManager)
+		w.Reveal = false -- the portal reveal follows now (StageManager; old stage loop)
 	end
 	setAttr(rp, "Walkthrough", step)
 	setAttr(rp, "WalkTarget", w.Target)
 end
 
 local function nextStep(w)
-	local i = table.find(STEPS, w.Step) or #STEPS
-	if i >= #STEPS then
+	local steps = w.Steps or STEPS
+	local i = table.find(steps, w.Step) or #steps
+	if i >= #steps then
 		table.insert(log, { Step = w.Step, How = w.How or "done" })
 		finish("done")
 		return
 	end
-	enter(STEPS[i + 1])
+	enter(steps[i + 1])
 end
 
 -- A step's fallback: finish its job so the next step makes sense, then move on.
@@ -354,7 +417,9 @@ local function stepDone(w): boolean
 		return w.Skip == true or ((rp.Level - (rp.PendingLevels or 0)) > w.Level0 and not rp.Offer)
 	elseif step == "Chest" then
 		return w.ChestOpened == true or (w.Chest ~= nil and w.Chest.State ~= "Ready") or w.Chest == nil
-	elseif step == "Go" then
+	elseif step == "Dash" then
+		return (rp.DashUntil or 0) > (w.Dash0 or 0)
+	elseif step == "Go" or step == "Beacon" then
 		return w.Time >= (cfg().GoSeconds or 6)
 	end
 	return true
@@ -376,12 +441,24 @@ function Walkthrough.Consider(rp, data, teamSize: number, mode: string?)
 	local first = data.WalkthroughDone ~= true
 	data.WalkthroughDone = true
 	data.WalkthroughReplay = false
-	active = { Rp = rp, Step = nil, Time = 0, Reveal = true, Level0 = rp.Level or 1, First = first }
+	local beacon = beaconRun()
+	active = {
+		Rp = rp,
+		Step = nil,
+		Time = 0,
+		Clock = 0, -- run time since the start (the director's opening hold)
+		Reveal = not beacon, -- a beacon run has no portal reveal to hold
+		Level0 = rp.Level or 1,
+		First = first,
+		Beacon = beacon,
+		Steps = beacon and BEACON_STEPS or STEPS,
+	}
 	rp.Walkthrough = true
 	table.clear(log)
 	if ctx.EnemySpawner.SetHold then
 		ctx.EnemySpawner.SetHold(HOLD, true)
 	end
+	setAttr(rp, "WalkMode", beacon and "Beacon" or nil)
 	enter("Move")
 	return true
 end
@@ -392,9 +469,15 @@ function Walkthrough.HoldsReveal(): boolean
 	return w ~= nil and w.Reveal == true
 end
 
--- True while a walkthrough is running (waves held until Go).
+-- True while a walkthrough is running (on the old stage loop its waves are held until Go).
 function Walkthrough.Active(): boolean
 	return active ~= nil
+end
+
+-- True while the walkthrough holds the spawns (a beacon run: only its short opening).
+function Walkthrough.Holding(): boolean
+	local w = active
+	return w ~= nil and not w.Released
 end
 
 -- For tests: the current step (nil when none), the log, and the live state.
@@ -441,6 +524,11 @@ function Walkthrough.Step(dt: number)
 		return
 	end
 	w.Time += dt
+	w.Clock += dt
+	-- a beacon run: the director's spawns wait at most OpeningHold seconds of run time
+	if w.Beacon and not w.Released and w.Clock >= (cfg().OpeningHold or 10) then
+		releaseHolds()
+	end
 	local limit = (cfg().Timeouts or {})[w.Step]
 	if limit and w.Time >= limit then
 		timeout(w)
@@ -451,7 +539,7 @@ function Walkthrough.Init(c)
 	ctx = c
 	if ctx.LootSystem and ctx.LootSystem.OnBuilt then
 		ctx.LootSystem.OnBuilt(function(a)
-			arena = a
+			arenaSeen = a
 		end)
 	end
 end

@@ -49,8 +49,11 @@
 	  Chest     a ready chest within Smart.ChestStuds (InputPrompts.OpenChest) → the chest;
 	            done when it opens
 	  Portal    after the reveal (PortalTipDelay): "Find and charge the portal" → the PORTAL
-	            arrow (StageUI); done when the charge starts
-	  Boss      the first boss arrival: "Bosses guard the way out" → the boss bar
+	            arrow (StageUI); done when the charge starts. On a Cliffwood beacon run
+	            (SwarmState RunStage set) it is the beacon at 12:30: "Light the beacon ..."; done
+	            once it is lit
+	  Boss      the first boss arrival: "Bosses guard the way out" → the boss bar (a beacon
+	            run: "Beat the Basin Breaker to win!")
 	The co-op tips use the same bubble. The bubble hides while a panel covers the screen.
 ]]
 
@@ -126,6 +129,12 @@ local run: { [string]: any } = {} -- per-run trigger state
 
 local function tipsOn(): boolean
 	return ClientSettings.Get("Tips") ~= false
+end
+
+-- A Cliffwood beacon run (the run director: SwarmState RunStage is set).
+local function beaconRun(state: Configuration?): boolean
+	local st = state or game:GetService("ReplicatedStorage"):FindFirstChild("SwarmState")
+	return st ~= nil and st:GetAttribute("RunStage") ~= nil
 end
 
 local function wants(id: string): boolean
@@ -780,8 +789,14 @@ local function smartTriggers(state: Configuration)
 		if now - run.RevealSeen >= (T.PortalTipDelay or 2) then
 			run.Portal = true
 			-- a player already charging the portal has found it: no tip
-			if (tonumber(state:GetAttribute("PortalCharge")) or 0) <= 0 then
-				pushSmart("Portal", "Find and charge the portal", "portal", S.Seconds, function()
+			-- a beacon already lit has been found: no tip either
+			local beacon = beaconRun(state)
+			local open = if beacon then state:GetAttribute("RunStage") == "BeaconAvailable" else (tonumber(state:GetAttribute("PortalCharge")) or 0) <= 0
+			if open then
+				pushSmart("Portal", beacon and "Light the beacon: follow the arrow" or "Find and charge the portal", beacon and "flag" or "portal", S.Seconds, function()
+					if beacon then
+						return state:GetAttribute("RunStage") ~= "BeaconAvailable"
+					end
 					return (tonumber(state:GetAttribute("PortalCharge")) or 0) > 0 or state:GetAttribute("StagePhase") ~= "Explore"
 				end, function()
 					local arrow = StageUI.Elements().Arrow
@@ -799,7 +814,7 @@ local function smartTriggers(state: Configuration)
 	-- 7: the first boss
 	if not run.Boss and stagePhase == "Boss" then
 		run.Boss = true
-		pushSmart("Boss", "Bosses guard the way out", "skull", S.Seconds, function()
+		pushSmart("Boss", beaconRun(state) and "Beat the Basin Breaker to win!" or "Bosses guard the way out", "skull", S.Seconds, function()
 			return state:GetAttribute("StagePhase") ~= "Boss"
 		end, hudAim("Boss"))
 	end
@@ -825,7 +840,9 @@ local function triggers(state: Configuration)
 	-- arrive just after InRun)
 	if not run.Team and os.clock() - (run.Start or 0) < 8 and (state:GetAttribute("Participants") or 1) > 1 then
 		run.Team = true
-		push("TeamRules", "Team run", "Gem XP is shared by every living teammate. Gold and items are your own.", "people2", T.HintSeconds + 2, true)
+		local rules = beaconRun(state) and "Every hero gets their own XP shards. Team gold is shared: anyone can open a chest for everyone."
+			or "Gem XP is shared by every living teammate. Gold and items are your own."
+		push("TeamRules", "Team run", rules, "people2", T.HintSeconds + 2, true)
 	end
 	if smart() then
 		smartTriggers(state)
@@ -843,7 +860,11 @@ local function triggers(state: Configuration)
 		if os.clock() - run.RevealSeen >= (T.PortalTipDelay or 2) then
 			run.Portal = true
 			-- A player already charging the portal has found it: no tip.
-			if (tonumber(state:GetAttribute("PortalCharge")) or 0) <= 0 then
+			if beaconRun(state) then
+				if state:GetAttribute("RunStage") == "BeaconAvailable" then
+					push("Portal", "Light the beacon", "Follow the arrow to the beacon and light it, then hold its ring to call the Basin Breaker.", "flag", T.HintSeconds + 1)
+				end
+			elseif (tonumber(state:GetAttribute("PortalCharge")) or 0) <= 0 then
 				local boss = tostring(state:GetAttribute("StageBoss") or "")
 				local body = string.format("Follow the PORTAL arrow, then stand in its ring for %s s to summon %s.",
 					tostring(Config.Stages.ChargeSeconds), boss ~= "" and ("the " .. boss) or "the boss")
@@ -855,7 +876,7 @@ local function triggers(state: Configuration)
 		run.Boss = true
 		local boss = tostring(state:GetAttribute("BossName") or state:GetAttribute("StageBoss") or "")
 		local who = boss ~= "" and ("the " .. boss) or "the boss"
-		push("Boss", "Dodge the red", string.format("Red floor shapes show where %s strikes. Step out!", who), "skull")
+		push("Boss", "Dodge the red", string.format("Red floor shapes show where %s strikes. Step out!%s", who, beaconRun(state) and " Beat it to win!" or ""), "skull")
 	end
 	-- the first fallen teammate
 	if not run.Revive then
@@ -965,7 +986,10 @@ function Tutorial.Update(dt: number, state: Configuration, inRun: boolean, block
 	if walking then
 		if walkStarted then
 			for _, id in ipairs(WALK_TIPS) do
-				markSeen(id)
+				-- a beacon run's walkthrough only announces the beacon (12:30): its tip still shows
+				if not (id == "Portal" and player:GetAttribute("WalkMode") == "Beacon") then
+					markSeen(id)
+				end
 			end
 			for i = #queue, 1, -1 do
 				if not COOP[queue[i].Id] then
