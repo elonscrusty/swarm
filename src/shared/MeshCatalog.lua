@@ -190,7 +190,7 @@ MeshCatalog.Models = {
 		},
 	},
 	BarryPlotter = {
-		AssetId = 0,
+		AssetId = 99717626662221,
 		Category = "Classes",
 		Bounds = { {-2.25, 0, -2.27}, {3.37, 6.9, 3.15} },
 		Joints = { LeftHip = {-0.55, 1.75, 0}, LeftShoulder = {-1.3, 3.7, 0}, Neck = {0, 4, 0}, RightHip = {0.55, 1.75, 0}, RightShoulder = {1.3, 3.7, 0} },
@@ -596,7 +596,7 @@ MeshCatalog.Models = {
 		},
 	},
 	CoachCrunch = {
-		AssetId = 0,
+		AssetId = 124224662401401,
 		Category = "Classes",
 		Bounds = { {-2.725, 0, -2.2}, {3.29, 6.62, 2.958} },
 		Joints = { LeftHip = {-0.75, 2, 0}, LeftShoulder = {-1.85, 3.8, 0}, Neck = {0, 4, 0}, RightHip = {0.75, 2, 0}, RightShoulder = {1.85, 3.8, 0} },
@@ -643,7 +643,7 @@ MeshCatalog.Models = {
 		},
 	},
 	CrashCassidy = {
-		AssetId = 0,
+		AssetId = 135097324149679,
 		Category = "Classes",
 		Bounds = { {-2.8, 0, -3.2}, {2.8, 6.921, 3.137} },
 		Joints = { LeftHip = {-0.7, 2.35, 0}, LeftShoulder = {-1.85, 3.7, 0}, Neck = {0, 4, 0}, RightHip = {0.7, 2.35, 0}, RightShoulder = {1.85, 3.7, 0} },
@@ -842,7 +842,7 @@ MeshCatalog.Models = {
 		},
 	},
 	DougJanitor = {
-		AssetId = 0,
+		AssetId = 130722568045727,
 		Category = "Classes",
 		Bounds = { {-3.158, 0, -2.226}, {2.98, 6.76, 3.2} },
 		Joints = { LeftHip = {-0.58, 1.9, 0}, LeftShoulder = {-1.55, 3.55, 0}, Neck = {0, 3.95, -0.35}, RightHip = {0.58, 1.9, 0}, RightShoulder = {1.55, 3.55, 0} },
@@ -1417,7 +1417,7 @@ MeshCatalog.Models = {
 		},
 	},
 	KnucklesMcGee = {
-		AssetId = 0,
+		AssetId = 70838149236752,
 		Category = "Classes",
 		Bounds = { {-4.295, 0, -2.365}, {4.295, 6.536, 1.498} },
 		Joints = { LeftHip = {-0.7, 1.4, 0}, LeftShoulder = {-1.25, 3.05, 0}, Neck = {0, 3.35, 0}, RightHip = {0.7, 1.4, 0}, RightShoulder = {1.25, 3.05, 0} },
@@ -1691,7 +1691,7 @@ MeshCatalog.Models = {
 		},
 	},
 	PeterParkour = {
-		AssetId = 0,
+		AssetId = 134717387610454,
 		Category = "Classes",
 		Bounds = { {-1.99, 0, -1.525}, {1.99, 6.4, 2.26} },
 		Joints = { LeftHip = {-0.65, 2.95, 0}, LeftShoulder = {-1.22, 4.45, 0}, Neck = {0, 4.6, 0}, RightHip = {0.65, 2.95, 0}, RightShoulder = {1.22, 4.45, 0} },
@@ -1875,7 +1875,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Rambozo = {
-		AssetId = 0,
+		AssetId = 73141317086964,
 		Category = "Classes",
 		Bounds = { {-3.432, 0, -5.63}, {3.432, 6.681, 3.96} },
 		Joints = { LeftHip = {-0.9, 1.85, 0}, LeftShoulder = {-2.45, 3.8, 0}, Neck = {0, 4.1, 0}, RightHip = {0.9, 1.85, 0}, RightShoulder = {2.45, 3.8, 0} },
@@ -2685,7 +2685,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Swolverine = {
-		AssetId = 0,
+		AssetId = 125381513695024,
 		Category = "Classes",
 		Bounds = { {-3.925, 0, -3.785}, {3.925, 6.297, 2.334} },
 		Joints = { LeftHip = {-0.85, 1.55, 0}, LeftShoulder = {-2.5, 3.45, 0}, Neck = {0, 3.75, 0}, RightHip = {0.85, 1.55, 0}, RightShoulder = {2.5, 3.45, 0} },
