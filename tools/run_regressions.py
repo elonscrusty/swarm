@@ -133,6 +133,10 @@ def main():
     # continuation stream E1 survival rules: downed / hold-to-revive / bleed-out / wipe once, shared hit
     # protection, falls, out-of-bounds rescue, movement caps and dash, disconnect window (PASS/FAIL lines)
     checks += [("survival-sim", [])]
+    # continuation stream G (feel and audio): the 12 class cues, movement hooks, run-stage stingers + charge hum,
+    # down / revive / chest cues, crit tick + burst, shake caps, recoil (class-sfx-regression); who rolled a crit
+    # reaches the clients (crit-owner-regression, real server)
+    checks += [("class-sfx-regression", []), ("crit-owner-regression", [])]
 
     def run(check):
         scene, settings = check

@@ -5,7 +5,9 @@
 	SwarmState listeners below) call in, this module only draws.
 
 	* Impact star: two crossed ivory blades that snap open and vanish on a sparked hit.
-	* Crit star (FxBatch "k", Fx.Crit): a larger gold star with sparks.
+	* Crit star (FxBatch "k", Fx.Crit): a larger gold star with sparks. The local hero's OWN crits (the
+	  batch's "ku" says who rolled them) get a bigger two-star burst and a short bright tick sound
+	  (CritTick); a teammate's crit stays the small star. Reduced effects: the tick only.
 	* Kill shards: a white pop and colour-matched shards bursting out of a dead enemy.
 	  Big kills (elites, large creatures) add radial streaks and a floor flash; huge kills
 	  (bosses, large elites) add a short camera kick (the "hit-stop" punch) and a sound.
@@ -348,9 +350,10 @@ local function kick(amount: number)
 	CameraController.Kick(amount)
 end
 
--- Crossed blades that snap open (impact / crit / pickup star).
-local function star(at: Vector3, color: Color3, size: number, dur: number)
-	local cf = facing(at)
+-- Crossed blades that snap open (impact / crit / pickup star); roll = an extra turn (a second star
+-- at 22.5 degrees makes an eight-point burst).
+local function star(at: Vector3, color: Color3, size: number, dur: number, roll: number?)
+	local cf = facing(at) * CFrame.Angles(0, 0, roll or 0)
 	local s0 = Vector3.new(size * 0.16, size * 0.35, 0.05)
 	local s1 = Vector3.new(size * 0.07, size, 0.05)
 	spawn("Block", color, NEON, cf * CFrame.Angles(0, 0, math.rad(45)), nil, s0, s1, 0.05, 1, dur)
@@ -375,17 +378,32 @@ function CombatFx.Impact(pos: Vector3)
 	star(towardCamera(pos + Vector3.new(0, 0.3, 0), 1.6), FX.Hit, 3.2, 0.1)
 end
 
--- A critical hit (or another big hit) on an enemy at pos.
-function CombatFx.Crit(pos: Vector3)
+-- The crit tick (Config.Sounds.CritTick) for the local hero's own crit; the sound is a cue, so Reduced
+-- effects keep it. Teammates' crits are silent unless Config.Feel.ClassSfx.CritOtherGain says otherwise.
+function CombatFx.CritTick(own: boolean?)
+	local F = (Config.Feel :: any).ClassSfx
+	local gain = own and F.CritGain or F.CritOtherGain
+	if gain and gain > 0 and Config.FeatureOn("ClassSfx") then
+		Audio.Play("CritTick", nil, gain)
+	end
+end
+
+-- A critical hit (or another big hit) on an enemy at pos. own = the local hero rolled it: the burst is two
+-- stars and four sparks (still pooled, claimed from the same budget) and the tick plays.
+function CombatFx.Crit(pos: Vector3, own: boolean?)
+	CombatFx.CritTick(own)
 	if ClientSettings.Reduced() or lod(pos) < 1 then
 		return
 	end
-	local n = 3
-	if not claim(2 + n) then
+	local n = own and 4 or 3
+	if not claim((own and 4 or 2) + n) then
 		return
 	end
 	local at = towardCamera(pos + Vector3.new(0, 0.5, 0), 1.8)
-	star(at, FX.Gold, 5, 0.15)
+	star(at, FX.Gold, own and 6.2 or 5, 0.15)
+	if own then
+		star(at, WHITE, 3.6, 0.12, math.rad(22.5))
+	end
 	sparks(at, P.gold_200, n, 0.9, 3, 0.18, 0.3)
 end
 
@@ -457,7 +475,7 @@ function CombatFx.Kill(x: number, z: number, color: Color3, size: number, rank: 
 	end
 	if huge then
 		kick(3.5)
-		CameraController.Shake(0.4)
+		CameraController.Shake(0.4, "boss")
 		Audio.Play("BigKill")
 	elseif l >= 1 then
 		kick(1.5)
@@ -523,19 +541,26 @@ end
 
 -- A floor pickup next to the local hero was taken (pos = where it sat).
 function CombatFx.Pickup(pos: Vector3, chest: boolean)
-	if ClientSettings.Reduced() or not claim(chest and 6 or 4) then
+	-- Reduced effects keep the cue that matters (a chest's star, no sparks); a plain pickup's cue is its gem pop
+	local reduced = ClientSettings.Reduced()
+	if reduced and not chest then
+		return
+	end
+	if not claim(reduced and 2 or (chest and 6 or 4)) then
 		return
 	end
 	local at = pos + Vector3.new(0, 1, 0)
 	star(towardCamera(at, 1), chest and FX.Gold or WHITE, chest and 6 or 4, 0.2)
-	sparks(at, FX.Gold, chest and 4 or 2, 0.4, 2.2, 0.3, 0.8)
+	if not reduced then
+		sparks(at, FX.Gold, chest and 4 or 2, 0.4, 2.2, 0.3, 0.8)
+	end
 end
 
 -- The boss entered a new phase.
 function CombatFx.BossPhase()
 	edgeFlash(P.crimson_400, 0.6, 0.85)
 	kick(3)
-	CameraController.Shake(0.5)
+	CameraController.Shake(0.5, "boss")
 end
 
 -- Debug / preview counters: parts alive now, peak, started, skipped (budget), pool size.
