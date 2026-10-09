@@ -78,6 +78,12 @@ is MonetizationService's.
 
 ## 2. Receipt contract (developer products)
 
+The save mechanism is the project's own session lock in `DataService` (no ProfileService / ProfileStore
+library is installed): each key holds `{ Data, Lock = { JobId, Time }, LastJob }`; load and every save are
+one `UpdateAsync` whose transform only checks the lock and returns the record (no yields, no side
+effects); `SaveProfile` serializes saves per profile (`Saving` flag) and returns true only when that
+`UpdateAsync` succeeded with the lock still ours; `ForceSave` is `SaveProfile(profile, false)`.
+
 | Invariant | How it holds | Evidence |
 |---|---|---|
 | Dedupe by PurchaseId, never ProductId | `HasPurchase(purchaseId)` before any handler; the same product with two PurchaseIds is two grants | receipt-regression 2 (two ids -> +1000; three replays -> no change) |
@@ -222,3 +228,24 @@ disabled while loading, PRICE UNAVAILABLE on failure), the revive overlay's pric
   ambiguous outcomes (a thrown call that still committed is handled by the in-memory id, a crash after it
   by the stored id). The release checklist's owner steps (create products, test a real purchase with a
   copy of a save, then "Migrate to Latest Update") still apply.
+
+## 9. Test results (offline, 2026-10-09, `tools/run_regressions.py --only ...`)
+
+- PASS: `receipt-regression` (94 checks), `store-regression`, `safety-sim`, `economy-sim`,
+  `pass-warm-regression`, `security-regression`, `settlement-lifecycle`, `storage-sim`,
+  `storage-sim-outage-all`, `settings-sim`, `economy-regression`, `reward-regression`,
+  `difficulty-handoff`, `run-manager-regression`, `reconnect-lobby` (3 cases), `admission-regression`,
+  `lobby-queue-regression`, `party-v2-regression`, `runserver-sim` (lobby, run), `revive-thanks-regression`,
+  `analytics-regression` (published, studio), `survival-sim`.
+- PASS, run directly (the runner's time limits ran out under machine load): store layouts
+  `section=Pets ids=on price=fail` and `pending=on` on iphone and phone-portrait (scene assertion plus
+  `check_layout.py`: 0 problems), `run-entry-regression` (21/21), `swarm-v2-flow` (49/49; note: its
+  own line "PASS Z1 no step / handler errors logged" matches the runner's `handler error` failure
+  pattern, so the runner reports this scene as FAIL even when it passes).
+- Mutation check: putting back the 150 cap, spending the revive before the commit, or ignoring the pass
+  record makes `receipt-regression` fail (6 checks, including a double grant on a replay).
+- Failing before and after this pass (not caused by it): `data-regression` (identical findings: class rank
+  specs, Basin Breaker BossAI starts, feature flag count), `layout-store-iphone-section-Gift-ids-on`
+  (gift picker caption cut, identical on the unchanged MenuStore), `heroes-regression` ("in Order: Archer",
+  old heroes hidden by the SwarmV2 roster) and `coop-regression` ("actual kill records emitted drops"):
+  assertions in systems this pass did not touch.
