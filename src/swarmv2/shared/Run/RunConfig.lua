@@ -434,6 +434,22 @@ RunConfig.Director = {
 		Repaths = 2,
 		RepathSeconds = 1.2,
 	},
+	--[[
+		Rewards on a director run (the brief: elites pay team gold and XP, chests are bought with team
+		gold and give passive choices; nothing grants the old run items):
+		  EliteFloorChest = false   no free chest from an elite kill (its Sigil roll stays)
+		  OptionalLocations = false no guarded altar, runes, treasure or caravan; no Shrine of Chance
+		                            or Bargain; no chest variants (cursed chests) (LootSystem)
+		  Encounters                the feature encounters that may start (EncounterDirector); the
+		                            others (merchant, mini-boss, secret room, cursed chests) grant old
+		                            items. The villager rescue pays one passive choice per recipient
+		                            and is delivered to the Stone Circle (the beacon's landmark).
+	]]
+	Rewards = {
+		EliteFloorChest = false,
+		OptionalLocations = false,
+		Encounters = { "Rescue", "Weather", "MapEvents", "TrialShrine" } :: { string },
+	},
 	-- the Basin Breaker (BossData BasinBreaker): HP = HPB x B x [1 + 0.80 (N-1)] x [1 + 0.07 t]
 	Boss = {
 		Id = "BasinBreaker",

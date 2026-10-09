@@ -1360,8 +1360,13 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		-- killer (burnt up by the open portal's sweep, or an elite Bomb Tick blowing itself
 		-- up) was not beaten: gems only, no free chest (WORLD audit W-04).
 		if not e.Guard and rp then
-			ctx.XPSystem.SpawnChest(pos)
-			table.insert(drops, "Chest")
+			-- [stream D] a director run pays elites in team gold and XP only (the brief); no free
+			-- chest (RunConfig.Director.Rewards.EliteFloorChest)
+			local R = Dir.Rewards
+			if not (directorOn and R and R.EliteFloorChest == false) then
+				ctx.XPSystem.SpawnChest(pos)
+				table.insert(drops, "Chest")
+			end
 			if ctx.MetaService and not e.WaveId then
 				ctx.MetaService.OnEliteKilled(rp) -- META: the killer's Sigil roll (wave elites never)
 			end

@@ -89,6 +89,12 @@ local function soloRun(): boolean
 	return #ctx.RunManager.GetRunPlayers() <= 1
 end
 
+-- [stream D] a director run (the Cliffwood beacon run): the villager goes to the Stone Circle (the
+-- beacon's landmark, info.PortalPos) and pays one passive choice per chest recipient
+local function directorRun(): boolean
+	return ctx.StageManager ~= nil and ctx.StageManager.IsDirector ~= nil and ctx.StageManager.IsDirector()
+end
+
 ------------------------------------------------------------------------------------------
 -- Model (a small part-built villager: tunic, head, straw hat, a lantern on a stick)
 ------------------------------------------------------------------------------------------
@@ -206,6 +212,27 @@ local function save(c: Villager)
 	Fx.Sound("Chest")
 	local k = K()
 	local anyItem = false
+	if directorRun() and ctx.LevelUpSystem.QueueChoice then
+		-- [stream D] one passive choice each (the chest recipients: connected, not eliminated,
+		-- downed included), like a bought chest
+		local list = ctx.LootSystem and ctx.LootSystem.ChestRecipients and ctx.LootSystem.ChestRecipients() or ctx.RunManager.GetRunPlayers()
+		for _, rp in ipairs(list) do
+			if not rp.Returned and rp.Stats then
+				rp.VillagersSaved = (rp.VillagersSaved or 0) + 1 -- daily quests (DailyQuests)
+				ctx.LevelUpSystem.QueueChoice(rp, "Chest", "PassiveOnly")
+			end
+		end
+		ctx.RunManager.Broadcast("The villager is safe! " .. (soloRun() and "A passive choice for you." or "A passive choice for everyone."), Color3.fromRGB(255, 220, 120), nil, { Id = "rescue.result" })
+		EncounterDirector.NoteReward()
+		say(c, "Home at last! Thank you!", true)
+		local dm = c.Model
+		task.delay(1.5, function()
+			if dm.Parent then
+				dm:Destroy()
+			end
+		end)
+		return
+	end
 	-- "for everyone": a teammate downed and waiting for a revive is still in the run
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if (rp.Alive or rp.AwaitingRevive) and not rp.Returned and rp.Stats then
@@ -311,7 +338,7 @@ local function step(dt: number, info)
 			setAttr(c.Model, "Blocked", "")
 			Fx.Ring(c.Pos, 6, P.gold_300)
 			say(c, "Thank you! Lead the way!", true)
-			ctx.RunManager.Broadcast("Escort: lead the villager to the portal ring", Color3.fromRGB(255, 220, 140), nil, { Id = "rescue.found" })
+			ctx.RunManager.Broadcast(directorRun() and "Escort: lead the villager to the Stone Circle" or "Escort: lead the villager to the portal ring", Color3.fromRGB(255, 220, 140), nil, { Id = "rescue.found" })
 		else
 			-- waving for help
 			c.WaveT += dt

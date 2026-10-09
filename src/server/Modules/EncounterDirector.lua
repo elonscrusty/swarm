@@ -342,9 +342,17 @@ function EncounterDirector.StageStart(arena: any, stage: number, portalPos: Vect
 	if #order == 0 then
 		return
 	end
+	-- [stream D] a director run (the Cliffwood beacon run) starts only the encounters on
+	-- RunConfig.Director.Rewards.Encounters (the rest grant the old run items)
+	local only: { string }? = nil
+	if ctx and ctx.StageManager and ctx.StageManager.IsDirector and ctx.StageManager.IsDirector() then
+		local ok, cfg = pcall(require, game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig)
+		local R = ok and cfg.Director and cfg.Director.Rewards
+		only = (R and R.Encounters) or {}
+	end
 	local candidates = {}
 	for _, name in ipairs(order) do
-		if enabled(name) then
+		if enabled(name) and (only == nil or table.find(only :: { string }, name) ~= nil) then
 			local allowed = true
 			if (defs[name] :: any).Allow then
 				local ok, result = call(name, "Allow", info)

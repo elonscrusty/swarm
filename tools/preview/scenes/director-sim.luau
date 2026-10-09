@@ -109,8 +109,12 @@ preview.remote("RunResult").OnClientEvent:Connect(function(d)
 	table.insert(results, d)
 end)
 local offers = 0
+local offersAfterLock = 0 -- upgrade offers sent once the run is won (the terminal lock must stop them)
 preview.remote("LevelUpOffer").OnClientEvent:Connect(function()
 	offers += 1
+	if ReplicatedStorage.SwarmState:GetAttribute("RunStage") == "Victory" then
+		offersAfterLock += 1
+	end
 end)
 
 local advance = preview.advance
@@ -370,6 +374,30 @@ if parts.B then
 	run(1)
 	check("B4 no stage choice and no exit (PortalChoice ignored)", st:GetAttribute("Phase") == "Running" and portalOffers == 0 and RM.GetRunPlayer(me) == rp)
 	conn:Disconnect()
+	-- rewards on a director run: chests only (no altar, runes, treasure, caravan, shrines), and
+	-- only the allowed feature encounters
+	local Loot = preview.server("LootSystem")
+	local ED = preview.server("EncounterDirector")
+	local kinds, nonChest = {}, 0
+	for _, obj in ipairs(Loot.Objects()) do
+		kinds[obj.Kind .. ":" .. obj.Type] = (kinds[obj.Kind .. ":" .. obj.Type] or 0) + 1
+		if obj.Kind ~= "Chest" then
+			nonChest += 1
+		end
+	end
+	local kindList = {}
+	for k, n in pairs(kinds) do
+		table.insert(kindList, k .. " x" .. n)
+	end
+	table.sort(kindList)
+	check("B4b loot: chests only (no optional locations or shrines)", nonChest == 0 and #kindList > 0, table.concat(kindList, ", "))
+	local badActive = {}
+	for _, name in ipairs(ED.Registered()) do
+		if ED.IsActive(name) and not table.find(Dir.Rewards.Encounters, name) then
+			table.insert(badActive, name)
+		end
+	end
+	check("B4c only the allowed feature encounters start", #badActive == 0, #badActive > 0 and table.concat(badActive, ",") or "ok")
 
 	-- 20 s at the start: the band, the ground, the minute-0 roster
 	table.clear(spawns)
@@ -487,6 +515,17 @@ if parts.B then
 			eliteRec.Type)
 	else
 		check("B15 an elite spawned", false)
+	end
+	-- an elite killed by a hero leaves no free floor chest on a director run
+	do
+		local pickups = workspace:FindFirstChild("SwarmPickups")
+		local before = pickups and #pickups:GetChildren() or 0
+		local el = Spawner.Spawn("Skeleton", rp.Root.Position + Vector3.new(6, 0, 0), { Elite = true })
+		if el then
+			Spawner.Kill(el, rp)
+		end
+		local after = pickups and #pickups:GetChildren() or 0
+		check("B15b an elite kill drops no free chest", el ~= nil and after == before, before .. " -> " .. after)
 	end
 	local S2 = Spawner.DirectorStats
 	local gatesOk = true
@@ -751,7 +790,7 @@ if parts.B then
 		check("B42b the victory settles once, as an extraction (all run gold kept, win bonus paid)", rp.Committed == true and rp.Extracted == true and rp.WinPaid == true and gs ~= nil and gs.Rate == 1,
 			gs and string.format("earned %d kept %d", gs.Earned, gs.Retained) or "no settlement")
 		check("B43 terminal lock: spawns and hazards cleared, offers cancelled, no new panel", #Spawner.Active == 0 and Hazards.Count() == 0 and rp.Offer == nil and rp.PendingLevels == 0
-			and offers == offersBefore and not Spawner.IsDirector(), string.format("active %d hazards %d offers +%d", #Spawner.Active, Hazards.Count(), offers - offersBefore))
+			and offersAfterLock == 0 and not Spawner.IsDirector(), string.format("active %d hazards %d, offers after the lock %d (during the collapse %d)", #Spawner.Active, Hazards.Count(), offersAfterLock, offers - offersBefore))
 		-- a wipe after the victory changes nothing
 		rp.InvulnUntil = 0
 		RM.DamagePlayer(rp, 1e6, "Test")
