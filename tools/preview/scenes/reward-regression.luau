@@ -12,6 +12,15 @@ preview.advance(4)
 local rp = assert(RM.GetRunPlayer(player))
 rp.InvulnUntil = math.huge
 Gold.AddRunGold(rp, 10000)
+-- redesign economy (stream E2): chests are paid from the team run gold; this scene checks the
+-- item reward pipeline, so chests keep their item reward here (Economy.Chests.HideItems off)
+if Gold.AddTeamGold then
+	Gold.AddTeamGold(10000)
+end
+local Economy = preview.require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Economy
+if Economy and Economy.Chests then
+	Economy.Chests.HideItems = false
+end
 local function open(id)
 	local chest
 	for _, obj in ipairs(Loot.Objects()) do

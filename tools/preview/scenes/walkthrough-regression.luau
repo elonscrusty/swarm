@@ -183,6 +183,14 @@ if chest then
 	check("free: no gold taken", Gold.RunWallet(rp) >= gold0, gold0 .. " -> " .. Gold.RunWallet(rp))
 	preview.remote("RewardClose"):FireServer(rp.RewardSeq)
 	preview.advance(0.3)
+	-- redesign economy (stream E2): the chest's reward is a passive choice; pick it like a player
+	for _ = 1, 5 do
+		if not rp.Offer then
+			break
+		end
+		preview.remote("LevelUpChoose"):FireServer(1, rp.OfferSeq)
+		preview.advance(0.3)
+	end
 	preview.remote("LootHold"):FireServer(chest.Id, true)
 	preview.advance((chest.Model:GetAttribute("Hold") or 1) + 0.6)
 	check("exactly once: a second hold pays nothing", (rp.ChestsOpened or 0) == opened0 + 1)

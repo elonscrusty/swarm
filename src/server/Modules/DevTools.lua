@@ -197,7 +197,11 @@ function DevTools.Handle(ctx, player: Player, command: string, arg: any, inLobby
 			end
 		end
 	elseif command == "AddGold" then
-		ctx.GoldSystem.AddRunGold(rp, count(arg, 1, 100000, 300))
+		local amount = count(arg, 1, 100000, 300)
+		ctx.GoldSystem.AddRunGold(rp, amount)
+		if ctx.GoldSystem.AddTeamGold then
+			ctx.GoldSystem.AddTeamGold(amount) -- [stream E2] chests are bought with the team run gold
+		end
 	elseif command == "SpawnBoss" then
 		if not isId(arg, BossData.Bosses) then
 			return

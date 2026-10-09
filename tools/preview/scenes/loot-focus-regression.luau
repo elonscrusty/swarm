@@ -52,6 +52,18 @@ end
 local rp = assert(RM.GetRunPlayer(me), "run player")
 rp.InvulnUntil = math.huge
 Gold.AddRunGold(rp, 100000)
+-- redesign economy (stream E2): chests are bought with the team run gold; the item reward
+-- pipeline is counted here, so chests keep their item reward (Economy.Chests.HideItems off)
+if Gold.AddTeamGold then
+	Gold.AddTeamGold(100000)
+end
+local Economy = preview.require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Economy
+if Economy and Economy.Chests then
+	Economy.Chests.HideItems = false
+end
+local function bought(): number
+	return Gold.ChestsBought and Gold.ChestsBought() or 0
+end
 advance(0.5)
 
 local function readyChest()
@@ -80,12 +92,13 @@ local a = assert(readyChest(), "a ready chest")
 standAt(a)
 advance(0.5) -- LootUI picks the nearest chest as its target
 local wallet0 = Gold.RunWallet(rp)
+local bought0 = bought()
 key("Begin")
 advance((a.Model:GetAttribute("Hold") or 0.4) + 0.6)
 key("End")
 advance(0.3)
 check(a.State == "Opened" and grants == 1, "control: E held opens the chest (state " .. tostring(a.State) .. ", grants " .. grants .. ")")
-check(Gold.RunWallet(rp) < wallet0, "control: the chest was paid for")
+check(Gold.RunWallet(rp) < wallet0 or bought() == bought0 + 1, "control: the chest was paid for")
 advance(5) -- the compact card and its prompt hold
 
 -- focus loss mid-hold: no open, no charge
@@ -95,12 +108,13 @@ if b then
 	standAt(b)
 	advance(0.5)
 	local wallet1 = Gold.RunWallet(rp)
+	local bought1 = bought()
 	key("Begin")
 	advance(0.1)
 	UIS.WindowFocusReleased:_fire()
 	advance((b.Model:GetAttribute("Hold") or 0.4) + 1)
 	check(b.State == "Ready", "focus loss: the chest is not opened (state " .. tostring(b.State) .. ")")
-	check(Gold.RunWallet(rp) == wallet1 and grants == 1, "focus loss: no gold taken, no item granted")
+	check(Gold.RunWallet(rp) == wallet1 and bought() == bought1 and grants == 1, "focus loss: no gold taken, no item granted")
 	key("End") -- the late release (or none) changes nothing
 	advance(0.3)
 	check(b.State == "Ready" and grants == 1, "focus loss: a late release changes nothing")

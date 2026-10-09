@@ -1332,7 +1332,10 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		return
 	end
 
-	if rng:NextNumber() < (def.GemChance or 1) then
+	-- [stream E2] personal XP shards + team run gold + class goals (RunConfig.Economy): true =
+	-- handled, so the old shared gem drops below are skipped
+	local personal = ctx.XPSystem.OnEnemyKilled(e, rp, pos)
+	if not personal and rng:NextNumber() < (def.GemChance or 1) then
 		-- wave members (stepWaves) and, with waves on, the boss fight's crowd and the surge
 		-- (the only XP for a minute or two: without it the level-ups dried up, then came 5-6
 		-- at once at the portal)
@@ -1348,7 +1351,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 
 	if e.Boss then
 		table.insert(drops, "XP")
-		for _ = 1, 12 do
+		for _ = 1, personal and 0 or 12 do -- [stream E2]
 			ctx.XPSystem.SpawnGem(pos + Vector3.new(rng:NextNumber(-8, 8), 0, rng:NextNumber(-8, 8)), Config.XP.GemValues.Large)
 		end
 		ctx.RunManager.OnBossKilled(pos)
@@ -1363,7 +1366,9 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 				ctx.MetaService.OnEliteKilled(rp) -- META: the killer's Sigil roll (wave elites never)
 			end
 		end
-		ctx.XPSystem.SpawnGem(pos + Vector3.new(2, 0, 0), gemValue(EnemyData.EliteGem, 1))
+		if not personal then -- [stream E2]
+			ctx.XPSystem.SpawnGem(pos + Vector3.new(2, 0, 0), gemValue(EnemyData.EliteGem, 1))
+		end
 		table.insert(drops, "XP")
 	elseif def.Reward then
 		-- a destroyed nest (by a player, not swept away): gold for every living player
@@ -1381,7 +1386,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 					end
 				end
 			end
-			for k = 1, R.Gems or 0 do
+			for k = 1, personal and 0 or (R.Gems or 0) do -- [stream E2]
 				local a = k * 2.4
 				ctx.XPSystem.SpawnGem(pos + Vector3.new(math.cos(a) * 3, 0, math.sin(a) * 3), gemValue(def.Gem, 1))
 			end

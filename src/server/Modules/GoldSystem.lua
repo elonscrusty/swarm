@@ -7,12 +7,23 @@
 	share on defeat. Existing savings and purchased coins never enter the at-risk ledger.
 	All prices are read from the shared data modules on the server; the client only
 	sends ids, never amounts.
+
+	Team run gold (redesign, DECISIONS C7; RunConfig.Economy.Gold; stream E2): a second,
+	temporary balance owned by the whole team, never saved and never converted into account
+	gold. Credited once per eligible kill by enemy kind (CreditKill: Normal 3, Tough 6,
+	Elite 20); it pays for chests only (BuyChest: round(40 x 1.35^k), at most 400, k = chests
+	bought this run). SwarmState attributes TeamRunGold and ChestCost show both. It starts at
+	0 with every run (BeginRun sees a new run id) and is cleared in the lobby. With the
+	redesign economy on, chests no longer spend the personal escrow below; that escrow, its
+	settlement (kill gold, survival gold, bonuses, pass multipliers, loss retention) is
+	unchanged.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
+local RunConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
 
 local Fx = require(script.Parent.Fx)
 
@@ -20,6 +31,118 @@ local GoldSystem = {}
 
 local ctx
 local rng = Random.new()
+
+------------------------------------------------------------------------------------------
+-- Team run gold (stream E2)
+------------------------------------------------------------------------------------------
+
+local function econ()
+	return (RunConfig :: any).Economy
+end
+
+-- the team balance of the current run (server truth; the attributes only display it)
+local team = { RunId = nil :: string?, Gold = 0, Bought = 0, Dirty = false, FlushedAt = 0 }
+local TEAM_FLUSH = 0.1 -- s: kill credits reach the TeamRunGold attribute at most 10x a second
+
+-- The redesign's team gold pays for chests (RunConfig.Economy.Enabled).
+function GoldSystem.TeamGoldOn(): boolean
+	local E = econ()
+	return E ~= nil and E.Enabled == true
+end
+
+-- Chest price after `k` chests were bought this run: round(Base x Growth^k), at most Cap.
+function GoldSystem.ChestCostAt(k: number): number
+	local G = econ().Gold
+	local cost = math.floor(G.ChestBase * G.ChestGrowth ^ math.max(0, math.floor(k)) + 0.5)
+	return math.min(G.ChestCap, cost)
+end
+
+function GoldSystem.ChestCost(): number
+	return GoldSystem.ChestCostAt(team.Bought)
+end
+
+function GoldSystem.TeamGold(): number
+	return team.Gold
+end
+
+function GoldSystem.ChestsBought(): number
+	return team.Bought
+end
+
+local function publishTeam()
+	team.Dirty = false
+	team.FlushedAt = os.clock()
+	local state = Remotes.State()
+	if state:GetAttribute("TeamRunGold") ~= team.Gold then
+		state:SetAttribute("TeamRunGold", team.Gold)
+	end
+	local cost = GoldSystem.ChestCost()
+	if state:GetAttribute("ChestCost") ~= cost then
+		state:SetAttribute("ChestCost", cost)
+	end
+end
+
+-- A new run (runId) or the lobby (nil): balance 0, no chests bought.
+function GoldSystem.ResetTeamGold(runId: string?)
+	team.RunId = runId
+	team.Gold = 0
+	team.Bought = 0
+	publishTeam()
+end
+
+-- Team gold for one eligible kill of this enemy kind (XPSystem.OnEnemyKilled). Returns it.
+function GoldSystem.CreditKill(kind: string): number
+	local RM = ctx.RunManager
+	if not GoldSystem.TeamGoldOn() or not (RM and RM.IsRunning and RM.IsRunning()) then
+		return 0
+	end
+	local amount = tonumber(econ().Gold.ByKind[kind]) or 0
+	if not (amount > 0 and amount < math.huge) then
+		return 0
+	end
+	team.Gold += math.floor(amount)
+	team.Dirty = true
+	if os.clock() - team.FlushedAt >= TEAM_FLUSH then
+		publishTeam()
+	end
+	return math.floor(amount)
+end
+
+-- Sets the team balance (DEV tools, tests): a whole amount >= 0; the purchase count stays.
+function GoldSystem.SetTeamGold(amount: number)
+	if not (amount >= 0 and amount < math.huge) then
+		return
+	end
+	team.Gold = math.floor(amount)
+	publishTeam()
+end
+
+-- Adds team gold directly (DEV tools, tests). Whole positive amounts only.
+function GoldSystem.AddTeamGold(amount: number): number
+	if not (amount > 0 and amount < math.huge) then
+		return 0
+	end
+	team.Gold += math.floor(amount)
+	publishTeam()
+	return math.floor(amount)
+end
+
+--[[
+	The one chest purchase: when the balance covers the current price it is debited ONCE,
+	the purchase count goes up (the next price rises) and both attributes update, all in one
+	step with no yield, so two interacts finishing together cannot both pay or both open.
+	Returns (true, cost) or (false, cost) with nothing changed.
+]]
+function GoldSystem.BuyChest(): (boolean, number)
+	local cost = GoldSystem.ChestCost()
+	if team.Gold < cost then
+		return false, cost
+	end
+	team.Gold -= cost
+	team.Bought += 1
+	publishTeam()
+	return true, cost
+end
 
 ------------------------------------------------------------------------------------------
 -- Run gold
@@ -48,6 +171,11 @@ function GoldSystem.RecoverEscrow(data): number
 end
 
 function GoldSystem.BeginRun(rp)
+	-- [stream E2] the first record of a new run starts the team balance at 0
+	local RM = ctx.RunManager
+	if rp.RunId ~= nil and team.RunId ~= tostring(rp.RunId) and RM and RM.IsRunning and RM.IsRunning() then
+		GoldSystem.ResetTeamGold(tostring(rp.RunId))
+	end
 	local data = ctx.DataService.GetData(rp.Player)
 	if not data or rp.GoldSettlement then
 		return
@@ -517,6 +645,19 @@ function GoldSystem.Init(c)
 end
 
 function GoldSystem.Start()
+	-- [stream E2] team gold: throttled attribute flush; cleared back in the lobby
+	game:GetService("RunService").Heartbeat:Connect(function()
+		if team.Dirty and os.clock() - team.FlushedAt >= TEAM_FLUSH then
+			publishTeam()
+		end
+	end)
+	local state = Remotes.State()
+	state:GetAttributeChangedSignal("Phase"):Connect(function()
+		if state:GetAttribute("Phase") == "Lobby" and (team.Gold ~= 0 or team.Bought ~= 0) then
+			GoldSystem.ResetTeamGold(nil)
+		end
+	end)
+	publishTeam()
 	Remotes.Listen("SelectCharacter", onSelectCharacter, 4)
 	Remotes.Listen("BuyCharacter", onBuyCharacter, 2)
 	Remotes.Listen("BuyMeta", onBuyMeta, 4)

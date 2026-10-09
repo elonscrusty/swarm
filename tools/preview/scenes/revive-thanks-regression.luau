@@ -95,6 +95,10 @@ assert(RM.StartTeamRun({ me, ava }, "Duo", "Forest", me))
 preview.advance(6)
 local rp, helper = assert(RM.GetRunPlayer(me)), assert(RM.GetRunPlayer(ava))
 rp.InvulnUntil, helper.InvulnUntil = 0, math.huge
+-- no kill-XP level-ups in this scene (the redesign economy's personal shards and its
+-- 20-XP first level open panels every few seconds; a chooser can't be hit): only the
+-- thank-you XP is measured here, through GiveXP
+rp.XPNeeded, helper.XPNeeded = 1e12, 1e12
 rp.RevivesLeft, rp.ProductReviveUsed = 0, true
 local function stand(distance: number)
 	helper.Root.CFrame = CFrame.new(rp.Root.Position + Vector3.new(distance, 0, 0))
