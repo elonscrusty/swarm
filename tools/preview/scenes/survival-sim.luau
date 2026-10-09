@@ -273,6 +273,16 @@ RM.DamagePlayer(rMe, 10, "Fall", "fall")
 RM.DamagePlayer(rMe, 10, "Beetle contact", "contact")
 check("revive-style protection blocks everything, falls included", rMe.HP == hp5)
 rMe.InvulnUntil = 0
+-- player armor with the rank system: A / (100 + A) less (stream B's BuildRules.ArmorMult)
+if RunConfig.Builds.Enabled then
+	rMe.HitProtectUntil = 0
+	local oldArmor = rMe.Stats.Armor
+	rMe.Stats.Armor = 50
+	local hpA = rMe.HP
+	RM.DamagePlayer(rMe, 30, "Beetle contact", "contact")
+	check("rank armor: A 50 takes a third off a hit", math.abs((hpA - rMe.HP) - 30 * rMe.Stats.DamageTaken * (1 - 50 / 150)) < 0.01, string.format("%.2f", hpA - rMe.HP))
+	rMe.Stats.Armor = oldArmor
+end
 calm(rMe)
 
 ------------------------------------------------------------------------------------------
@@ -336,6 +346,16 @@ calm(rMe)
 rMe.LastLanding = nil
 fallFrom(rMe, 12)
 check("a 12-stud drop is free", rMe.LastLanding ~= nil and rMe.LastLanding.Damage == 0 and rMe.HP == hpAfter)
+-- Spring Stitch (stream B puts its reduction on the stat sheet as FallDamageMult)
+rMe.Stats.FallDamageMult = 0.6
+calm(rMe)
+rMe.LastLanding = nil
+local hpS = rMe.HP
+fallFrom(rMe, 30)
+check("Spring Stitch (Stats.FallDamageMult 0.6): a 30-stud fall costs 14.4%", math.abs((hpS - rMe.HP) - rMe.Stats.MaxHP * 0.144) < 0.6, string.format("%.1f", hpS - rMe.HP))
+rMe.Stats.FallDamageMult = 1
+hpAfter = rMe.HP
+check("post-landing jump restriction 0.12 s (Spring Stitch shortens it on the client)", S.Move.LandLockSeconds == 0.12)
 rMe.LeapUntil = os.clock() + 5
 rMe.LastLanding = nil
 fallFrom(rMe, 40)
