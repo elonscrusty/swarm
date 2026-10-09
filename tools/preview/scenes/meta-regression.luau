@@ -170,7 +170,11 @@ withSigil = StatSheet.Compute({ CharacterId = "Knight", Sigils = { HaresFoot = t
 local alone = StatSheet.Compute({ CharacterId = "Knight", Sigils = { LoneWolf = true }, SigilAlone = true })
 local crowd = StatSheet.Compute({ CharacterId = "Knight", Sigils = { LoneWolf = true }, SigilAlone = false })
 check("Hare's Foot: +15% speed, -10% max HP", math.abs(withSigil.Speed / base.Speed - 1.15) < 1e-6 and withSigil.MaxHP < base.MaxHP, string.format("%.2f/%.2f hp %d/%d", withSigil.Speed, base.Speed, withSigil.MaxHP, base.MaxHP))
-check("Lone Wolf: +10% alone, -10% with an ally", math.abs(alone.Might - base.Might - 0.10) < 1e-6 and math.abs(base.Might - crowd.Might - 0.10) < 1e-6)
+-- (rank system, continuation brief: the additive damage bonus is clamped to 0..2, so the -10 % with an
+-- ally can only take a hero with no other damage bonus down to +0 %)
+local rankedBuilds = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Builds.Enabled == true
+local crowdExpect = rankedBuilds and math.max(1, base.Might - 0.10) or base.Might - 0.10
+check("Lone Wolf: +10% alone, -10% with an ally" .. (rankedBuilds and " (bonus clamped at 0)" or ""), math.abs(alone.Might - base.Might - 0.10) < 1e-6 and math.abs(crowd.Might - crowdExpect) < 1e-6)
 local ember = StatSheet.Compute({ CharacterId = "Knight", Sigils = { EmberHeart = true }, Items = { HealingHerb = 2 } })
 check("Ember Heart: no regen", ember.Regen == 0 and math.abs(ember.Might - base.Might - 0.10) < 1e-6)
 

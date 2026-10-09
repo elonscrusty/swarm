@@ -602,15 +602,17 @@ local function dget(section: string): { [string]: any }
 end
 
 --[[
-	The brief's baselines. B: weapon / enemy HP coefficients (RunConfig.Combat.B from stream B,
-	else Director.DefaultB = the starter weapons' base damage, 10). H0: normal player maximum HP
-	(RunConfig.Survival.H0 from stream E1, else Config.Player.BaseMaxHP = 120).
+	The brief's baselines. B: weapon / enemy HP coefficients (RunConfig.Builds.B from stream B,
+	else Combat.B, else Director.DefaultB = the starter weapons' base damage, 10). H0: normal
+	player maximum HP (Builds.H0 / Survival.H0 when set, else Config.Player.BaseMaxHP = 120).
 ]]
 function StageManager.Baselines(): (number, number)
+	local builds = RunCfgAll.Builds
 	local combat = RunCfgAll.Combat
 	local survival = RunCfgAll.Survival
-	local B = (type(combat) == "table" and tonumber(combat.B)) or tonumber(DirCfg.DefaultB) or 10
-	local H0 = (type(survival) == "table" and tonumber(survival.H0)) or tonumber((Config.Player :: any).BaseMaxHP) or 100
+	local B = (type(builds) == "table" and tonumber(builds.B)) or (type(combat) == "table" and tonumber(combat.B)) or tonumber(DirCfg.DefaultB) or 10
+	local H0 = (type(builds) == "table" and tonumber(builds.H0)) or (type(survival) == "table" and tonumber(survival.H0))
+		or tonumber((Config.Player :: any).BaseMaxHP) or 100
 	return B, H0
 end
 

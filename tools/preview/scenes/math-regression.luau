@@ -15,6 +15,12 @@ local ItemData = C.shared("ItemData")
 local SynergyData = C.shared("SynergyData")
 local CharacterData = C.shared("CharacterData")
 local MetaUpgradeData = C.shared("MetaUpgradeData")
+-- [stream B] the continuation pack's rank system (RunConfig.Builds.Enabled) changes a few rules:
+-- attack speed only (the old Cooldown key no longer counts), crit cap 50 %, weapon ranks 1-5 and
+-- a max-HP rise keeping the HP fraction. Those checks expect the live system's numbers.
+local RunConfigM = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig)
+local Ranked = RunConfigM.Builds.Enabled == true
+local CombatCfg = RunConfigM.Combat
 
 local results = {}
 local function check(name: string, ok: boolean, detail: string?)
@@ -58,12 +64,14 @@ check("A5 DamageTaken order", near(dt.DamageTaken, expectDt), string.format("%.4
 -- caps: cooldown, crit, speed
 local maxCd = PassiveData.MaxLevelOf("Cooldown")
 local fast = StatSheet.Compute({ CharacterId = "Knight", Passives = { Cooldown = maxCd }, Items = { QuickGloves = 200, CrownOfAges = 50 } })
-check("A6 CooldownMult floor", near(fast.CooldownMult, I.MinCooldownMult), tostring(fast.CooldownMult))
+-- rank system: attack speed is clamped to 0..1, so the multiplier bottoms out at 1 / 2
+local cdFloor = Ranked and 1 / (1 + CombatCfg.AttackSpeedMax) or I.MinCooldownMult
+check("A6 CooldownMult floor", near(fast.CooldownMult, cdFloor), tostring(fast.CooldownMult))
 local cdMid = StatSheet.Compute({ CharacterId = "Knight", Passives = { Cooldown = maxCd }, Items = { QuickGloves = 2 } })
-local cdExpect = math.max(I.MinCooldownMult, math.max(0.4, 1 - PassiveData.Passives.Cooldown.Values[maxCd].cooldown) / (1 + 0.12))
-check("A7 cooldown reduction then attack speed divides", near(cdMid.CooldownMult, cdExpect), string.format("%.4f vs %.4f", cdMid.CooldownMult, cdExpect))
+local cdExpect = Ranked and 1 / (1 + 0.12) or math.max(I.MinCooldownMult, math.max(0.4, 1 - PassiveData.Passives.Cooldown.Values[maxCd].cooldown) / (1 + 0.12))
+check(Ranked and "A7 attack speed divides (the old Cooldown key no longer counts)" or "A7 cooldown reduction then attack speed divides", near(cdMid.CooldownMult, cdExpect), string.format("%.4f vs %.4f", cdMid.CooldownMult, cdExpect))
 local crit = StatSheet.Compute({ CharacterId = "Knight", Items = { KeenLens = 100 } })
-check("A8 crit chance cap", crit.CritChance == I.MaxCritChance, tostring(crit.CritChance))
+check("A8 crit chance cap", crit.CritChance == (Ranked and CombatCfg.CritMax or I.MaxCritChance), tostring(crit.CritChance))
 local speedy = StatSheet.Compute({ CharacterId = "Rogue", Meta = { Speed = 6 }, Items = { SwiftFeather = 100 } })
 check("A9 move speed cap", near(speedy.Speed, P.BaseSpeed * I.MaxSpeedMult), tostring(speedy.Speed))
 
@@ -231,12 +239,15 @@ advance(0.02)
 check("C1b one pick, applied once", buildSum() == sumBefore + 1 and rp.PendingLevels == 0 and rp.Offer == nil,
 	string.format("build %d -> %d pending %d", sumBefore, buildSum(), rp.PendingLevels))
 check("C1c a pick does not reset weapon cooldowns", whip.Timer <= 0.77 + 1e-9, tostring(whip.Timer))
-check("C1d a pick heals only by the max-HP increase", near(rp.HP, 50 + math.max(0, rp.Stats.MaxHP - maxBefore)), string.format("HP %.2f max %d -> %d", rp.HP, maxBefore, rp.Stats.MaxHP))
+-- (rank system: a max-HP rise keeps the HP fraction instead of healing the rise)
+local c1Expect = Ranked and 50 * math.max(rp.Stats.MaxHP, maxBefore) / maxBefore or 50 + math.max(0, rp.Stats.MaxHP - maxBefore)
+check("C1d a pick heals only by the max-HP rule", near(rp.HP, c1Expect), string.format("HP %.2f max %d -> %d", rp.HP, maxBefore, rp.Stats.MaxHP))
 rp.XPNeeded = 1e12
 
 -- C2 stale cards at max rank never overflow (WeaponUp / PassiveUp past the cap)
 local wid = rp.WeaponOrder[1]
-rp.Weapons[wid].Level = WeaponData.MaxLevel
+local wMax = WeaponData.MaxLevelOf and WeaponData.MaxLevelOf(wid) or WeaponData.MaxLevel -- rank system: 5
+rp.Weapons[wid].Level = wMax
 rp.Weapons[wid].Evolved = false
 if not rp.Passives.Might then table.insert(rp.PassiveOrder, "Might") end
 rp.Passives.Might = PassiveData.MaxLevelOf("Might")
@@ -252,15 +263,15 @@ rp.OfferSeq += 1
 preview.remote("LevelUpChoose"):FireServer(1, rp.OfferSeq)
 advance(0.02)
 LU.Cancel(rp)
-check("C2 stale max-rank cards cap", rp.Weapons[wid].Level == WeaponData.MaxLevel and rp.Passives.Might == PassiveData.MaxLevelOf("Might"),
+check("C2 stale max-rank cards cap", rp.Weapons[wid].Level == wMax and rp.Passives.Might == PassiveData.MaxLevelOf("Might"),
 	string.format("%s L%d, Might L%d", wid, rp.Weapons[wid].Level, rp.Passives.Might))
 -- C3 a free chest level on a maxed build gives no rank past the cap
 for _, id in ipairs(rp.PassiveOrder) do rp.Passives[id] = PassiveData.MaxLevelOf(id) end
-for _, id in ipairs(rp.WeaponOrder) do rp.Weapons[id].Level = WeaponData.MaxLevel end
+for _, id in ipairs(rp.WeaponOrder) do rp.Weapons[id].Level = WeaponData.MaxLevelOf(id) end
 rp.Weapons[wid].Evolved = true -- nothing left to evolve either
 LU.OpenChest(rp)
 local over = false
-for _, w in pairs(rp.Weapons) do if w.Level > WeaponData.MaxLevel then over = true end end
+for _, w in pairs(rp.Weapons) do if w.Level > WeaponData.MaxLevelOf(w.Id) then over = true end end
 for id, l in pairs(rp.Passives) do if l > PassiveData.MaxLevelOf(id) then over = true end end
 check("C3 chest level on a maxed build stays capped", not over)
 advance(4) -- reward hold ends
@@ -305,9 +316,11 @@ check("C5a heal clamps to max", rp.HP == m0, string.format("%.1f/%d", rp.HP, m0)
 rp.HP = 40
 rp.Items = { HeartyBread = 2 }
 LU.RecomputeStats(rp)
-check("C5b +30 max HP heals exactly 30", rp.Stats.MaxHP == m0 + 30 and near(rp.HP, 70), string.format("%.1f/%d", rp.HP, rp.Stats.MaxHP))
+-- rank system (continuation brief): a max-HP rise keeps the HP fraction; before: it healed the rise
+local hpAfter = Ranked and 40 * (m0 + 30) / m0 or 70
+check(Ranked and "C5b +30 max HP keeps the HP fraction" or "C5b +30 max HP heals exactly 30", rp.Stats.MaxHP == m0 + 30 and near(rp.HP, hpAfter), string.format("%.1f/%d", rp.HP, rp.Stats.MaxHP))
 LU.RecomputeStats(rp)
-check("C5c recompute without change does not heal", near(rp.HP, 70), tostring(rp.HP))
+check("C5c recompute without change does not heal", near(rp.HP, hpAfter), tostring(rp.HP))
 rp.HP = rp.Stats.MaxHP
 rp.Items = {}
 LU.RecomputeStats(rp)
@@ -320,12 +333,22 @@ RM.Heal(rp, -25)
 RM.Heal(rp, -math.huge)
 check("C6 heal ignores NaN / negative", rp.HP == 60 and rp.Alive, tostring(rp.HP))
 
--- C7 damage formula: max(MinDamagePerHit, raw x DamageTaken - armor), invalid ignored
+-- C7 damage formula: max(MinDamagePerHit, raw x DamageTaken - armor), invalid ignored; with the rank
+-- system the armor is A / (100 + A) less, A clamped 0..100 (stream E1 uses BuildRules.ArmorMult)
+-- (stream E1: every landed hit opens the shared 0.35 s hit protection; cleared between the checks)
+local function armorHit(raw: number, st): number
+	if Ranked then
+		local a = math.clamp(st.Armor, 0, CombatCfg.ArmorMax)
+		return math.max(P.MinDamagePerHit, raw * st.DamageTaken * (1 - a / (100 + a)))
+	end
+	return math.max(P.MinDamagePerHit, raw * st.DamageTaken - st.Armor)
+end
 rp.InvulnUntil = 0
+rp.HitProtectUntil = 0
 rp.HP = 100
 local s = rp.Stats
 RM.DamagePlayer(rp, 20, "test")
-local expect = math.max(P.MinDamagePerHit, 20 * s.DamageTaken - s.Armor)
+local expect = armorHit(20, s)
 check("C7a hit = raw x DamageTaken - armor", near(rp.HP, 100 - expect), string.format("HP %.2f expect %.2f", rp.HP, 100 - expect))
 local h = rp.HP
 RM.DamagePlayer(rp, 0 / 0, "nan")
@@ -333,8 +356,9 @@ RM.DamagePlayer(rp, -10, "neg")
 RM.DamagePlayer(rp, math.huge, "inf")
 check("C7b NaN / negative / inf damage ignored", rp.HP == h, tostring(rp.HP))
 rp.Stats.Armor = 1000
+rp.HitProtectUntil = 0
 RM.DamagePlayer(rp, 5, "armor")
-check("C7c armor never below the minimum hit", near(rp.HP, h - P.MinDamagePerHit), tostring(rp.HP))
+check("C7c armor never below the minimum hit (rank system: capped at A = 100, half damage)", near(rp.HP, h - armorHit(5, rp.Stats)), tostring(rp.HP))
 LU.RecomputeStats(rp)
 
 -- C8 enemy damage: NaN / zero never touch HP
@@ -522,6 +546,7 @@ RM.DamagePlayer(rp, 500, "second") -- same frame
 check("E1 two lethal hits in one frame use one extra life", rp.Alive and rp.RevivesLeft == 0 and near(afterFirst, rp.Stats.MaxHP * P.ReviveHPFraction) and rp.HP == afterFirst,
 	string.format("alive %s lives %d HP %.1f", tostring(rp.Alive), rp.RevivesLeft, rp.HP))
 rp.InvulnUntil = 0
+rp.HitProtectUntil = 0 -- (stream E1: E1's hits opened the shared hit protection this frame)
 rp.HP = 5
 rp.Items = {}
 RM.DamagePlayer(rp, 500, "lethal")

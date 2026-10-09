@@ -23,9 +23,8 @@ end
 
 -- A fallen player in a group run who can still be partner-revived.
 local function revivable(rp): boolean
-	local rules = (Config.Modes :: any)[Remotes.State():GetAttribute("Mode") or ""]
-	local perRun = rules and rules.PartnerRevive and rules.PartnerRevive.PerRun
-	return not rp.Alive and not rp.AwaitingRevive and (perRun == nil or (rp.PartnerRevives or 0) < perRun)
+	-- [stream E1] downed (bleeding out) heroes can be revived; eliminated ones cannot
+	return rp.Downed == true and not rp.Alive and not rp.AwaitingRevive
 end
 
 function TeamPingService.Assign(rp, slot: number)

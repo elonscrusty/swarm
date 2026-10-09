@@ -1,6 +1,6 @@
 -- revive-thanks-regression: the THANKS! button after a teammate revive (Config.Features.ReviveThanks,
 -- server ReviveThanks.lua, client ReviveThanks.lua, docs/next/REVIVE_THANKS.md) against the real server.
---   1) a real proximity revive makes one offer for the revived player only; the client shows it
+--   1) a real hold-to-revive makes one offer for the revived player only; the client shows it
 --      for Config.Revive.ThanksSeconds and a tap sends the offer id; the reviver gets the
 --      "<name> says thanks!" notice and exactly Config.Revive.ThanksXP run XP, once
 --   2) refusals: repeated tap, wrong / junk ids, a player with no offer, an expired offer,
@@ -123,16 +123,28 @@ local function reviveByHelper()
 		end
 	end
 	rp.InvulnUntil = 0
+	rp.HitProtectUntil = 0
 	RM.DamagePlayer(rp, 1e6, "Test boss strike")
 	stand(25)
 	preview.advance(0.3)
 	stand(2)
-	preview.advance(2.4)
+	-- stream E1: the reviver holds interact (ReviveHold, repeated like the client) for 3 s
+	for _ = 1, 14 do
+		preview.fireServerAs(ava, "ReviveHold", true)
+		preview.advance(0.25)
+	end
+	preview.fireServerAs(ava, "ReviveHold", false)
+	preview.advance(0.1)
 end
 
 -- 1) a real revive makes the offer; the client shows it; the tap pays once
 reviveByHelper()
 check("the revive happened", rp.Alive == true and rp.PartnerRevives == 1)
+-- keep this player up until the next deliberate knock-down (reviveByHelper resets it): the swarm must
+-- not down them in between, or the partner revives them for real and replaces the offers under test
+-- (with the continuation pack's live choices, [stream B], a reviver who levelled up is no longer
+-- held still by the card panel)
+rp.InvulnUntil = math.huge
 check("one offer, to the revived player only", #(offers[me] or {}) == 1 and #(offers[ava] or {}) == 0)
 local offer = (offers[me] or {})[1] or {}
 check("offer carries id, 6 s and the reviver's name", type(offer.Id) == "number" and offer.Seconds == R.ThanksSeconds and offer.FromName == "Ava")
@@ -169,7 +181,8 @@ tap(me, idOld)
 check("the replaced offer pays nothing", paid(helper) == 1)
 -- expiry: ThanksSeconds + grace
 preview.advance(R.ThanksSeconds + R.ThanksGrace + 0.5)
-check("an expired offer is refused", RT.Check(me, id3) == "expired")
+local expiredWhy = RT.Check(me, id3)
+check("an expired offer is refused", expiredWhy == "expired", string.format("%s, revives %s", tostring(expiredWhy), tostring(rp.PartnerRevives)))
 tap(me, id3)
 check("an expired tap pays nothing", paid(helper) == 1 and thanksNotes(ava) == 1)
 -- the reviver left the run
@@ -219,6 +232,7 @@ Config.Features.ReviveThanks = true
 local clientBefore = #(offers[me] or {})
 reviveByHelper()
 check("the second real revive made an offer", #(offers[me] or {}) == clientBefore + 1 and rp.PartnerRevives == 2, string.format("offers %d->%d revives=%s alive=%s hpaused=%s hoffer=%s hpend=%s halive=%s prog=%s", clientBefore, #(offers[me] or {}), tostring(rp.PartnerRevives), tostring(rp.Alive), tostring(helper.Paused), tostring(helper.Offer ~= nil), tostring(helper.PendingLevels), tostring(helper.Alive), tostring(rp.ReviveProgress)))
+rp.InvulnUntil = math.huge -- (no further real revive while the client checks run; see step 1)
 preview.advance(0.3)
 check("the client holds the second offer", RTc.Active() == true)
 preview.advance(R.ThanksSeconds + 0.4)

@@ -158,7 +158,8 @@ local badgeText = badge and badge:FindFirstChild("Text") and badge:FindFirstChil
 check(string.find(badgeText, "TEAM", 1, true), "combo: client badge shows the meter", badgeText)
 -- choosing a card: protected, so no charge and no fire
 LUS.QueueLevels(rp, 1)
-check(rp.Offer ~= nil and rp.Paused, "combo: a level-up panel is open")
+-- ([stream B] the rank system's team-run choices are live: open without pausing the chooser)
+check(rp.Offer ~= nil and (rp.Paused or rp.LiveChoice), "combo: a level-up panel is open")
 local before = Combo.Meter()
 for _ = 1, 15 do together(); advance(0.1) end
 check(Combo.Meter() <= before + 1e-6, "combo: no charge while a player is choosing", string.format("%.3f -> %.3f", before, Combo.Meter()))
@@ -430,8 +431,9 @@ end
 check(toMates == 3, "spectate: teammates see REVIVE ME at the body", toMates)
 check(not SpectateC.AskRevive(), "spectate: REVIVE ME rate limited")
 check(not Ping.Send(ava, "ReviveMe"), "spectate: a living player cannot send REVIVE ME")
--- revived: the bar goes, the camera comes home
-run(4, function() place(a, base + Vector3.new(2, 0, 0)); place(b, base + Vector3.new(-30, 0, 10)) end)
+-- revived: the bar goes, the camera comes home (stream E1: the teammate holds interact for 3 s)
+run(4, function() place(a, base + Vector3.new(2, 0, 0)); place(b, base + Vector3.new(-30, 0, 10)); preview.fireServerAs(ava, "ReviveHold", true) end)
+preview.fireServerAs(ava, "ReviveHold", false)
 check(me:GetAttribute("Alive") == true, "spectate: partner revive works")
 run(1.5)
 check(not SpectateC.Active() and not preview.playerGui().Spectate.Enabled, "spectate: bar gone after the revive")
