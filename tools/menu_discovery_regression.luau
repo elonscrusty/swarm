@@ -16,7 +16,12 @@ local ok, err = S.runMain(function()
 	local screen = env.Instance.new("Frame")
 	screen.Size = env.UDim2.fromOffset(1000, 700)
 	screen.Parent = preview.playerGui()
-	local p = { Gold = 100, OwnedCharacters = { Knight = true }, SelectedCharacter = "Knight", OwnedSkins = { Knight_Crimson = true }, Skins = { Knight = "Default" }, Achievements = { Progress = {} } }
+	-- the twelve classes, as ClientMain registers them (the 11 old heroes and their skins are
+	-- hidden, docs/redesign/DECISIONS.md); a class has Default + the Starter Pack's Gold Trim
+	local CharacterData = preview.shared("CharacterData")
+	preview.require(env.game:GetService("ReplicatedStorage").SwarmV2.Run.ClassRoster).Register(CharacterData, preview.shared("MetaUpgradeData"))
+	local hero = CharacterData.Default
+	local p = { Gold = 100, OwnedCharacters = { [hero] = true }, SelectedCharacter = hero, OwnedSkins = {}, Skins = { [hero] = "Default" }, Achievements = { Progress = {} } }
 	local host = { VirtualSize = function() return env.Vector2.new(1000, 700) end, IsPortrait = function() return false end, Insets = function() return { Top = 0, Bottom = 0, Left = 0, Right = 0 } end, Scale = function() return 1 end }
 	local equips = {}
 	remotes.Get("EquipSkin").OnServerEvent:Connect(function(_, character, skin) table.insert(equips, { character, skin }) end)
@@ -24,10 +29,18 @@ local ok, err = S.runMain(function()
 	local chars = preview.client("MenuCharacters")
 	local menu = chars.Build(screen, { Host = host, Profile = function() return p end, Back = function() end, Toast = function() end, Current = function() return "Characters" end })
 	menu.OnShow(p)
-	local swatch = screen:FindFirstChild("Knight_Crimson", true)
-	swatch.Activated:_fire()
+	check("old hero skins are not offered", screen:FindFirstChild("Knight_Crimson", true) == nil)
+	local lockedSkin = screen:FindFirstChild("GoldTrim", true)
+	check("the class lists its Gold Trim skin", lockedSkin ~= nil)
+	if lockedSkin then lockedSkin.Activated:_fire() end
 	preview.advance(0.05)
-	check("owned skin click previews without equipping", #equips == 0 and p.Skins.Knight == "Default")
+	check("unowned skin can preview without equip or purchase", #equips == 0 and p.Skins[hero] == "Default")
+	p.OwnedSkins.GoldTrim = true
+	menu.OnShow(p)
+	local swatch = screen:FindFirstChild("GoldTrim", true)
+	if swatch then swatch.Activated:_fire() end
+	preview.advance(0.05)
+	check("owned skin click previews without equipping", swatch ~= nil and #equips == 0 and p.Skins[hero] == "Default")
 	local equip
 	for _, d in ipairs(screen:GetDescendants()) do
 		if d:IsA("TextLabel") and d.Text == "EQUIP SKIN" then
@@ -38,11 +51,7 @@ local ok, err = S.runMain(function()
 	end
 	check("preview exposes explicit equip action", equip ~= nil)
 	if equip then equip.Activated:_fire(); preview.advance(0.05) end
-	check("equip sends inspected character and skin once", #equips == 1 and equips[1][1] == "Knight" and equips[1][2] == "Knight_Crimson")
-	local lockedSkin = screen:FindFirstChild("Knight_Shadow", true)
-	lockedSkin.Activated:_fire()
-	preview.advance(0.05)
-	check("unowned skin can preview without equip or purchase", #equips == 1 and p.Skins.Knight == "Default")
+	check("equip sends inspected character and skin once", #equips == 1 and equips[1][1] == hero and equips[1][2] == "GoldTrim")
 	local daily = preview.client("MenuDaily")
 	if daily.RankText then
 		local board = { Board = "Daily", Day = 44, Status = "ok", Age = 0, MyBest = 500, MyRank = 7, Rows = { { Me = true, Rank = 7, Value = 500 } } }
