@@ -905,7 +905,12 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 	if ok and kind == "Chest" then
 		-- what it costs, in which money, before the hold (the odds are the benefit line)
 		local cost = priceOf(model)
-		detail = cost > 0 and string.format(teamChest(model) and "Costs %s team gold · hold to open" or "Costs %s run gold · hold to open", UIKit.formatNumber(cost)) or "Free · hold to open"
+		if cost > 0 and teamChest(model) then
+			-- the shared price and the team's balance, before the hold (stream E2)
+			detail = string.format("Costs %s team gold (team has %s) · hold", UIKit.formatNumber(cost), UIKit.formatNumber(walletOf(model)))
+		else
+			detail = cost > 0 and string.format("Costs %s run gold · hold to open", UIKit.formatNumber(cost)) or "Free · hold to open"
+		end
 	end
 	local id = tonumber(model:GetAttribute("LootId")) or 0
 	local result = chanceResult.Id ~= 0 and chanceResult.Id == id and os.clock() < chanceResult.Until

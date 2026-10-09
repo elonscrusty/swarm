@@ -934,7 +934,7 @@ end
 local function buildTreasure(arena, pos: Vector3)
 	local obj = buildChest("Small", pos, 0, true)
 	obj.Type, obj.Price = "Treasure", 0
-	setAttrs(obj, { LootType = "Treasure", Title = TITLES.Treasure, Price = 0, Benefit = "Free uncommon or legendary item", Detail = "Discovered cache · hold to claim" })
+	setAttrs(obj, { LootType = "Treasure", Title = TITLES.Treasure, Price = 0, Benefit = chestItemsHidden() and "A free passive choice" or "Free uncommon or legendary item", Detail = "Discovered cache · hold to claim" })
 	addGlow(obj, pos + Vector3.new(0, 2.7, 0), P.gold_300, true, false)
 	MapBuilder.ClearDecor(arena, pos, 3)
 	return obj
