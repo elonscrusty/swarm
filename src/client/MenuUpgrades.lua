@@ -294,9 +294,12 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		elseif id == 0 then
 			text(f, "Caption", UIKit.track("Coming soon"), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -14), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextFaint })
 		else
+			-- only a real platform price opens the Roblox prompt: "R$ ..." while it loads,
+			-- PRICE UNAVAILABLE (disabled) when the lookup fails or the item is off sale
+			local ready = prices[id] ~= nil
 			local b = UIKit.Button(f, {
 				Kind = "Outline",
-				Title = prices[id] and ("R$ " .. UIKit.formatNumber(prices[id])) or "BUY",
+				Title = prices[id] and ("R$ " .. UIKit.formatNumber(prices[id])) or "R$ ...",
 				Icon = "robux",
 				IconSize = 20,
 				Align = "Center",
@@ -305,6 +308,9 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 				Size = UDim2.new(1, 0, 0, 50),
 				Shadow = false,
 				OnClick = function()
+					if not ready then
+						return
+					end
 					if item.Kind == "Pass" then
 						MarketplaceService:PromptGamePassPurchase(player, id)
 					else
@@ -312,16 +318,23 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 					end
 				end,
 			})
-			if not prices[id] then
+			b.SetEnabled(ready)
+			if not ready then
 				task.spawn(function()
 					local ok, info = pcall(function()
 						return MarketplaceService:GetProductInfo(id, item.Kind == "Pass" and Enum.InfoType.GamePass or Enum.InfoType.Product)
 					end)
-					if ok and info and info.PriceInRobux then
+					if not b.Instance.Parent then
+						return
+					end
+					if ok and info and type(info.PriceInRobux) == "number" and info.IsForSale ~= false then
 						prices[id] = info.PriceInRobux
-						if b.Instance.Parent then
-							b.SetText("R$ " .. UIKit.formatNumber(info.PriceInRobux))
-						end
+						ready = true
+						b.SetText("R$ " .. UIKit.formatNumber(info.PriceInRobux))
+						b.SetEnabled(true)
+					else
+						b.SetText("PRICE UNAVAILABLE")
+						b.SetEnabled(false)
 					end
 				end)
 			end

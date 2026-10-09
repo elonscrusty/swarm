@@ -1930,6 +1930,11 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		NewUnlocks = info and info.NewUnlocks or nil,
 		ClassGoals = info and info.ClassGoals or nil,
 		SaveState = player:GetAttribute("RunSaveState"),
+		-- [integration] the server-confirmed outcome for the results header: "Victory" (boss
+		-- beaten / expedition won), "Left" (voluntary departure, no later victory bonus) or
+		-- "Defeat"; Duration = seconds this hero was in the run
+		Outcome = (rp.Abandoned and "Left") or (won and "Victory") or "Defeat",
+		Duration = math.floor(rp.TimeSurvived),
 	})
 end
 
