@@ -36,7 +36,10 @@
 	  Weapons, WeaponOrder, Passives, PassiveOrder, PendingLevels, Offer, Paused, Alive,
 	  AwaitingRevive, RevivesLeft, Rerolls, Skips, Kills, Gold, DamageDealt, TimeSurvived,
 	  Facing, MoveDir, InvulnUntil, Returned, PortalChoice, PortalOffered, Committed, WinPaid,
-	  Items, ItemOrder, ItemState, ShieldMax, GoldSpent (run items: ItemSystem / LootSystem)
+	  Items, ItemOrder, ItemState, ShieldMax, GoldSpent (run items: ItemSystem / LootSystem),
+	  Downed, BleedLeft, Eliminated, Reviver, ReviveTarget, ReviveHeldAt, Revives,
+	  HitProtectUntil, SpeedBoost, SpeedBoostUntil, AirReset (survival rules, stream E1: see the
+	  "HP, downed, revive, elimination" and "Disconnect window" sections)
 	HP lives here (not in the Humanoid): the Humanoid's Dead state is disabled.
 ]]
 
@@ -56,6 +59,10 @@ local DevTools = require(script.Parent.DevTools)
 local EncounterDirector = require(script.Parent.EncounterDirector) -- feature encounters: PlayerOut on death / portal / abandon
 local HeightGrid = require(script.Parent.HeightGrid) -- ground height (flat FLOOR_Y without a height grid)
 local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
+-- [stream E1] survival rules: downed / revive / protection / falls / disconnects / movement caps
+local Survival = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Survival
+local SurvivalRules = require(game:GetService("ReplicatedStorage").SwarmV2.Run.SurvivalRules)
+local DashRules = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Dash
 
 local RunManager = {}
 
@@ -177,11 +184,14 @@ function RunManager.RefreshFrozen()
 		end
 	end
 	local choiceFreezes = fighters <= 1 or Config.Run.CoopChoiceFreezesRun == true
+	-- [stream E1] no connected living hero, but someone is inside their disconnect window: the
+	-- world waits for them (bounded by the window, Survival.Disconnect)
+	local awayHold = fighters == 0 and RunManager.AwayInWindow() > 0
 	-- who is opening a chest ("<Name> is opening a chest" on everyone else's HUD)
 	state:SetAttribute("RewardIds", rewarding and ("," .. table.concat(rewardIds, ",") .. ",") or "")
 	state:SetAttribute("RewardNames", rewarding and table.concat(rewardNames, ", ") or "")
 	-- QuickResume: a held solo run (its player disconnected) stays frozen until resumed / settled
-	local newFrozen = phase == "Running" and (menuPaused or RunManager.SoloAway ~= nil or (choiceFreezes and (choosing or rewarding)))
+	local newFrozen = phase == "Running" and (menuPaused or RunManager.SoloAway ~= nil or awayHold or (choiceFreezes and (choosing or rewarding)))
 	-- who is choosing, so the HUD can say "<Name> is choosing an upgrade" to everyone else
 	-- (the chooser sees the cards instead); set before LevelUpPause so both arrive together
 	state:SetAttribute("ChoosingIds", (phase == "Running" and choosing) and ("," .. table.concat(ids, ",") .. ",") or "")
@@ -391,11 +401,6 @@ local function maxPlayers(): number
 	return math.min(Config.Run.MaxPlayers, modeDef().MaxPlayers)
 end
 
--- Partner revive rules of the current mode (Duo / Trio), or nil.
-local function reviveRules()
-	return modeDef().PartnerRevive
-end
-
 local function setPhase(newPhase: string)
 	phase = newPhase
 	state:SetAttribute("Phase", newPhase)
@@ -440,7 +445,9 @@ end
 ------------------------------------------------------------------------------------------
 
 local spawnCharacter -- forward declaration
-local partnerRevives: (number) -> ()
+-- [stream E1] disconnect window helpers (defined in the "Disconnect window" section)
+local settleAway: (any, number) -> Player?
+local publishAway: () -> ()
 
 local function lobbySpawnCFrame(): CFrame
 	local a = rng:NextNumber(0, math.pi * 2)
@@ -577,10 +584,44 @@ function RunManager.ApplyMovement(rp)
 	local canMove = rp.Alive and not rp.Paused and not rp.RewardUntil and not frozen and phase == "Running" and not ctx.StageManager.IsHolding()
 	if hum and hum.Parent then
 		-- rp.RushMult: Windstep's short burst after a kill (ItemSystem); rp.WeatherSpeedMult:
-		-- a snow storm (Weather)
-		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * RunManager.RushMult(rp) * (rp.WeatherSpeedMult or 1) or 0
+		-- a snow storm (Weather). [stream E1] never above the generic cap (34) unless an explicit
+		-- class boost is active (RunManager.SetSpeedBoost)
+		local walk = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * RunManager.RushMult(rp) * (rp.WeatherSpeedMult or 1) or 0
+		hum.WalkSpeed = math.min(walk, RunManager.SpeedLimit(rp))
 	end
 	rp.Player:SetAttribute("Paused", rp.Paused == true)
+end
+
+-- [stream E1] The most horizontal speed a hero may have outside a dash: the generic cap
+-- (Survival.Move.HorizontalCap, 34) or an explicit class boost while it lasts.
+function RunManager.SpeedLimit(rp): number
+	local cap = Survival.Move.HorizontalCap
+	local boost, untilT = rp.SpeedBoost, rp.SpeedBoostUntil
+	if type(boost) == "number" and type(untilT) == "number" and os.clock() < untilT then
+		cap = math.max(cap, boost)
+	end
+	return cap
+end
+
+--[[
+	[stream E1] An explicit class boost (class kits, stream C): for `seconds` the hero may move up
+	to `speed` studs/s (WalkSpeed, the client's speed cap and the server speed check all allow it).
+	The kit still sets the speed itself (rp.Stats / its own multiplier); this only lifts the cap.
+]]
+function RunManager.SetSpeedBoost(rp, speed: number, seconds: number)
+	if not (speed == speed and seconds == seconds) or speed <= 0 or seconds <= 0 or seconds > 60 then
+		return
+	end
+	rp.SpeedBoost = math.min(speed, 200)
+	rp.SpeedBoostUntil = os.clock() + seconds
+	rp.Player:SetAttribute("SpeedBoost", rp.SpeedBoost)
+	rp.Player:SetAttribute("SpeedBoostUntil", workspace:GetServerTimeNow() + seconds)
+	RunManager.ApplyMovement(rp)
+	task.delay(seconds + 0.05, function()
+		if byPlayer[rp.Player] == rp then
+			RunManager.ApplyMovement(rp)
+		end
+	end)
 end
 
 -- Windstep's burst, capped with the speed of now (MATH-17): the burst stores its multiplier
@@ -657,11 +698,46 @@ function RunManager.SwapRunCharacter(player: Player, old: Model)
 end
 
 ------------------------------------------------------------------------------------------
--- HP, death, revive
+-- HP, downed, revive, elimination  [stream E1: RunConfig.Survival, docs in this header]
 ------------------------------------------------------------------------------------------
+--[[
+	A hero at 0 HP goes through, in this order:
+	  1. an extra life (the account's Revive upgrade, rp.RevivesLeft) or a Phoenix Feather run
+	     item: back at once (unchanged).
+	  2. DOWNED for Survival.Downed.BleedSeconds (20) while someone could still revive them: a
+	     living connected teammate, a living teammate inside the disconnect window, or a teammate
+	     deciding on the paid revive. Downed heroes do not attack, gain XP or heal, and their level
+	     choices wait (LevelUpSystem.Cancel keeps the banked levels). A living teammate holding
+	     interact (remote "ReviveHold", E / gamepad X / the touch REVIVE button) within ReviveRange
+	     (8) for ReviveSeconds (3) without a break revives them at ReviveHPShare (25%) of max HP with
+	     ReviveProtectSeconds (1) of protection and a visible ring. Letting go, leaving range, the
+	     reviver taking damage or going down resets the progress. The bleed only runs while the
+	     world runs (not during a freeze or a stage travel).
+	  3. ELIMINATED when the bleed runs out, or at once when nobody could revive them. The existing
+	     paid path runs first (DECISIONS C8, unchanged and receipt-backed): a saved revive token is
+	     spent, else the Revive product is offered (AwaitingRevive, RevivePromptSeconds). Declined or
+	     timed out: out for the rest of the run, spectating teammates.
+	Defeat is declared once (EndRun) when no living connected hero remains, nobody is inside the
+	disconnect window and no paid-revive offer is open. Downed heroes nobody can reach are
+	eliminated at that moment (resolveRescue) instead of waiting out their bleed.
 
--- Player attribute "AwaitingRevive": down but deciding on the revive product (teammates
--- can't partner-revive yet; the HUD's team list shows it).
+	Protection: one shared HitProtectSeconds (0.35) window after an ordinary incoming hit
+	(rp.HitProtectUntil, run clock; Player attribute HitProtectUntil, server time). It never stacks
+	per attacker and is separate from the revive protection (rp.InvulnUntil; attribute
+	ReviveProtectUntil). Dashes and open menus grant none (Survival.MenuProtection = false).
+	Falls (kind "fall", RunManager.OnFallLanding) skip the hit protection and armor.
+
+	Player attributes: Alive, Downed, BleedLeft (s), ReviveProgress (0..1), Eliminated, Spectating,
+	AwaitingRevive, HitProtectUntil, ReviveProtectUntil, PartnerRevivesLeft (old team UI: 1 while
+	revivable). rp fields: Downed, BleedLeft, Eliminated, Reviver / ReviveTarget (the link while a
+	revive is held), ReviveHeldAt (os.clock of the last fresh hold), Revives (teammates revived,
+	class goal "Revives"), PartnerRevives (times this hero was revived).
+]]
+
+local SD = Survival.Downed
+local resolvingRescue = false -- ResolveRescue is running (its eliminations check the end once, after it)
+
+-- Player attribute "AwaitingRevive": out of action and deciding on the revive product.
 local function setAwaiting(rp, on: boolean)
 	rp.AwaitingRevive = on
 	rp.Player:SetAttribute("AwaitingRevive", on or nil)
@@ -672,9 +748,52 @@ local function setHP(rp, hp: number)
 	rp.Player:SetAttribute("HP", math.ceil(rp.HP))
 end
 
+-- The downed / eliminated attributes the HUD reads (stream F).
+local function publishDown(rp)
+	local p: Player = rp.Player
+	if not p.Parent then
+		return
+	end
+	p:SetAttribute("Downed", rp.Downed == true)
+	p:SetAttribute("BleedLeft", rp.Downed == true and math.max(0, math.ceil((rp.BleedLeft or 0) * 10) / 10) or 0)
+	p:SetAttribute("Eliminated", rp.Eliminated == true)
+	p:SetAttribute("Spectating", rp.Eliminated == true and not rp.Returned)
+	p:SetAttribute("PartnerRevivesLeft", rp.Downed == true and 1 or 0) -- old team UI: "down" vs "out"
+end
+
+local function setProgress(rp, value: number)
+	rp.ReviveProgress = value
+	if rp.Player.Parent then
+		rp.Player:SetAttribute("ReviveProgress", math.clamp(value, 0, 1))
+	end
+end
+
+-- Ends a revive in progress on `target` (the downed hero): progress back to 0, link cleared.
+local function cancelRevive(target)
+	local helper = target.Reviver
+	if helper and helper.ReviveTarget == target then
+		helper.ReviveTarget = nil
+	end
+	target.Reviver = nil
+	if (target.ReviveProgress or 0) ~= 0 then
+		setProgress(target, 0)
+	end
+end
+
+-- Clears every revive link of `rp` (as the downed hero and as a reviver).
+local function clearReviveLinks(rp)
+	cancelRevive(rp)
+	local target = rp.ReviveTarget
+	if target then
+		cancelRevive(target)
+	end
+	rp.ReviveTarget = nil
+end
+
 function RunManager.Heal(rp, amount: number, silent: boolean?)
 	-- a heal only ever adds: NaN would stick in HP (never dies), a negative amount would be
-	-- damage that skips armor and the downed check (an alive hero at 0 HP)
+	-- damage that skips armor and the downed check (an alive hero at 0 HP). Downed and
+	-- eliminated heroes are not Alive: heals and heal triggers never reach them.
 	if not rp.Alive or not (amount > 0 and amount < math.huge) then
 		return
 	end
@@ -684,6 +803,89 @@ function RunManager.Heal(rp, amount: number, silent: boolean?)
 	end
 end
 
+-- True while `rp` is downed (bleeding out, revivable).
+function RunManager.IsDowned(rp): boolean
+	return rp ~= nil and rp.Downed == true
+end
+
+-- True once `rp` is out for the rest of the run (spectating).
+function RunManager.IsEliminated(rp): boolean
+	return rp ~= nil and rp.Eliminated == true
+end
+
+--[[
+	Back on their feet. opts.HPShare (default Config.Player.ReviveHPFraction), opts.Protect
+	(seconds, default Config.Player.ReviveInvulnSeconds), opts.Clear (default true: the old
+	extra-life / paid revive clears non-boss enemies around them; a teammate revive never does,
+	so it can't farm kills or XP).
+]]
+type ReviveOpts = { HPShare: number?, Protect: number?, Clear: boolean? }
+local function revive(rp, message: string, opts: ReviveOpts?)
+	local o: ReviveOpts = opts or {}
+	clearReviveLinks(rp)
+	setProgress(rp, 0)
+	rp.Alive = true
+	rp.Downed = false
+	rp.Eliminated = false
+	rp.BleedLeft = nil
+	setAwaiting(rp, false)
+	setDownedLook(rp, false)
+	setHP(rp, rp.Stats.MaxHP * (o.HPShare or Config.Player.ReviveHPFraction))
+	local protect = o.Protect or Config.Player.ReviveInvulnSeconds
+	rp.InvulnUntil = math.max(rp.InvulnUntil or 0, runTime + protect)
+	rp.RevivedAt = runTime -- Final Stand's revive grace (FinalStand.lua)
+	rp.Player:SetAttribute("Alive", true)
+	rp.Player:SetAttribute("ReviveProtectUntil", workspace:GetServerTimeNow() + protect)
+	publishDown(rp)
+	if rp.Root then
+		if o.Clear ~= false then
+			ctx.EnemySpawner.KillInRadius(rp.Root.Position, Config.Player.ReviveClearRadius, rp)
+			Fx.Ring(rp.Root.Position, Config.Player.ReviveClearRadius, Color3.fromRGB(255, 230, 120))
+		else
+			Fx.Ring(rp.Root.Position, SD.ReviveRange, Color3.fromRGB(255, 230, 120)) -- the visible cue only
+		end
+	end
+	Fx.PlayerEvent(rp.Player, "revive")
+	Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
+	RunManager.Notify(rp.Player, message, Color3.fromRGB(255, 230, 120))
+	RunManager.ApplyMovement(rp)
+	RunManager.RefreshFrozen()
+	-- resume level-ups that were waiting
+	if rp.PendingLevels > 0 and not rp.Offer then
+		ctx.LevelUpSystem.QueueLevels(rp, 0)
+	end
+end
+
+-- Out of action (downed or eliminated straight away): attacks stop, choices wait, the body
+-- lies faded and anchored. Once per fall.
+local function takeDown(rp)
+	rp.Alive = false
+	rp.TimeSurvived = runTime
+	rp.ReviveHeldAt = nil
+	clearReviveLinks(rp)
+	rp.Player:SetAttribute("Alive", false)
+	ctx.LevelUpSystem.Cancel(rp, true) -- banked levels stay for after a revive
+	ctx.WeaponSystem.ClearOwner(rp)
+	setDownedLook(rp, true)
+	EncounterDirector.PlayerOut(rp, "Death")
+	Fx.PlayerEvent(rp.Player, "die")
+	Fx.Sound("Death")
+end
+
+-- True when a teammate who could still revive `rp` exists: living and connected, living and
+-- inside the disconnect window, or deciding on the paid revive (they may come back).
+local function canBeRescued(rp): boolean
+	for _, other in ipairs(runPlayers) do
+		if other ~= rp and not other.Returned and ((other.Alive and other.Player.Parent ~= nil) or other.AwaitingRevive) then
+			return true
+		end
+	end
+	return RunManager.AwayInWindow() > 0
+end
+
+-- Defeat, declared once (EndRun's phase guard): no living connected hero, nobody living inside
+-- the disconnect window and no paid-revive offer open. Downed heroes do not hold it up: the ones
+-- nobody can reach were eliminated by ResolveRescue before this runs.
 local function checkEnd()
 	if phase ~= "Running" then
 		return
@@ -698,105 +900,97 @@ local function checkEnd()
 			return
 		end
 	end
+	if RunManager.AwayInWindow() > 0 then
+		return
+	end
 	RunManager.EndRun(false)
 end
 
-local function revive(rp, message: string)
-	rp.ReviveProgress = 0
-	rp.Player:SetAttribute("ReviveProgress", 0)
-	rp.Alive = true
-	setAwaiting(rp, false)
-	setDownedLook(rp, false)
-	setHP(rp, rp.Stats.MaxHP * Config.Player.ReviveHPFraction)
-	rp.InvulnUntil = runTime + Config.Player.ReviveInvulnSeconds
-	rp.RevivedAt = runTime -- Final Stand's revive grace (FinalStand.lua)
-	rp.Player:SetAttribute("Alive", true)
-	if rp.Root then
-		ctx.EnemySpawner.KillInRadius(rp.Root.Position, Config.Player.ReviveClearRadius, rp)
-		Fx.Ring(rp.Root.Position, Config.Player.ReviveClearRadius, Color3.fromRGB(255, 230, 120))
-	end
-	Fx.PlayerEvent(rp.Player, "revive")
-	Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
-	RunManager.Notify(rp.Player, message, Color3.fromRGB(255, 230, 120))
-	RunManager.ApplyMovement(rp)
-	-- resume level-ups that were waiting
-	if rp.PendingLevels > 0 and not rp.Offer then
-		ctx.LevelUpSystem.QueueLevels(rp, 0)
-	end
-end
-
-local function finalizeDeath(rp)
-	if not rp.Alive and not rp.AwaitingRevive then
+local function finalizeElimination(rp)
+	if rp.Eliminated or rp.Returned then
 		return
 	end
 	rp.Alive = false
+	rp.Downed = false
+	rp.BleedLeft = nil
+	rp.Eliminated = true
 	setAwaiting(rp, false)
-	EncounterDirector.PlayerOut(rp, "Death")
-	rp.TimeSurvived = runTime
+	clearReviveLinks(rp)
+	setProgress(rp, 0)
 	rp.Player:SetAttribute("Alive", false)
-	ctx.LevelUpSystem.Cancel(rp, true)
-	ctx.WeaponSystem.ClearOwner(rp)
-	setDownedLook(rp, true)
+	publishDown(rp)
 	Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
-	Fx.PlayerEvent(rp.Player, "die")
-	Fx.Sound("Death")
-	local rules = reviveRules()
-	if rules and #runPlayers > 1 and (rp.PartnerRevives or 0) < rules.PerRun then
-		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen! Stand beside them to revive.", Color3.fromRGB(255, 90, 90), nil, { Id = "team.fallen." .. rp.Player.UserId, Class = "Critical" })
-	else
-		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen!", Color3.fromRGB(255, 90, 90), nil, { Id = "team.fallen." .. rp.Player.UserId, Class = "Critical" })
-	end
+	RunManager.Broadcast(rp.Player.DisplayName .. " is out!", Color3.fromRGB(255, 90, 90), nil, { Id = "team.fallen." .. rp.Player.UserId, Class = "Critical" })
 	ctx.StageManager.OnRosterChanged() -- first: an open portal may finish the run as a win
-	checkEnd()
+	RunManager.RefreshFrozen()
+	if not resolvingRescue then
+		RunManager.ResolveRescue()
+		checkEnd()
+	end
 end
 
 --[[
-	DUO / TRIO: a fallen player (dead, not waiting on the revive offer) is revived when a
-	living teammate stands within PartnerRevive.Radius for PartnerRevive.Seconds (no button;
-	moving inside the radius is fine). With nobody in range the progress drains at the same
-	rate instead of vanishing. Each player has a limited number of revives.
+	Elimination: the bleed ran out, or nobody could revive. The established paid path first
+	(C8): a saved revive token, else the Revive product offer (bounded wait). Otherwise out.
 ]]
-partnerRevives = function(dt: number)
-	local D = reviveRules()
-	if not D then
+local function eliminate(rp)
+	if rp.Eliminated or rp.AwaitingRevive or rp.Returned then
 		return
 	end
-	for _, rp in ipairs(runPlayers) do
-		if not rp.Alive and not rp.AwaitingRevive and not rp.Returned and rp.Root and (rp.PartnerRevives or 0) < D.PerRun then
-			local helper = nil
-			for _, other in ipairs(runPlayers) do
-				if other ~= rp and other.Alive and other.Root and not other.Paused and not other.Returned then
-					if ((other.Root.Position - rp.Root.Position) * FLAT).Magnitude <= D.Radius then
-						helper = other
-					end
-				end
-			end
-			local before = rp.ReviveProgress or 0
-			-- fills while a teammate stands in range, drains at the same rate when nobody is
-			if helper then
-				rp.ReviveProgress = math.min(1, before + dt / D.Seconds)
-			else
-				rp.ReviveProgress = math.max(0, before - dt / D.Seconds)
-			end
-			if math.abs((rp.ReviveProgress or 0) - before) > 0 then
-				rp.Player:SetAttribute("ReviveProgress", math.clamp(rp.ReviveProgress, 0, 1))
-			end
-			if rp.ReviveProgress >= 1 and helper then
-				rp.ReviveProgress = 0
-				rp.Player:SetAttribute("ReviveProgress", 0)
-				rp.PartnerRevives = (rp.PartnerRevives or 0) + 1
-				rp.Player:SetAttribute("PartnerRevivesLeft", D.PerRun - rp.PartnerRevives)
-				rp.TimeSurvived = 0
-				revive(rp, "Revived by " .. helper.Player.DisplayName .. "!")
-				Events.Fire("PartnerRevive", helper.Player)
-				setHP(rp, rp.Stats.MaxHP * D.HPFraction)
-				RunManager.Notify(helper.Player, "You revived " .. rp.Player.DisplayName .. "!", Color3.fromRGB(120, 255, 160), { Id = "team.revived." .. rp.Player.UserId })
-				if ctx.ReviveThanks then
-					ctx.ReviveThanks.OnRevived(rp, helper) -- ReviveThanks: the THANKS! offer (docs/next/REVIVE_THANKS.md)
-				end
+	clearReviveLinks(rp)
+	setProgress(rp, 0)
+	rp.Downed = false
+	rp.BleedLeft = nil
+	local data = rp.Player.Parent and ctx.DataService.GetData(rp.Player)
+	if data and (data.ReviveTokens or 0) > 0 and not rp.ProductReviveUsed then
+		data.ReviveTokens -= 1
+		rp.ProductReviveUsed = true
+		revive(rp, "Revive used!")
+		return
+	end
+	if data and not rp.ProductReviveUsed and ctx.MonetizationService.ReviveAvailable() then
+		setAwaiting(rp, true)
+		rp.ReviveDeadline = os.clock() + Config.Monetization.RevivePromptSeconds
+		publishDown(rp)
+		Remotes.FireClient("ReviveOffer", rp.Player, { Seconds = Config.Monetization.RevivePromptSeconds, ProductId = Config.Monetization.Products.Revive })
+		ctx.MonetizationService.PromptRevive(rp.Player)
+		return
+	end
+	finalizeElimination(rp)
+end
+
+-- Downed heroes nobody can reach any more are eliminated now (no waiting out the bleed).
+-- One at a time: a revive token spent by one of them makes them a rescuer for the rest.
+function RunManager.ResolveRescue()
+	if resolvingRescue or phase ~= "Running" then
+		return
+	end
+	resolvingRescue = true
+	for _ = 1, #runPlayers + 1 do
+		local victim = nil
+		for _, rp in ipairs(runPlayers) do
+			if rp.Downed and not rp.Returned and not canBeRescued(rp) then
+				victim = rp
+				break
 			end
 		end
+		if not victim or phase ~= "Running" then
+			break
+		end
+		eliminate(victim)
 	end
+	resolvingRescue = false
+end
+
+local function enterDowned(rp)
+	rp.Downed = true
+	rp.Eliminated = false
+	rp.BleedLeft = SD.BleedSeconds
+	setProgress(rp, 0)
+	publishDown(rp)
+	RunManager.Broadcast(rp.Player.DisplayName .. " is down! Hold interact beside them to revive.", Color3.fromRGB(255, 90, 90), nil, { Id = "team.fallen." .. rp.Player.UserId, Class = "Critical" })
+	ctx.StageManager.OnRosterChanged()
+	RunManager.RefreshFrozen()
 end
 
 local function onDowned(rp)
@@ -808,31 +1002,97 @@ local function onDowned(rp)
 		revive(rp, "Extra life used!")
 		return
 	end
-	-- a run item (Phoenix Feather) comes before paid revive tokens
+	-- a run item (Phoenix Feather) comes before going down
 	if ctx.ItemSystem.TryRevive(rp) then
 		revive(rp, "The Phoenix Feather burns: you rise again!")
 		return
 	end
-	local data = ctx.DataService.GetData(rp.Player)
-	if data and (data.ReviveTokens or 0) > 0 and not rp.ProductReviveUsed then
-		data.ReviveTokens -= 1
-		rp.ProductReviveUsed = true
-		revive(rp, "Revive used!")
-		return
+	takeDown(rp)
+	if canBeRescued(rp) then
+		enterDowned(rp)
+	else
+		eliminate(rp)
 	end
-	if not rp.ProductReviveUsed and ctx.MonetizationService.ReviveAvailable() then
-		-- Downed: wait for the player to buy (or decline) the revive.
-		rp.Alive = false
-		setAwaiting(rp, true)
-		rp.ReviveDeadline = os.clock() + Config.Monetization.RevivePromptSeconds
-		rp.Player:SetAttribute("Alive", false)
-		ctx.WeaponSystem.ClearOwner(rp)
-		setDownedLook(rp, true)
-		Remotes.FireClient("ReviveOffer", rp.Player, { Seconds = Config.Monetization.RevivePromptSeconds, ProductId = Config.Monetization.Products.Revive })
-		ctx.MonetizationService.PromptRevive(rp.Player)
-		return
+	RunManager.ResolveRescue()
+	checkEnd()
+end
+
+-- A revive held by `helper` on `target` may go on this frame.
+local function holdValid(helper, target): boolean
+	if helper == target or not helper.Alive or helper.Returned or not helper.Player.Parent then
+		return false
 	end
-	finalizeDeath(rp)
+	if helper.ReviveTarget ~= nil and helper.ReviveTarget ~= target then
+		return false
+	end
+	local at = helper.ReviveHeldAt
+	if not at or os.clock() - at > SD.HoldFreshSeconds then
+		return false
+	end
+	local a: BasePart? = helper.Root
+	local b: BasePart? = target.Root
+	return a ~= nil and b ~= nil and (a.Position - b.Position).Magnitude <= SD.ReviveRange
+end
+
+local function completeRevive(target, helper)
+	cancelRevive(target)
+	target.PartnerRevives = (target.PartnerRevives or 0) + 1
+	helper.Revives = (helper.Revives or 0) + 1 -- class goal "Revives" (stream E2 counts it at settlement)
+	revive(target, "Revived by " .. helper.Player.DisplayName .. "!", { HPShare = SD.ReviveHPShare, Protect = SD.ReviveProtectSeconds, Clear = false })
+	Events.Fire("PartnerRevive", helper.Player)
+	RunManager.Notify(helper.Player, "You revived " .. target.Player.DisplayName .. "!", Color3.fromRGB(120, 255, 160), { Id = "team.revived." .. target.Player.UserId })
+	if ctx.ReviveThanks then
+		ctx.ReviveThanks.OnRevived(target, helper) -- ReviveThanks: the THANKS! offer (docs/next/REVIVE_THANKS.md)
+	end
+end
+
+--[[
+	Per frame: bleed timers and held revives. `live` = the world is running (the bleed and the
+	revive progress pause while it is frozen or travelling; a held revive is not reset by that).
+]]
+local function stepDowned(dt: number, live: boolean)
+	for _, rp in ipairs(table.clone(runPlayers)) do
+		if rp.Downed and not rp.Returned and phase == "Running" then
+			if live then
+				local before = math.ceil((rp.BleedLeft or 0) * 10)
+				rp.BleedLeft = (rp.BleedLeft or SD.BleedSeconds) - dt
+				if rp.BleedLeft <= 0 then
+					eliminate(rp)
+					continue
+				end
+				if math.ceil(rp.BleedLeft * 10) ~= before then
+					rp.Player:SetAttribute("BleedLeft", math.ceil(rp.BleedLeft * 10) / 10)
+				end
+			end
+			local helper = rp.Reviver
+			if helper and not holdValid(helper, rp) then
+				cancelRevive(rp) -- let go, walked off, went down or left: start again
+				helper = nil
+			end
+			if not helper then
+				local best, bestD = nil, math.huge
+				for _, other in ipairs(runPlayers) do
+					if other.ReviveTarget == nil and holdValid(other, rp) then
+						local d = (other.Root.Position - rp.Root.Position).Magnitude
+						if d < bestD then
+							best, bestD = other, d
+						end
+					end
+				end
+				if best then
+					rp.Reviver = best
+					best.ReviveTarget = rp
+					helper = best
+				end
+			end
+			if helper and live then
+				setProgress(rp, math.min(1, (rp.ReviveProgress or 0) + dt / SD.ReviveSeconds))
+				if rp.ReviveProgress >= 1 then
+					completeRevive(rp, helper)
+				end
+			end
+		end
+	end
 end
 
 -- What kind of hit a cause string is (callers that do not pass one): "contact" | "projectile"
@@ -853,7 +1113,7 @@ end
 	DEV combat trace (DevTools "CombatTrace" sets rp.CombatTrace, only for devs, for one
 	run): one server Output line per hit on that player, never shown to players. Using it
 	is a DEV command, so the run is dev-tainted like every other one.
-	  [combat] t=<run time> src=<cause> kind=<contact|projectile|area|hazard> dmg=<n>
+	  [combat] t=<run time> src=<cause> kind=<contact|projectile|area|hazard|fall> dmg=<n>
 	           hp=<before>-><after> phase=<boss state | none> (blocked=<why> when ignored)
 ]]
 local function trace(rp, cause: string?, kind: string, dmg: number, before: number, after: number, blocked: string?)
@@ -862,9 +1122,10 @@ local function trace(rp, cause: string?, kind: string, dmg: number, before: numb
 	print(string.format("[combat] t=%.2f src=%s kind=%s dmg=%.1f hp=%.1f->%.1f phase=%s%s", runTime, cause or "Swarm damage", kind, dmg, before, after, phaseName, blocked and (" blocked=" .. blocked) or ""))
 end
 
--- Server-only damage entry point (enemy contact, explosions, boss projectiles).
--- kind: "contact" | "projectile" | "area" | "hazard" (nil = read from the cause). Contact
--- hits give a short contact-only grace (Config.Player.ContactGraceSeconds).
+-- Server-only damage entry point (enemy contact, explosions, boss projectiles, falls).
+-- kind: "contact" | "projectile" | "area" | "hazard" | "fall" (nil = read from the cause).
+-- Every ordinary hit starts the shared hit protection (Survival.HitProtectSeconds); a hit
+-- inside it is ignored, whoever lands it. Falls skip the hit protection and armor.
 function RunManager.DamagePlayer(rp, amount: number, cause: string?, kind: string?)
 	if amount ~= amount or math.abs(amount) == math.huge or amount <= 0 then return end
 	if not RunManager.IsSimulating() or not rp.Alive then
@@ -872,12 +1133,11 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?, kind: strin
 	end
 	local tracing = rp.CombatTrace == true -- DEV only (DevTools "CombatTrace")
 	local k = kind or hitKind(cause)
-	-- choosing an upgrade or watching a chest reward: that player can't be hurt (in a group
-	-- run the world keeps moving around them, see RefreshFrozen). Only a server-opened
-	-- panel counts (rp.Offer, bounded by LevelUpSystem's deadline and the protection
-	-- budget); the run menu, rewards (chest reels included) and client state never protect.
-	-- A solo reward hold freezes the whole world instead (RefreshFrozen).
-	if rp.Paused and rp.Offer ~= nil and Config.Player.LevelUpInvulnerable then
+	local fall = k == "fall"
+	-- an open upgrade / reward panel protects only while Survival.MenuProtection is on (off:
+	-- live menus never pause the world nor shield the chooser). A solo reward hold freezes the
+	-- whole world instead (RefreshFrozen).
+	if Survival.MenuProtection and rp.Paused and rp.Offer ~= nil and Config.Player.LevelUpInvulnerable then
 		if tracing then
 			trace(rp, cause, k, 0, rp.HP, rp.HP, "choice")
 		end
@@ -891,26 +1151,38 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?, kind: strin
 		return
 	end
 	local now = os.clock()
+	-- revive protection, a rescue's lockout, a return from a disconnect, an ultimate's guard
 	if runTime < rp.InvulnUntil then
 		if tracing then
 			trace(rp, cause, k, 0, rp.HP, rp.HP, "invulnerable")
 		end
 		return
 	end
-	if k == "contact" then
-		-- post-hit protection for body contact only (a crowd can't stack bites)
-		if runTime < (rp.ContactGraceUntil or 0) then
+	if not fall then
+		-- the shared hit protection: one window for every attacker (a crowd can't stack hits)
+		if runTime < (rp.HitProtectUntil or 0) then
 			if tracing then
-				trace(rp, cause, k, 0, rp.HP, rp.HP, "contact-grace")
+				trace(rp, cause, k, 0, rp.HP, rp.HP, "hit-protect")
 			end
 			return
 		end
-		rp.ContactGraceUntil = runTime + (Config.Player.ContactGraceSeconds or 0)
+		rp.HitProtectUntil = runTime + Survival.HitProtectSeconds
+		rp.Player:SetAttribute("HitProtectUntil", workspace:GetServerTimeNow() + Survival.HitProtectSeconds)
+	end
+	-- a reviver who is hit lets go: the revive starts again (Survival.Downed)
+	if rp.ReviveTarget then
+		cancelRevive(rp.ReviveTarget)
 	end
 	local hpBefore = rp.HP
-	local dmg = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
-	local taken = dmg -- after armor / Iron Plate, before the shield (Barbed Mail scales on it)
-	dmg = ctx.ItemSystem.AbsorbHit(rp, dmg) -- Guardian Ward shield first
+	local dmg, taken
+	if fall then
+		dmg = amount
+		taken = amount
+	else
+		dmg = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
+		taken = dmg -- after armor / Iron Plate, before the shield (Barbed Mail scales on it)
+		dmg = ctx.ItemSystem.AbsorbHit(rp, dmg) -- Guardian Ward shield first
+	end
 	if dmg > 0 then
 		rp.DamageHistory = rp.DamageHistory or {}
 		table.insert(rp.DamageHistory, { Cause = cause or "Swarm damage", Damage = math.min(dmg, rp.HP), Time = runTime })
@@ -934,22 +1206,45 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?, kind: strin
 		onDowned(rp)
 		return
 	end
+	if fall then
+		return -- no on-hurt procs from the ground
+	end
 	if ctx.FinalStand then ctx.FinalStand.OnHurt(rp) end -- under 10% HP: Final Stand (once per stage)
 	ctx.ItemSystem.OnHurt(rp, amount, taken) -- Barbed Mail
 end
 
--- A revive product was bought (MonetizationService). Spend the token now if possible.
+--[[
+	A landing the server saw (Dash.lua's landing check): `drop` = studs from the highest point
+	of the fall to the landing. No damage up to Survival.Fall.SafeDrop (18), then PerStud (2%) of
+	max HP per extra stud, at most MaxShare (35%) per landing; rp.Stats.FallDamageReduction (0..1,
+	the Spring Stitch passive, stream B) scales it down. Leaps, launch pads, rescues and
+	teleports never count (Dash.lua skips those landings).
+]]
+function RunManager.OnFallLanding(rp, drop: number)
+	if phase ~= "Running" or not rp.Alive or rp.Returned or not rp.Stats then
+		return
+	end
+	local stats: any = rp.Stats
+	local dmg = SurvivalRules.FallDamage(drop, rp.Stats.MaxHP, stats.FallDamageReduction)
+	rp.LastLanding = { Drop = drop, Damage = dmg, At = runTime }
+	if dmg > 0 then
+		RunManager.DamagePlayer(rp, dmg, "Fall", "fall")
+	end
+end
+
+-- A revive product was bought (MonetizationService). Spend the token now if possible: on a
+-- hero deciding on the offer, or one eliminated while Roblox's purchase dialog was still open.
+-- A downed hero keeps it: it is spent automatically if their bleed runs out.
 function RunManager.OnReviveTokenGranted(player: Player)
 	local rp = byPlayer[player]
 	local data = ctx.DataService.GetData(player)
-	-- Also revive a player whose offer timed out while Roblox's purchase dialog was open.
-	local fallen = rp and not rp.Alive and (rp.AwaitingRevive or not rp.ProductReviveUsed)
+	local fallen = rp and not rp.Alive and not rp.Downed and (rp.AwaitingRevive or (rp.Eliminated and not rp.ProductReviveUsed))
 	if rp and fallen and not rp.Returned and phase == "Running" and data and data.ReviveTokens > 0 then
 		data.ReviveTokens -= 1
 		rp.ProductReviveUsed = true
 		revive(rp, "Revived!")
 	else
-		RunManager.Notify(player, "Revive saved. It will be used automatically next time you fall.", Color3.fromRGB(255, 230, 120))
+		RunManager.Notify(player, "Revive saved. It will be used automatically next time you are out.", Color3.fromRGB(255, 230, 120))
 	end
 	ctx.GoldSystem.SyncProfile(player)
 end
@@ -1072,6 +1367,10 @@ local function resetPlayerAttributes(player: Player)
 	player:SetAttribute("PartnerRevivesLeft", nil)
 	player:SetAttribute("AwaitingRevive", nil)
 	player:SetAttribute("CharacterId", nil)
+	-- [stream E1] survival state
+	for _, name in ipairs({ "Downed", "BleedLeft", "Eliminated", "Spectating", "HitProtectUntil", "ReviveProtectUntil", "SpeedBoost", "SpeedBoostUntil" }) do
+		player:SetAttribute(name, nil)
+	end
 end
 
 local function placeOnArena(arena, i: number, n: number): Vector3
@@ -1177,8 +1476,11 @@ local function setupRunPlayer(player: Player, i: number, count: number, arena: a
 	-- chest / shrine prices are shown x this (gamepass owners earn and pay more)
 	player:SetAttribute("GoldMult", ctx.MonetizationService.GoldMultiplier(player))
 	ctx.ItemSystem.Send(rp)
-	local rules = reviveRules()
-	player:SetAttribute("PartnerRevivesLeft", rules and count > 1 and rules.PerRun or 0)
+	-- [stream E1] downed / eliminated state (all false at the start)
+	publishDown(rp)
+	setProgress(rp, 0)
+	player:SetAttribute("HitProtectUntil", 0)
+	player:SetAttribute("ReviveProtectUntil", 0)
 	ctx.WeaponSystem.OnInventoryChanged(rp)
 	ctx.LevelUpSystem.SendInventory(rp)
 	RunManager.ApplyMovement(rp)
@@ -1642,7 +1944,15 @@ end
 
 -- Clears the run world and goes back to the Lobby phase.
 local function returnAll(how: string?)
+	-- [stream E1] a hero still inside their disconnect window when the run ends: settled once
+	for userId, entry in pairs(disconnected) do
+		if entry.Window and entry.Player and not entry.Player.Committed and entry.Player.RunId == runId then
+			settleAway(entry.Player, userId)
+		end
+	end
 	table.clear(disconnected)
+	state:SetAttribute("AwayIds", "")
+	state:SetAttribute("AwayUntil", 0)
 	RunManager.SoloAway = nil -- QuickResume: a held solo run ends with the world
 	for _, rp in ipairs(runPlayers) do
 		returnPlayerToLobby(rp, how)
@@ -1673,6 +1983,7 @@ end
 -- Takes a record out of the running run (portal return, leaving the game). Other
 -- systems may still hold it (enemy targets, delayed whip slashes), so it is made inert.
 local function removeFromRun(rp)
+	clearReviveLinks(rp) -- [stream E1] a revive they held (or received) stops
 	rp.Alive = false
 	rp.AwaitingRevive = false
 	ctx.WeaponSystem.ClearOwner(rp)
@@ -1750,6 +2061,7 @@ function RunManager.AbandonRun(rp)
 	else
 		RunManager.Broadcast(rp.Player.DisplayName .. " returned to the main menu.", Color3.fromRGB(255, 200, 120), nil, { Id = "team.left." .. rp.Player.UserId })
 		ctx.StageManager.OnRosterChanged()
+		RunManager.ResolveRescue() -- [stream E1] downed teammates nobody can reach now are out
 		checkEnd() -- only fallen teammates left: their run ends as a defeat
 	end
 end
@@ -1786,6 +2098,9 @@ function RunManager.TeleportPlayer(rp, floorPos: Vector3)
 	rp.LastValidPos = pos
 	rp.SafePos = pos
 	rp.SpeedCheckTimer = 0
+	-- [stream E1] a teleport is no fall: Dash.lua's landing check starts over (no fall damage,
+	-- no landing ability from the arrival)
+	rp.AirReset = true
 end
 
 --[[
@@ -1807,6 +2122,9 @@ function RunManager.TravelPlayers(arena, stay: boolean?)
 			end
 			rp.Alive = true
 			setAwaiting(rp, false)
+			clearReviveLinks(rp)
+			rp.Downed, rp.Eliminated, rp.BleedLeft = false, false, nil -- [stream E1] (old stage loop only)
+			publishDown(rp)
 			rp.ReviveProgress = 0
 			rp.TimeSurvived = 0
 			rp.Player:SetAttribute("ReviveProgress", 0)
@@ -2204,6 +2522,123 @@ local function setupPreviews()
 end
 
 ------------------------------------------------------------------------------------------
+-- Disconnect window  [stream E1, RunConfig.Survival.Disconnect]
+------------------------------------------------------------------------------------------
+--[[
+	A living hero who drops out of a run that goes on (another member is still connected) keeps
+	their record for Survival.Disconnect.WindowSeconds (60): HP, build, levels, cooldown clocks
+	(rp.DashReadyAt ...) and escrow. Meanwhile they are out of runPlayers, so they cannot attack,
+	be hit or collect XP. Coming back inside the window resumes that same record (SwarmV2 matches:
+	RunManager.ReconnectAdmitted from RunEntry; the old run-server route: TryReconnect). When the
+	window ends they are eliminated and settled once (saveRunStats when they are on this server,
+	else the boards here and their escrow on their next load, GoldSystem.RecoverEscrow); a later
+	authorized return can only watch. A hero who was downed or eliminated when they dropped is
+	settled at once and may also come back to watch. Lifetime stats are checkpointed at the drop
+	(as the old co-op rejoin did): a hero who never returns keeps those and the escrow's kept
+	share, not the run's account / mastery XP.
+	A wipe waits only for living heroes inside a window. While no connected living hero remains
+	and someone is inside one, the world is held (RefreshFrozen), so nobody returns into a run
+	that went on without anyone; the bleed timers wait with it.
+	SwarmState: AwayIds (",userId,"), AwayUntil (server time the last window ends, 0 = none).
+]]
+
+-- Living heroes inside their disconnect window right now.
+function RunManager.AwayInWindow(): number
+	local n, now = 0, os.clock()
+	for _, entry in pairs(disconnected) do
+		if entry.Window and not entry.Expired and now < (entry.Until or 0) then
+			n += 1
+		end
+	end
+	return n
+end
+
+-- True when this server holds a resumable record for this user (GoldSystem keeps their escrow
+-- on a profile load here instead of settling it).
+function RunManager.HoldsReconnect(userId: number): boolean
+	local entry = disconnected[userId]
+	if phase ~= "Running" or entry == nil then
+		return false
+	end
+	if entry.Window and not entry.Expired and os.clock() < (entry.Until or 0) then
+		return true
+	end
+	return RunManager.SoloAway ~= nil and RunManager.SoloAway.UserId == userId
+end
+
+publishAway = function()
+	local ids, last = {}, 0
+	local now = os.clock()
+	for userId, entry in pairs(disconnected) do
+		if entry.Window and not entry.Expired and now < (entry.Until or 0) then
+			table.insert(ids, tostring(userId))
+			last = math.max(last, (entry.Until or 0) - now)
+		end
+	end
+	table.sort(ids)
+	state:SetAttribute("AwayIds", #ids > 0 and ("," .. table.concat(ids, ",") .. ",") or "")
+	state:SetAttribute("AwayUntil", #ids > 0 and (workspace:GetServerTimeNow() + last) or 0)
+end
+
+--[[
+	Settles an away record once (its window ended, a held solo run ended, shutdown, the run
+	ended without them). The player back on this server (not in the run): the normal leave
+	commit (saveRunStats). Away: the boards get the run's score here; the gold settles on their
+	next load. Returns the player when they were here.
+]]
+settleAway = function(rp, userId: number): Player?
+	if rp.Committed then
+		return nil
+	end
+	local here = game:GetService("Players"):GetPlayerByUserId(userId)
+	local data = here and not byPlayer[here] and not ctx.DataService.IsReleased(here) and ctx.DataService.GetData(here)
+	if here and data then
+		rp.Player = here
+		saveRunStats(rp, false)
+		return here
+	end
+	rp.Committed = true
+	if not rp.DevTainted then
+		local cleared = ctx.StageManager.StagesCleared()
+		local score = ctx.LeaderboardService.RunScore({ Cleared = cleared, Bosses = bossKills, Level = rp.Level, Kills = rp.Kills, Seconds = runTime })
+		local board = rp.Endless and "ScoreEndless" or "Score"
+		ctx.LeaderboardService.Submit(rp.Player, board, score, nil, rp.RunId)
+		ctx.LeaderboardService.Submit(rp.Player, "BestStage", ctx.StageManager.GetStage(), nil, rp.RunId)
+		ctx.LeaderboardService.Submit(rp.Player, "Kills", rp.Kills, nil, rp.RunId)
+		ctx.LeaderboardService.Submit(rp.Player, "Level", rp.Level or 1, nil, rp.RunId)
+	end
+	return nil
+end
+
+-- Per frame: windows that ran out eliminate their hero (once).
+local function stepAway()
+	local now = os.clock()
+	local changed = false
+	for userId, entry in pairs(disconnected) do
+		if entry.Window and not entry.Expired and now >= (entry.Until or 0) then
+			entry.Expired = true
+			entry.Spectate = true
+			changed = true
+			local rp = entry.Player
+			rp.Alive, rp.Downed, rp.Eliminated = false, false, true
+			local here = settleAway(rp, userId)
+			if here then
+				ctx.GoldSystem.SyncProfile(here)
+			end
+			if phase == "Running" then
+				RunManager.Broadcast(rp.Player.DisplayName .. " didn't make it back in time.", Color3.fromRGB(255, 200, 120), nil, { Id = "team.left." .. tostring(userId) })
+			end
+		end
+	end
+	if changed then
+		publishAway()
+		RunManager.ResolveRescue()
+		RunManager.RefreshFrozen()
+		checkEnd()
+	end
+end
+
+------------------------------------------------------------------------------------------
 -- Per-frame
 ------------------------------------------------------------------------------------------
 
@@ -2251,17 +2686,20 @@ local function speedCheck(rp, dt: number)
 	local moved = ((pos - last) * FLAT).Magnitude
 	-- paused (level-up), frozen or downed players may not travel at all
 	-- (ice makes players faster: BiomeHazards' TerrainSpeedMult > 1)
-	local maxSpeed = (rp.Paused or rp.RewardUntil or frozen or not rp.Alive) and 0 or math.max(rp.Stats.Speed, Config.Player.BaseSpeed) * math.max(1, rp.TerrainSpeedMult or 1) * (rp.RushMult or 1)
-	-- hop cap: the client may raise its own WalkSpeed up to HopSpeedCap while chaining hops
-	local allowed = maxSpeed * Config.Movement.HopSpeedCap * Config.Movement.ServerTolerance * elapsed + Config.Player.SpeedCheckAllowance
+	-- [stream E1] never above the generic cap (Survival.Move.HorizontalCap, 34) or an explicit
+	-- class boost (RunManager.SetSpeedBoost). No bunny-hop multiplier: chained jumps add nothing.
+	local SM = Survival.Move
+	local maxSpeed = (rp.Paused or rp.RewardUntil or frozen or not rp.Alive) and 0
+		or math.min(math.max(rp.Stats.Speed, Config.Player.BaseSpeed) * math.max(1, rp.TerrainSpeedMult or 1) * (rp.RushMult or 1), RunManager.SpeedLimit(rp))
+	local allowed = maxSpeed * SM.ServerTolerance * elapsed + SM.SpeedAllowance
 	-- dash / leap (SwarmV2 Run.Dash, validated there): the same pattern as RushMult. While the
 	-- dash is current, or ended less than AllowTail ago (plus this check window, which may have
-	-- started before it ended), max(normal, DashSpeed * 1.15) is allowed. A leap carries its own
-	-- rp.DashAllow (horizontal speed * 1.2). Never for a paused, frozen or downed player.
+	-- started before it ended), max(normal, DashSpeed * AllowMult) is allowed. A leap carries its
+	-- own rp.DashAllow (horizontal speed * LeapAllowMult). Never for a paused, frozen or downed player.
 	local dashUntil: number? = rp.DashUntil
-	if maxSpeed > 0 and dashUntil and os.clock() < dashUntil + 0.25 + elapsed then
-		local dashSpeed: number = rp.DashAllow or (rp.DashSpeed or 0) * 1.15
-		allowed = math.max(allowed, dashSpeed * elapsed + Config.Player.SpeedCheckAllowance)
+	if maxSpeed > 0 and dashUntil and os.clock() < dashUntil + DashRules.AllowTail + elapsed then
+		local dashSpeed: number = rp.DashAllow or (rp.DashSpeed or 0) * DashRules.AllowMult
+		allowed = math.max(allowed, dashSpeed * elapsed + SM.SpeedAllowance)
 	end
 	if moved > allowed then
 		root.CFrame = CFrame.new(last + Vector3.new(0, 0.5, 0)) * root.CFrame.Rotation
@@ -2275,14 +2713,16 @@ end
 
 --[[
 	Safety net against falling through the map (a floor that had not reached the client
-	yet after travel, a physics push through the thin floor): a run player whose root is
-	RESCUE_BELOW studs under the floor top, or well outside the arena, is put back on the
-	last safe floor spot (rp.SafePos: standing height, inside the arena) or the arena
-	centre. No damage; a living player gets RESCUE_GRACE seconds of invulnerability.
-	Downed (anchored) players are moved too, so teammates can still reach them.
+	yet after travel, a physics push through the thin floor) and out-of-bounds rescue: a run
+	player whose root is RESCUE_BELOW studs under the floor top, or well outside the arena, is
+	put back on the last verified safe surface (rp.SafePos: standing height on walkable ground,
+	inside the arena) or the arena spawn. [stream E1, Survival.Rescue] A living hero pays at most
+	MaxHPShare (10%) of max HP (never their last hit point, nothing during an earlier rescue's
+	lockout) and gets LockoutSeconds (3) without damage. No XP or healing; the arrival is no
+	landing (no fall damage, no landing ability: rp.AirReset via TeleportPlayer). Downed
+	(anchored) players are moved too, for free, so teammates can still reach them.
 ]]
 local RESCUE_BELOW = 4
-local RESCUE_GRACE = 1.5
 local function arenaHalf(): number
 	return ((Config.Arenas :: any).Size or 400) / 2
 end
@@ -2336,7 +2776,17 @@ local function fallRescue(rp): boolean
 	end
 	RunManager.TeleportPlayer(rp, Vector3.new(safe.X, HeightGrid.GroundY(safe.X, safe.Z), safe.Z))
 	if rp.Alive then
-		rp.InvulnUntil = math.max(rp.InvulnUntil or 0, runTime + RESCUE_GRACE)
+		local lockout = Survival.Rescue.LockoutSeconds
+		-- the cost (inside an earlier rescue's lockout, or any other protection, there is none)
+		if runTime >= (rp.InvulnUntil or 0) and rp.Player:GetAttribute("DevGod") ~= true then
+			local cost = SurvivalRules.RescueCost(rp.Stats.MaxHP, rp.HP)
+			if cost > 0 then
+				setHP(rp, rp.HP - cost)
+				rp.RescueCost = (rp.RescueCost or 0) + cost
+				Fx.PlayerEvent(rp.Player, "hurt")
+			end
+		end
+		rp.InvulnUntil = math.max(rp.InvulnUntil or 0, runTime + lockout)
 	end
 	rp.FallRescues = (rp.FallRescues or 0) + 1
 	warn(string.format("[RunManager] %s fell out of the arena at (%.0f, %.0f, %.0f); put back on the floor", rp.Player.Name, pos.X, pos.Y, pos.Z))
@@ -2438,13 +2888,17 @@ function RunManager.Step(dt: number)
 			if menuPaused or frozen or ctx.StageManager.IsHolding() then
 				rp.ReviveDeadline += dt
 			elseif now >= rp.ReviveDeadline then
-				finalizeDeath(rp)
+				finalizeElimination(rp)
 			end
 		end
 	end
 	local holding = ctx.StageManager.IsHolding()
-	if reviveRules() and not frozen and not holding then
-		partnerRevives(dt)
+	-- [stream E1] bleed timers and held revives (paused while the world is frozen / travelling),
+	-- then the disconnect windows
+	stepDowned(dt, phase == "Running" and not frozen and not holding)
+	stepAway()
+	if phase ~= "Running" then
+		return
 	end
 
 	if frozen or holding then
@@ -2488,20 +2942,25 @@ function RunManager.OnPlayerRemoving(player: Player)
 		return
 	end
 	local wasInRun = phase == "Running" and not rp.Returned
-	local resumable = false
-	if wasInRun and rp.Alive and not rp.Committed and ctx.RunServers and ctx.RunServers.CanReconnect(rp) then
-		for _, other in ipairs(runPlayers) do
-			if other ~= rp and other.Alive and not other.Returned and other.Player.Parent then resumable = true; break end
+	clearReviveLinks(rp)
+	-- [stream E1] the run goes on without this hero for now: another member is still connected
+	local others = false
+	for _, other in ipairs(runPlayers) do
+		if other ~= rp and not other.Returned and other.Player ~= player and other.Player.Parent then
+			others = true
+			break
 		end
 	end
+	-- a living hero keeps their record for the disconnect window (Survival.Disconnect)
+	local windowed = wasInRun and rp.Alive and not rp.Committed and others and Survival.Disconnect.WindowSeconds > 0
 	-- QuickResume (docs/next/QUICK_RESUME.md): a solo run waits, frozen, for its player
-	local soloHold = not resumable and wasInRun and ctx.QuickResume ~= nil and ctx.QuickResume.CanHold(rp, #runPlayers, maxPlayers())
-	if resumable or soloHold then
+	local soloHold = not windowed and wasInRun and ctx.QuickResume ~= nil and ctx.QuickResume.CanHold(rp, #runPlayers, maxPlayers())
+	local data = ctx.DataService.GetData(player)
+	if windowed or soloHold then
 		ctx.LevelUpSystem.Cancel(rp, true)
-		local data = ctx.DataService.GetData(player)
 		-- Preserve lifetime progress even if reconnect never succeeds. Completion rewards
 		-- wait until the run actually ends; the kill delta prevents counting this twice.
-		if not rp.DevTainted then
+		if data and not rp.DevTainted then
 			data.Stats.TotalKills += math.max(0, rp.Kills - (rp.DisconnectRecordedKills or 0))
 			rp.DisconnectRecordedKills = rp.Kills
 			data.Stats.MostKills = math.max(data.Stats.MostKills or 0, rp.Kills)
@@ -2512,17 +2971,33 @@ function RunManager.OnPlayerRemoving(player: Player)
 		local snapshot = table.clone(rp)
 		snapshot.Root, snapshot.Character, snapshot.Humanoid = nil, nil, nil
 		snapshot.ReviveHeld, snapshot.RewardUntil, snapshot.RewardSeq = false, nil, 0
+		snapshot.ReviveHeldAt, snapshot.ReviveTarget, snapshot.Reviver = nil, nil, nil
+		snapshot.ResumePos = rp.Root and rp.Root.Position or nil
 		if soloHold then
-			snapshot.ResumePos = rp.Root and rp.Root.Position or nil
-			local expires = ctx.QuickResume.Mark(rp, data)
-			RunManager.SoloAway = { UserId = player.UserId, Expires = expires, RunId = rp.RunId }
-			disconnected[player.UserId] = { Player = snapshot, Expires = expires }
+			if data then
+				local expires = ctx.QuickResume.Mark(rp, data)
+				RunManager.SoloAway = { UserId = player.UserId, Expires = expires, RunId = rp.RunId }
+				disconnected[player.UserId] = { Player = snapshot, Expires = expires }
+			end
 		else
-			data.RunReconnect.Expires = os.time() + Config.RunServers.RejoinGraceSeconds
-			disconnected[player.UserId] = { Player = snapshot, Expires = data.RunReconnect.Expires }
+			local window = Survival.Disconnect.WindowSeconds
+			local expires = os.time() + window
+			if data and data.RunReconnect and ctx.RunServers and ctx.RunServers.CanReconnect(rp) then
+				data.RunReconnect.Expires = expires -- the old run-server route (lobby RESUME / auto rejoin)
+			end
+			disconnected[player.UserId] = { Player = snapshot, Expires = expires, Until = os.clock() + window, Window = true }
 		end
 	elseif wasInRun then
 		saveRunStats(rp, false)
+		if others then
+			-- [stream E1] downed / eliminated when they dropped: settled now; a later authorized
+			-- return may watch the rest of the run, never play it again
+			local snapshot = table.clone(rp)
+			snapshot.Root, snapshot.Character, snapshot.Humanoid = nil, nil, nil
+			snapshot.ReviveHeldAt, snapshot.ReviveTarget, snapshot.Reviver, snapshot.RewardUntil = nil, nil, nil, nil
+			snapshot.Alive, snapshot.Downed, snapshot.Eliminated, snapshot.AwaitingRevive = false, false, true, false
+			disconnected[player.UserId] = { Player = snapshot, Expires = math.huge, Spectate = true }
+		end
 	end
 	-- other systems may still hold this record (enemy targets, delayed whip slashes)
 	if wasInRun then
@@ -2531,34 +3006,39 @@ function RunManager.OnPlayerRemoving(player: Player)
 	removeFromRun(rp)
 	if wasInRun and #runPlayers > 0 then
 		-- teammates see who dropped out (their HUD team list removes the row by itself)
-		RunManager.Broadcast(player.DisplayName .. " left the run.", Color3.fromRGB(255, 200, 120), nil, { Id = "team.left." .. player.UserId })
+		if windowed then
+			RunManager.Broadcast(string.format("%s disconnected: %d s to come back.", player.DisplayName, Survival.Disconnect.WindowSeconds), Color3.fromRGB(255, 200, 120), nil, { Id = "team.left." .. player.UserId })
+		else
+			RunManager.Broadcast(player.DisplayName .. " left the run.", Color3.fromRGB(255, 200, 120), nil, { Id = "team.left." .. player.UserId })
+		end
 	end
 	rp.Root = nil
+	publishAway()
 	if phase == "Running" then
 		if #runPlayers == 0 then
 			-- nobody is left to see results: clear the run world straight away (a held solo
-			-- run stays, frozen, for QuickResume)
-			if not RunManager.SoloAway then
+			-- run stays, frozen, for QuickResume; a run with someone inside the disconnect
+			-- window stays, held, until they return or the window ends)
+			if not RunManager.SoloAway and RunManager.AwayInWindow() == 0 then
 				returnAll()
+			else
+				RunManager.RefreshFrozen()
 			end
 		else
 			ctx.StageManager.OnRosterChanged()
+			RunManager.ResolveRescue()
+			RunManager.RefreshFrozen()
 			checkEnd()
 		end
 	end
 end
 
--- Restores only a server-held record from this same still-running expedition.
--- The saved ledger must still match; a lobby settlement makes a stale replay fail closed.
-function RunManager.TryReconnect(player: Player, id: string): boolean
-	local saved = disconnected[player.UserId]
-	local data = ctx.DataService.GetData(player)
-	-- QuickResume: this player's held solo run (no co-op route needed on the same server)
-	local solo = RunManager.SoloAway ~= nil and RunManager.SoloAway.UserId == player.UserId
-	if phase ~= "Running" or byPlayer[player] or not saved or saved.Expires <= os.time()
-		or saved.Player.RunId ~= runId or id ~= runId or not data or not data.RunEscrow
-		or data.RunEscrow.Id ~= runId or not (solo or (data.RunReconnect and data.RunReconnect.Id == runId))
-		or saved.Player.Committed or #runPlayers >= maxPlayers() then return false end
+--[[
+	Puts a held record back into the run for its returning player (same HP, build, levels,
+	cooldown clocks and escrow; never healed, never a new life). The record is consumed first.
+	solo = a QuickResume hold. False when the character can't be built.
+]]
+local function restoreRecord(player: Player, saved, solo: boolean, data): boolean
 	local rp = saved.Player
 	-- Consume before callbacks or any operation that may yield.
 	disconnected[player.UserId] = nil
@@ -2580,16 +3060,19 @@ function RunManager.TryReconnect(player: Player, id: string): boolean
 	end
 	rp.DevTainted = rp.DevTainted or runDevTainted
 	rp.LastValidPos, rp.SpeedCheckTimer, rp.OnObstacleFor = nil, 0, 0
-	rp.ReviveHeld, rp.RewardUntil, rp.Paused = false, nil, false
+	rp.ReviveHeld, rp.ReviveHeldAt, rp.ReviveTarget, rp.Reviver = false, nil, nil, nil
+	rp.RewardUntil, rp.Paused = nil, false
 	rp.PortalChoice, rp.PortalOffered = nil, false
+	rp.Alive, rp.Downed, rp.Eliminated, rp.BleedLeft = true, false, false, nil
 	local arena = MapBuilder.GetArena()
 	local position = HeightGrid.Ground(arena and arena.Center or Config.ArenaOrigin)
 	for _, teammate in ipairs(runPlayers) do
 		if teammate.Alive and teammate.Root then position = teammate.Root.Position; break end
 	end
-	if rp.ResumePos then
-		position, rp.ResumePos = rp.ResumePos, nil -- a resumed solo hero comes back where it stood
+	if solo and rp.ResumePos then
+		position = rp.ResumePos -- a resumed solo hero comes back where it stood
 	end
+	rp.ResumePos = nil
 	local model = spawnCharacter(player, CFrame.new(position + Vector3.new(3, 3.5, 0)), false, rp.CharacterId)
 	if not model then
 		if solo and #runPlayers == 0 then
@@ -2603,7 +3086,8 @@ function RunManager.TryReconnect(player: Player, id: string): boolean
 	table.insert(runPlayers, rp)
 	byPlayer[player] = rp
 	RunManager.AttachCharacter(rp, model)
-	rp.InvulnUntil = runTime + 2
+	-- a short landing grace, not a new life (Survival.Disconnect.ReturnProtectSeconds)
+	rp.InvulnUntil = runTime + Survival.Disconnect.ReturnProtectSeconds
 	if ctx.TeamPingService then ctx.TeamPingService.Assign(rp, 1) end
 	ctx.LevelUpSystem.RecomputeStats(rp)
 	setHP(rp, rp.HP)
@@ -2616,13 +3100,22 @@ function RunManager.TryReconnect(player: Player, id: string): boolean
 	player:SetAttribute("Kills", rp.Kills)
 	player:SetAttribute("RunGold", rp.Gold)
 	player:SetAttribute("GoldMult", ctx.MonetizationService.GoldMultiplier(player))
-	local rules = reviveRules()
-	player:SetAttribute("PartnerRevivesLeft", rules and math.max(0, rules.PerRun - (rp.PartnerRevives or 0)) or 0)
+	-- [stream E1] the same cooldown clocks as before the drop (os.clock based, same server)
+	local dashLeft = math.max(0, (rp.DashReadyAt or 0) - os.clock())
+	player:SetAttribute("DashReadyAt", dashLeft > 0 and workspace:GetServerTimeNow() + dashLeft or 0)
+	if type(rp.DashCd) == "number" then
+		player:SetAttribute("DashCd", rp.DashCd)
+	end
+	publishDown(rp)
+	setProgress(rp, 0)
+	player:SetAttribute("HitProtectUntil", 0)
+	player:SetAttribute("ReviveProtectUntil", 0)
 	ctx.ItemSystem.Send(rp)
 	ctx.WeaponSystem.OnInventoryChanged(rp)
 	ctx.LevelUpSystem.SendInventory(rp)
 	ctx.LevelUpSystem.QueueLevels(rp, 0)
 	state:SetAttribute("Participants", #runPlayers)
+	publishAway()
 	-- the teammate's solo pause menu froze the world while they were alone: a group run
 	-- again, so nobody can hold the rejoined player frozen
 	if menuPaused and #runPlayers > 1 then
@@ -2634,11 +3127,110 @@ function RunManager.TryReconnect(player: Player, id: string): boolean
 	return true
 end
 
+-- [stream E1] An eliminated (or settled) member came back: they watch the rest of the run.
+-- Never alive again and never a second settlement (the record is already committed).
+local function spectateRecord(player: Player, saved): boolean
+	local rp = saved.Player
+	if not rp.Committed then
+		rp.Player = player
+		saveRunStats(rp, false) -- (normally done when they left or when their window ended)
+	end
+	local arena = MapBuilder.GetArena()
+	local position = HeightGrid.Ground(arena and arena.Center or Config.ArenaOrigin)
+	for _, teammate in ipairs(runPlayers) do
+		if teammate.Alive and teammate.Root then position = teammate.Root.Position; break end
+	end
+	local model = spawnCharacter(player, CFrame.new(position + Vector3.new(3, 3.5, 0)), false, rp.CharacterId)
+	if not model then
+		return false
+	end
+	disconnected[player.UserId] = nil
+	rp.Player = player
+	rp.Alive, rp.Downed, rp.Eliminated, rp.BleedLeft = false, false, true, nil
+	rp.AwaitingRevive, rp.ReviveHeld, rp.ReviveHeldAt, rp.ReviveTarget, rp.Reviver = false, false, nil, nil, nil
+	rp.RewardUntil, rp.Paused, rp.Offer, rp.ResumePos = nil, false, nil, nil
+	rp.LastValidPos, rp.SpeedCheckTimer = nil, 0
+	table.insert(runPlayers, rp)
+	byPlayer[player] = rp
+	RunManager.AttachCharacter(rp, model)
+	setDownedLook(rp, true)
+	player:SetAttribute("CharacterId", rp.CharacterId)
+	player:SetAttribute("InRun", true)
+	player:SetAttribute("Alive", false)
+	player:SetAttribute("AwaitingRevive", nil)
+	player:SetAttribute("Level", rp.Level)
+	player:SetAttribute("XP", rp.XP)
+	player:SetAttribute("XPNeeded", rp.XPNeeded)
+	player:SetAttribute("Kills", rp.Kills)
+	player:SetAttribute("HP", 0)
+	publishDown(rp)
+	setProgress(rp, 0)
+	state:SetAttribute("Participants", #runPlayers)
+	RunManager.RefreshFrozen()
+	RunManager.Broadcast(player.DisplayName .. " is back, watching the run.", Color3.fromRGB(200, 220, 255), nil, { Id = "team.rejoined." .. player.UserId })
+	return true
+end
+
+-- Restores only a server-held record from this same still-running expedition.
+-- The saved ledger must still match; a lobby settlement makes a stale replay fail closed.
+-- (The old run-server route and QuickResume; SwarmV2 matches use ReconnectAdmitted.)
+function RunManager.TryReconnect(player: Player, id: string): boolean
+	local saved = disconnected[player.UserId]
+	local data = ctx.DataService.GetData(player)
+	-- QuickResume: this player's held solo run (no co-op route needed on the same server)
+	local solo = RunManager.SoloAway ~= nil and RunManager.SoloAway.UserId == player.UserId
+	if phase ~= "Running" or byPlayer[player] or not saved or saved.Spectate or saved.Expired or saved.Expires <= os.time()
+		or (saved.Until ~= nil and os.clock() >= saved.Until)
+		or saved.Player.RunId ~= runId or id ~= runId or not data or not data.RunEscrow
+		or data.RunEscrow.Id ~= runId or not (solo or (data.RunReconnect and data.RunReconnect.Id == runId))
+		or saved.Player.Committed or #runPlayers >= maxPlayers() then return false end
+	return restoreRecord(player, saved, solo, data)
+end
+
+--[[
+	[stream E1] SwarmV2: a member MatchAdmission already admitted to this match came back
+	(RunEntry: the arrival barrier says "duplicate"). Inside their disconnect window, with their
+	escrow still this run's: the same hero resumes ("resumed"). After the window, or when they
+	were downed / eliminated when they dropped: they watch ("spectating"). Otherwise "refused"
+	(RunEntry sends them back to the lobby with the reason). Never trusts anything the client sent.
+]]
+function RunManager.ReconnectAdmitted(player: Player): string
+	local saved = disconnected[player.UserId]
+	if phase ~= "Running" or byPlayer[player] or not saved or saved.Player.RunId ~= runId then
+		return "refused"
+	end
+	local data = ctx.DataService.GetData(player)
+	if not data then
+		return "refused"
+	end
+	local open = saved.Window == true and not saved.Expired and os.clock() < (saved.Until or 0)
+	if open and not saved.Player.Committed and type(data.RunEscrow) == "table" and data.RunEscrow.Id == runId then
+		return restoreRecord(player, saved, false, data) and "resumed" or "refused"
+	end
+	if open then
+		-- their escrow was settled elsewhere meanwhile (they loaded into a lobby): that was a
+		-- departure; no second settlement, they may only watch
+		saved.Expired, saved.Spectate = true, true
+		saved.Player.Committed = true
+		publishAway()
+	end
+	if saved.Spectate or saved.Expired or saved.Window then
+		return spectateRecord(player, saved) and "spectating" or "refused"
+	end
+	return "refused"
+end
+
 -- Commits stats of everyone in a run (server shutdown).
 function RunManager.CommitAll()
 	for _, rp in ipairs(runPlayers) do
 		if not rp.Returned and phase == "Running" then
 			saveRunStats(rp, false)
+		end
+	end
+	-- [stream E1] heroes inside their disconnect window: settled once (boards here, escrow on load)
+	for userId, entry in pairs(disconnected) do
+		if entry.Window and not entry.Player.Committed then
+			settleAway(entry.Player, userId)
 		end
 	end
 	if RunManager.SoloAway then
@@ -2674,29 +3266,16 @@ function RunManager.ExpireSoloHold(atShutdown: boolean?): boolean
 	disconnected[hold.UserId] = nil
 	local rp = saved and saved.Player
 	if rp and phase == "Running" and rp.RunId == runId and not rp.Committed then
-		local here = game:GetService("Players"):GetPlayerByUserId(hold.UserId)
-		local data = here and not byPlayer[here] and not ctx.DataService.IsReleased(here) and ctx.DataService.GetData(here)
-		if here and data then
-			rp.Player = here
-			saveRunStats(rp, false)
-			if ctx.QuickResume then
+		local here = settleAway(rp, hold.UserId)
+		if here then
+			local data = ctx.DataService.GetData(here)
+			if ctx.QuickResume and data then
 				ctx.QuickResume.Clear(here, data)
 			end
 			local s = rp.GoldSettlement
 			local kept = s and (s.Retained + (s.Survival or 0) + (s.Group or 0) + (s.Prestige or 0)) or 0
 			ctx.GoldSystem.SyncProfile(here)
 			RunManager.Notify(here, string.format("Your run ended. %d gold kept.", kept), Color3.fromRGB(255, 200, 120), { Id = "resume.settled" })
-		else
-			rp.Committed = true
-			if not rp.DevTainted then
-				local cleared = ctx.StageManager.StagesCleared()
-				local score = ctx.LeaderboardService.RunScore({ Cleared = cleared, Bosses = bossKills, Level = rp.Level, Kills = rp.Kills, Seconds = runTime })
-				local board = rp.Endless and "ScoreEndless" or "Score"
-				ctx.LeaderboardService.Submit(rp.Player, board, score, nil, rp.RunId)
-				ctx.LeaderboardService.Submit(rp.Player, "BestStage", ctx.StageManager.GetStage(), nil, rp.RunId)
-				ctx.LeaderboardService.Submit(rp.Player, "Kills", rp.Kills, nil, rp.RunId)
-				ctx.LeaderboardService.Submit(rp.Player, "Level", rp.Level or 1, nil, rp.RunId)
-			end
 		end
 	end
 	if not atShutdown and phase == "Running" and #runPlayers == 0 then
@@ -2793,23 +3372,35 @@ function RunManager.Start()
 	Remotes.Listen("ReviveDecline", function(player)
 		local rp = byPlayer[player]
 		if rp and rp.AwaitingRevive then
-			finalizeDeath(rp)
+			finalizeElimination(rp)
 		end
 	end, 2)
 
-	-- A release must clear held input even when repeated presses exhaust the limiter.
+	-- [stream E1] Hold-to-revive (Survival.Downed): ReviveHold(true) while interact is held (the
+	-- client repeats it every HoldRefresh s), ReviveHold(false) on release. The server only
+	-- notes a fresh hold from a living run player; who is revived, the range (from server
+	-- positions), the 3 s and every cancel are decided in stepDowned. A release must clear held
+	-- input even when repeated presses exhaust the limiter, so it bypasses it.
 	Remotes.Get("ReviveHold").OnServerEvent:Connect(function(player, held)
 		if held == false then
 			local rp = byPlayer[player]
-			if rp then rp.ReviveHeld = false end
+			if rp then
+				rp.ReviveHeld = false
+				rp.ReviveHeldAt = nil
+				if rp.ReviveTarget then
+					cancelRevive(rp.ReviveTarget) -- letting go breaks the 3 uninterrupted seconds
+				end
+			end
 		end
 	end)
 	Remotes.Listen("ReviveHold", function(player, held)
 		local rp = byPlayer[player]
 		if rp and held == true then
-			rp.ReviveHeld = rp.Alive and not rp.Returned and not rp.Paused and phase == "Running"
+			local ok = rp.Alive and not rp.Returned and phase == "Running"
+			rp.ReviveHeld = ok
+			rp.ReviveHeldAt = ok and os.clock() or nil
 		end
-	end, 12)
+	end, SD.HoldRate)
 
 	ctx.DataService.OnProfileLoaded(function(player)
 		ctx.MonetizationService.RefreshAttributes(player)

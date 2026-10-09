@@ -1,6 +1,6 @@
 -- revive-thanks-regression: the THANKS! button after a teammate revive (Config.Features.ReviveThanks,
 -- server ReviveThanks.lua, client ReviveThanks.lua, docs/next/REVIVE_THANKS.md) against the real server.
---   1) a real proximity revive makes one offer for the revived player only; the client shows it
+--   1) a real hold-to-revive makes one offer for the revived player only; the client shows it
 --      for Config.Revive.ThanksSeconds and a tap sends the offer id; the reviver gets the
 --      "<name> says thanks!" notice and exactly Config.Revive.ThanksXP run XP, once
 --   2) refusals: repeated tap, wrong / junk ids, a player with no offer, an expired offer,
@@ -123,11 +123,18 @@ local function reviveByHelper()
 		end
 	end
 	rp.InvulnUntil = 0
+	rp.HitProtectUntil = 0
 	RM.DamagePlayer(rp, 1e6, "Test boss strike")
 	stand(25)
 	preview.advance(0.3)
 	stand(2)
-	preview.advance(2.4)
+	-- stream E1: the reviver holds interact (ReviveHold, repeated like the client) for 3 s
+	for _ = 1, 14 do
+		preview.fireServerAs(ava, "ReviveHold", true)
+		preview.advance(0.25)
+	end
+	preview.fireServerAs(ava, "ReviveHold", false)
+	preview.advance(0.1)
 end
 
 -- 1) a real revive makes the offer; the client shows it; the tap pays once

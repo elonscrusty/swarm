@@ -219,15 +219,14 @@ Config.Player = {
 	-- grace after closing the level-up cards or a chest reward: can't be hurt this long, so
 	-- the swarm that closed in meanwhile doesn't land a hit the moment play resumes
 	ChoiceGraceSeconds = 1.5,
-	-- after taking CONTACT damage (an enemy body touching you), further contact hits are
-	-- ignored this long, so a crowd cannot stack several bites into one frame; area
-	-- attacks, projectiles and hazards are not affected (RunManager.DamagePlayer)
+	-- (unused since stream E1: every ordinary hit now starts the shared 0.35 s hit protection,
+	-- RunConfig.Survival.HitProtectSeconds, RunManager.DamagePlayer)
 	ContactGraceSeconds = 0.4,
 	ReviveClearRadius = 22, -- non-boss enemies inside this radius die on revive
 	LevelUpInvulnerable = true, -- paused (choosing an upgrade) players can't be hurt
 	-- Movement sanity check: the server snaps players back if they move faster than their
-	-- speed * Movement.HopSpeedCap * Movement.ServerTolerance (plus a small allowance for lag).
-	SpeedCheckAllowance = 6,
+	-- allowed speed (cap 34) * RunConfig.Survival.Move.ServerTolerance plus SpeedAllowance.
+	SpeedCheckAllowance = 6, -- (RunConfig.Survival.Move.SpeedAllowance is used)
 }
 
 -- Final Stand (batch B, switch Config.Features.FinalStand; docs/next/FINAL_STAND.md; server
@@ -1723,12 +1722,13 @@ Config.Arenas = {
 --   Solo  starts at once (no countdown).
 --   Duo / Trio  count down (Config.Run.CountdownSeconds) so others can join; the starter
 --   can press START NOW once someone joined, and a full run starts by itself.
--- A fallen player is revived by a living teammate standing next to them (no button).
+-- [stream E1] A downed player is revived by a living teammate holding interact beside them. The
+-- rules (any run of 2+ players) are RunConfig.Survival.Downed; these mirror them for the old team
+-- UI (TeamUI's world ring radius). No per-run limit any more.
 local PARTNER_REVIVE = {
-	Seconds = 2, -- stand within Radius this long; out of range the progress drains at the same rate
-	Radius = 7,
-	HPFraction = 0.4,
-	PerRun = 3, -- per downed player
+	Seconds = 3, -- RunConfig.Survival.Downed.ReviveSeconds
+	Radius = 8, -- RunConfig.Survival.Downed.ReviveRange
+	HPFraction = 0.25, -- RunConfig.Survival.Downed.ReviveHPShare
 }
 Config.Modes = {
 	Order = { "Solo", "Duo", "Trio" }, -- modes shown in the lobby (and accepted from clients)
@@ -1852,31 +1852,25 @@ Config.Lobby = {
 }
 
 ------------------------------------------------------------------------------------------
--- MOVEMENT: jump and bunny hop (client JumpController.lua, server RunManager speedCheck)
---   Jump: Space / gamepad A / the JUMP button (touch). A press shortly before landing is
---   kept (BufferSeconds) and a press just after walking off an edge still jumps
---   (CoyoteSeconds). No jumping while the run is frozen (level-up, pause), downed or in
---   the lobby.
---   Bunny hop: jumping again within HopWindow of landing (while moving) adds HopBonus to
---   a speed multiplier, never above HopSpeedCap. On the ground it decays back to 1 at
---   HopDecay per second (and resets at once when the player stops).
---   Air control: in the air the move input only steers the takeoff direction at
---   AirControl per second (modest; no full mid-air turns).
---   Server: RunManager's position check allows base speed * HopSpeedCap * ServerTolerance
---   (plus Config.Player.SpeedCheckAllowance for lag) and snaps back anything faster.
+-- MOVEMENT: jump (client JumpController.lua, server RunManager speedCheck)
+--   [stream E1] The run's movement numbers now live in RunConfig.Survival.Move (accel / decel,
+--   jump buffer + coyote 0.10 s, jump cooldown, horizontal cap 34, server speed check) and
+--   RunConfig.Movement (jump apex 9 from the real gravity, air steering 0.65). The bunny hop
+--   speed multiplier is gone: chained jumps never raise the speed. The fields below are kept
+--   for older callers (JumpPower is the fallback when SwarmV2 is missing) and the touch buttons.
 ------------------------------------------------------------------------------------------
 Config.Movement = {
 	JumpEnabled = true,
-	JumpPower = 59.4, -- studs/s upward: sqrt(2 * 196.2 * 9), a 9-stud apex (JumpController scales it by class, RunConfig.Movement)
-	BufferSeconds = 0.12,
-	CoyoteSeconds = 0.1,
-	JumpCooldown = 0.2, -- minimum time between two jumps
-	AirControl = 0.7, -- share of the live stick that steers in the air; the rest is the takeoff direction
-	HopWindow = 0.15, -- seconds after landing in which a jump counts as a chained hop
-	HopBonus = 0.06, -- speed multiplier added per chained hop
-	HopSpeedCap = 1.24, -- hard cap on the hop speed multiplier
-	HopDecay = 0.6, -- multiplier lost per second on the ground after HopWindow
-	ServerTolerance = 1.35, -- server speed check slack on top of the hop cap (lag, knockback)
+	JumpPower = 59.4, -- fallback only: sqrt(2 * 196.2 * 9) (ModelBuilder / JumpController compute it from the gravity)
+	BufferSeconds = 0.10, -- (RunConfig.Survival.Move.BufferSeconds is used)
+	CoyoteSeconds = 0.10, -- (RunConfig.Survival.Move.CoyoteSeconds is used)
+	JumpCooldown = 0.2, -- (RunConfig.Survival.Move.JumpCooldown is used)
+	AirControl = 0.65, -- (RunConfig.Movement.AirControl is used)
+	HopWindow = 0, -- no bunny hop
+	HopBonus = 0, -- no bunny hop
+	HopSpeedCap = 1, -- no bunny hop: the server speed check never multiplies by it
+	HopDecay = 0,
+	ServerTolerance = 1.3, -- (RunConfig.Survival.Move.ServerTolerance is used)
 	ButtonSize = 96, -- touch JUMP button (pixels before UIScale)
 	DashButtonSize = 78, -- touch DASH button, above-left of JUMP
 	ButtonMargin = 26, -- from the right and bottom safe-area edges

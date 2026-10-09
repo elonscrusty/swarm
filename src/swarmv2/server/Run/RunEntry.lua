@@ -183,9 +183,26 @@ local function startRun()
 	end
 end
 
+-- [stream E1] An arrival carrying the old run-server ticket (SwarmRun) or its rejoin route
+-- (SwarmRejoin) and no SwarmV2 hint belongs to RunServers, which admits it itself (it skips
+-- SwarmV2 arrivals the same way). Rejecting it here released the save mid-reconnect.
+local function legacyArrival(player: Player): boolean
+	local ok, data = pcall(function()
+		return player:GetJoinData()
+	end)
+	local td = ok and type(data) == "table" and (data :: any).TeleportData or nil
+	if type(td) ~= "table" or type(td.SwarmV2) == "table" then
+		return false
+	end
+	return type(td.SwarmRun) == "table" or type(td.SwarmRejoin) == "table"
+end
+
 -- Match role: one arriving player.
 local function admit(player: Player)
 	if resolving[player] or contexts[player] then
+		return
+	end
+	if legacyArrival(player) then
 		return
 	end
 	resolving[player] = true
@@ -213,6 +230,26 @@ local function admit(player: Player)
 		rejectAndReturn(player, "This match has already started without you.")
 		return
 	elseif decision == "duplicate" then
+		-- [stream E1] an admitted member came back after a disconnect: the run decides from its
+		-- own record (resume inside the 60 s window, else watch; never a new life or a second
+		-- settlement). The admission context only proves who they are.
+		if not runStarted then
+			if not table.find(waiting, player) then
+				contexts[player] = c
+				ctx.RunManager.SetAdmittedClass(player, c.classId)
+				table.insert(waiting, player)
+				setEntry(player, "Waiting", "Waiting for your team...")
+			end
+			return
+		end
+		local how = ctx.RunManager.ReconnectAdmitted and ctx.RunManager.ReconnectAdmitted(player) or "refused"
+		if how == "resumed" or how == "spectating" then
+			contexts[player] = c
+			ctx.RunManager.SetAdmittedClass(player, c.classId)
+			setEntry(player, "InRun", nil)
+		else
+			rejectAndReturn(player, "Your run has ended or your return window closed. Back to camp.")
+		end
 		return
 	end
 	contexts[player] = c
