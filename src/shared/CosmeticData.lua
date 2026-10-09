@@ -148,6 +148,19 @@ function CosmeticData.Get(id: string): Entry?
 end
 
 -- Every entry of one kind, in registry order.
+-- Is `skinId` a skin of one of the 11 hidden old heroes? Such skins stay in saves (owned ones keep
+-- working) but are not offered in the Store or a skin picker. Unknown ids are not legacy.
+function CosmeticData.IsLegacySkin(skinId: any): boolean
+	local skin = type(skinId) == "string" and CharacterData.Skins[skinId] or nil
+	if not skin then
+		return false
+	end
+	local ok, ClassCatalog = pcall(function()
+		return require((game:GetService("ReplicatedStorage") :: any):WaitForChild("SwarmV2"):WaitForChild("ClassCatalog"))
+	end)
+	return ok and (ClassCatalog :: any).IsLegacyId((skin :: any).Character) == true
+end
+
 function CosmeticData.OfKind(kind: string): { Entry }
 	local out = {}
 	for _, id in ipairs(CosmeticData.Order) do

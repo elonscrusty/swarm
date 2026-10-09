@@ -518,7 +518,9 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 			for i, e in ipairs(CosmeticData.OfKind("Skin")) do
 				-- a skin of a held feature (Starter Bundle) is hidden while its switch is off, unless owned
 				local feature = (CharacterData.Skins[e.Id] :: any).Feature
-				if not feature or Config.FeatureOn(feature) or (type(p.OwnedSkins) == "table" and p.OwnedSkins[e.Id] == true) then
+				if CosmeticData.IsLegacySkin(e.Id) then
+					-- skin of a hidden old hero: not offered (an owned one stays in the save)
+				elseif not feature or Config.FeatureOn(feature) or (type(p.OwnedSkins) == "table" and p.OwnedSkins[e.Id] == true) then
 					table.insert(made, skinCard(p, e, i))
 				end
 			end

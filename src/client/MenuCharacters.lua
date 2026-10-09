@@ -42,6 +42,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
+local CosmeticData = require(Shared:WaitForChild("CosmeticData"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local AchievementData = require(Shared:WaitForChild("AchievementData"))
 local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
@@ -232,7 +233,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local out = {}
 		for _, skinId in ipairs(CharacterData.SkinsFor(inspChar)) do
 			local feature = skinId ~= "Default" and CharacterData.Skins[skinId] and (CharacterData.Skins[skinId] :: any).Feature
-			if not feature or Config.FeatureOn(feature) or (p ~= nil and skinOwned(p, skinId)) then
+			if skinId ~= "Default" and CosmeticData.IsLegacySkin(skinId) then
+				-- skin of a hidden old hero: not offered
+			elseif not feature or Config.FeatureOn(feature) or (p ~= nil and skinOwned(p, skinId)) then
 				table.insert(out, skinId)
 			end
 		end
