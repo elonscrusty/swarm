@@ -341,6 +341,7 @@ local function startSolo()
 end
 local function fall(rp)
 	rp.InvulnUntil = 0
+	rp.HitProtectUntil = 0 -- stream E1: a fall right after another hit is not inside the shared 0.35 s window
 	rp.Paused, rp.RewardUntil = false, nil
 	RM.DamagePlayer(rp, 1e7, "test")
 end

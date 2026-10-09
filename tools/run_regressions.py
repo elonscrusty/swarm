@@ -123,6 +123,9 @@ def main():
     # redesign integration: basecamp avatar + camera, ClassService select / buy, gate -> local match on
     # Cliffwood with the class rig, results -> back at the bonfire, rewards once, a 2-player party
     checks += [("swarm-v2-flow", [])]
+    # continuation stream E1 survival rules: downed / hold-to-revive / bleed-out / wipe once, shared hit
+    # protection, falls, out-of-bounds rescue, movement caps and dash, disconnect window (PASS/FAIL lines)
+    checks += [("survival-sim", [])]
 
     def run(check):
         scene, settings = check

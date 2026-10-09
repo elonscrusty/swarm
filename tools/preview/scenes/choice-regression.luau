@@ -23,15 +23,20 @@ tough(rp)
 tough(mate)
 rp.InvulnUntil, mate.InvulnUntil = 0, 0
 -- three heavy hits: random upgrades from the auto-picks may include a one-hit ward or a
--- shield, which must not be mistaken for choice protection (MaxHP resets on each pick)
+-- shield, which must not be mistaken for choice protection (MaxHP resets on each pick).
+-- (stream E1: each opens the shared 0.35 s hit protection, cleared so all three land)
 local function hit(r)
-	for _ = 1, 3 do RM.DamagePlayer(r, 1e5, "Test") end
+	for _ = 1, 3 do
+		r.HitProtectUntil = 0
+		RM.DamagePlayer(r, 1e5, "Test")
+	end
 end
 local function serverLeft(): number
 	return (player:GetAttribute("ChoiceProtectedUntil") or 0) - workspace:GetServerTimeNow()
 end
 
--- 1) duo: the chooser is protected, the world and the teammate are not
+-- 1) duo: the world and the teammate keep going; (stream E1, continuation pack) an open
+--    panel no longer protects the chooser (RunConfig.Survival.MenuProtection = false)
 LUS.QueueLevels(rp, 1)
 assert(rp.Offer and rp.Paused, "a duo level-up opens a panel")
 assert(player:GetAttribute("ChoiceOpen") == true and player:GetAttribute("ChoiceGroup") == true, "choice attributes published")
@@ -44,7 +49,7 @@ tough(rp); tough(mate)
 local hp, mateHp = rp.HP, mate.HP
 hit(rp)
 hit(mate)
-assert(rp.HP == hp, "the chooser is protected while the panel is open")
+assert(rp.HP < hp, "an open panel grants no protection (Survival.MenuProtection off)")
 assert(mate.HP < mateHp, "the teammate takes damage normally")
 assert(rp.Root.Parent and rp.Humanoid.WalkSpeed == 0, "the chooser is rooted")
 
