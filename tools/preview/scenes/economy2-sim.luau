@@ -460,6 +460,37 @@ if chest3 then
 	end
 end
 
+-- stream B's real QueueChoice (once merged): the chest choice lands in each recipient's queue
+if realQueueChoice then
+	LU.QueueChoice = realQueueChoice
+	clearOffers()
+	local chest5
+	for _, obj in ipairs(Loot.Objects()) do
+		if obj.Kind == "Chest" and obj.TeamChest and obj.State == "Ready" and (obj.Price or 0) > 0 then
+			chest5 = obj
+			break
+		end
+	end
+	if chest5 then
+		local function chestQueued(rp): number
+			local n = 0
+			for _, q in ipairs(rp.ChoiceQueue or {}) do
+				if q.Source == "Chest" and q.Kind == "PassiveOnly" then
+					n += 1
+				end
+			end
+			return n
+		end
+		local qA0 = chestQueued(rA)
+		rM.XPNeeded = 1e12 -- (no level choice gets in the way of the count)
+		holdAll({ me }, chest5)
+		check("F real QueueChoice: downed Ava holds one queued Chest/PassiveOnly choice", chestQueued(rA) == qA0 + 1, chestQueued(rA) - qA0)
+		check("F real QueueChoice: my chest choice is offered (or queued)", (rM.Offer ~= nil and LU.PendingCount(rM) >= 1) or chestQueued(rM) >= 1, LU.PendingCount(rM))
+		clearOffers()
+	end
+	LU.QueueChoice = nil
+end
+
 ------------------------------------------------------------------------------------------
 -- G  class goals and the settlement
 ------------------------------------------------------------------------------------------
