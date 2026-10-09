@@ -762,7 +762,7 @@ end
 local function rollChoices(rp)
 	if ranked() then
 		local meta = rp.OfferMeta
-		return R.roll(rp, meta and meta.Kind or "Any") -- [stream B]
+		return R.roll(rp, meta and meta.Kind or "Any", meta and meta.Bonus) -- [stream B]
 	end
 	local pool = buildPool(rp)
 	local choices = showcaseChoices(rp, pool)
@@ -838,7 +838,9 @@ end
 ]]
 function LevelUpSystem.QueueBonusPick(rp)
 	if ranked() then
-		LevelUpSystem.QueueChoice(rp, "Level", "Any") -- [stream B] a normal choice (rarity rolls as usual)
+		-- [stream B] a queued choice whose offer holds a card above Common (R.roll `bonus`)
+		rp.BonusPicks = (rp.BonusPicks or 0) + 1
+		LevelUpSystem.QueueChoice(rp, "Level", "Any", true)
 		return
 	end
 	rp.BonusPicks = (rp.BonusPicks or 0) + 1
@@ -1403,8 +1405,10 @@ function R.card(rp, o: any): { [string]: any }
 end
 
 -- A fresh offer for `kind`: the eligible evolution first, then up to Builds.Choices distinct
--- options (BuildRules.RollOffer + RollRarity); nothing left = one heal card.
-function R.roll(rp, kind: string): { any }
+-- options (BuildRules.RollOffer + RollRarity); nothing left = one heal card. bonus (a Shrine of
+-- Trial pick): when no card is above Common, one card that has room gets an Uncommon+ grant
+-- (weights renormalised over the tiers above Common that fit).
+function R.roll(rp, kind: string, bonus: boolean?): { any }
 	local cards = {}
 	local evo = kind ~= "PassiveOnly" and R.evolutionReady(rp) or nil
 	if evo then
@@ -1420,6 +1424,40 @@ function R.roll(rp, kind: string): { any }
 	end
 	if #cards == 0 then
 		table.insert(cards, R.card(rp, { Category = "Heal" }))
+	end
+	if bonus then
+		local above = false
+		for _, c in ipairs(cards) do
+			above = above or (c.Rarity ~= nil and c.Rarity ~= "Common")
+		end
+		for i, c in ipairs(cards) do
+			local from = tonumber(c.RankFrom) or 0
+			if above then
+				break
+			end
+			if (c.Category == "WeaponUpgrade" or c.Category == "NewWeapon" or c.Category == "PassiveUpgrade" or c.Category == "NewPassive") and max - from >= 2 then
+				local tiers, total = {}, 0
+				for _, t in ipairs(BuildRules.RarityTable(max - from)) do
+					if t.Ranks >= 2 then
+						table.insert(tiers, t)
+						total += t.Weight
+					end
+				end
+				local roll, tier = rng:NextNumber() * total, tiers[#tiers]
+				for _, t in ipairs(tiers) do
+					roll -= t.Weight
+					if roll < 0 then
+						tier = t
+						break
+					end
+				end
+				cards[i] = R.card(rp, { Category = c.Category, Id = c.Id, From = from, To = from + tier.Ranks, Tier = tier })
+				above = true
+			end
+		end
+		for _, c in ipairs(cards) do
+			c.Bonus = true -- the client may tag the set ("TRIAL REWARD")
+		end
 	end
 	-- Clove Bulb Sigil (META): the run's first offer shows one card fewer (never the evolution)
 	if rp.SigilFewerFirst and kind ~= "PassiveOnly" then
@@ -1612,10 +1650,11 @@ function R.offerNext(rp)
 		rp.Offer = sus.Choices
 		seconds = sus.Left
 	else
-		rp.OfferMeta = { Source = head.Source, Kind = head.Kind, Rerolled = false }
-		rp.Offer = R.roll(rp, head.Kind)
+		rp.OfferMeta = { Source = head.Source, Kind = head.Kind, Rerolled = false, Bonus = head.Bonus }
+		rp.Offer = R.roll(rp, head.Kind, head.Bonus)
 		seconds = (live and Builds.ChoiceSeconds or Builds.SoloChoiceSeconds) + (Config.LevelUp.RevealGraceSeconds or 0)
 	end
+	rp.OfferBoosted = (rp.OfferMeta and rp.OfferMeta.Bonus) or nil -- useBonus spends the bonus pick
 	rp.OfferDeadline = os.clock() + seconds
 	rp.ChoiceTimerPaused = false
 	if not rp.PanelOpen then
@@ -1684,7 +1723,7 @@ end
 	kind "Any" | "PassiveOnly" (a chest: passive upgrades and new passives only). Choices show one
 	at a time in queue order. Ignored after CancelAll (the run ended).
 ]]
-function LevelUpSystem.QueueChoice(rp, source: string?, kind: string?)
+function LevelUpSystem.QueueChoice(rp, source: string?, kind: string?, bonus: boolean?)
 	if rp.ChoicesClosed then
 		return
 	end
@@ -1694,7 +1733,8 @@ function LevelUpSystem.QueueChoice(rp, source: string?, kind: string?)
 	end
 	R.setup(rp)
 	local q = R.queue(rp)
-	table.insert(q, { Source = source == "Chest" and "Chest" or "Level", Kind = kind == "PassiveOnly" and "PassiveOnly" or "Any" })
+	-- (bonus: a Shrine of Trial pick, QueueBonusPick: its offer holds a card above Common)
+	table.insert(q, { Source = source == "Chest" and "Chest" or "Level", Kind = kind == "PassiveOnly" and "PassiveOnly" or "Any", Bonus = bonus == true or nil })
 	rp.PendingLevels = #q
 	if source ~= "Chest" then
 		Fx.PlayerEvent(rp.Player, "levelup")
@@ -2029,7 +2069,7 @@ function LevelUpSystem.Start()
 			if not meta or meta.Rerolled or R.downed(rp) then
 				return
 			end
-			local new = R.roll(rp, meta.Kind or "Any")
+			local new = R.roll(rp, meta.Kind or "Any", meta.Bonus)
 			if R.sameSet(new, rp.Offer) then
 				return
 			end
