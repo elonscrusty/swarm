@@ -42,6 +42,9 @@ local function check(ok: boolean, label: string)
 	preview.log((ok and "PASS " or "FAIL ") .. label)
 end
 local function section(name: string, fn)
+	if preview.args.only and preview.args.only ~= name then
+		return -- --set only=cards: one section (fast iteration)
+	end
 	local ok, err = xpcall(fn, function(e)
 		return debug.traceback(tostring(e), 2)
 	end)
@@ -979,7 +982,8 @@ section("cards", function()
 		RunCards.Close()
 		C.fire("LevelUpOffer", payload({ OfferId = id }))
 		-- the lowest scale the panel shows over its first few frames (a pop starts below 1 and eases up)
-		local lowest = 1
+		local first = RunCards.Elements().Panel:FindFirstChildWhichIsA("UIScale")
+		local lowest = first and first.Scale or 1 -- right after the offer arrives (a pop starts at 0.9)
 		for _ = 1, 8 do
 			preview.advance(0.02, 60)
 			local sc2 = RunCards.Elements().Panel:FindFirstChildWhichIsA("UIScale")
