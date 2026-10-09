@@ -249,4 +249,14 @@ RunConfig.Entry = {
 	ReturnAttempts = 2,
 }
 
+------------------------------------------------------------------------------------------
+-- CONTINUATION PACK sections (docs/redesign/continuation/GAMEPLAY_PLAN.md): one per stream
+------------------------------------------------------------------------------------------
+RunConfig.Builds = {} -- [stream B] ranks, offers, slots, evolutions
+RunConfig.Combat = {} -- [stream B] damage formula, crit, armor, status caps, targeting
+RunConfig.Director = {} -- [stream D] run clock, beacon, boss, enemy pressure
+RunConfig.Survival = {} -- [stream E1] downed, revive, protection, falls, movement feel
+RunConfig.Economy = {} -- [stream E2] XP shards, team run gold, chests, class goals
+RunConfig.UI = {} -- [stream F] run HUD layout and screens
+
 return RunConfig
