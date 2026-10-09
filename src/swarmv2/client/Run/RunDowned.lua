@@ -138,6 +138,11 @@ function RunDowned.Layout()
 	ui.Menu.Instance.Size = UDim2.fromOffset(150, tp)
 	local h = mode == "Out" and (tp + 70) or 146
 	local top = (kit.TopBottom and kit.TopBottom() or 140) + 10
+	-- portrait keeps the equipment row under the top cluster: this panel sits under it
+	local eq = kit.Hud and kit.Hud.RunRect("Equipment")
+	if eq and kit.IsPortrait and kit.IsPortrait() then
+		top = math.max(top, eq.Y + eq.H + 8)
+	end
 	ui.Panel.Size = UDim2.fromOffset(w, h)
 	ui.Panel.Position = UDim2.fromOffset(math.floor((v.X - w) / 2 + 0.5), math.floor(top + 0.5))
 end

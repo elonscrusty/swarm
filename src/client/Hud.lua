@@ -1691,6 +1691,7 @@ local function layout()
 	-- (portrait), never under the top cluster
 	if ui.Build then
 		local bw = math.min(BUILD_W, W - 2 * margin)
+		local buildCx = W / 2
 		if portrait then
 			local top = clusterBottom + 8
 			ui.Build.AnchorPoint = Vector2.new(0.5, 0)
@@ -1706,8 +1707,24 @@ local function layout()
 				top = topBottom + 4
 			end
 			local bh = math.floor(math.clamp(bottom - top, 150, 420))
+			-- stay between the party column and the minimap where the screen is wide enough
+			local buildLo, buildHi = margin, W - margin
+			for _, name in ipairs({ "Party", "Map" }) do
+				local r = rects[name]
+				if r and r.W > 0 and r.Y < top + bh and r.Y + r.H > top then
+					if r.X + r.W / 2 < W / 2 then
+						buildLo = math.max(buildLo, r.X + r.W + 8)
+					else
+						buildHi = math.min(buildHi, r.X - 8)
+					end
+				end
+			end
+			if buildHi - buildLo >= 300 then
+				bw = math.min(bw, buildHi - buildLo)
+				buildCx = math.clamp(W / 2, buildLo + bw / 2, buildHi - bw / 2)
+			end
 			ui.Build.AnchorPoint = Vector2.new(0.5, 0.5)
-			ui.Build.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(top + (bottom - top) / 2))
+			ui.Build.Position = UDim2.fromOffset(math.floor(buildCx), math.floor(top + (bottom - top) / 2))
 			ui.Build.Size = UDim2.fromOffset(math.floor(bw), bh)
 		end
 		local face = ui.BuildFace :: Frame

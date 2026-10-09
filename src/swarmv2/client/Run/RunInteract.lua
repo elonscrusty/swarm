@@ -461,6 +461,17 @@ function RunInteract.Update(_dt: number, state: Instance, inRun: boolean)
 	local v = kit.VirtualSize()
 	local w = math.min(v.X - 24, UIKit.IsCompact() and 360 or 400)
 	local bottom = (kit.EquipmentTop and kit.EquipmentTop() or (v.Y - 120)) - 12
+	if kit.IsPortrait and kit.IsPortrait() and kit.Hud then
+		-- portrait: the equipment row is under the top cluster; the prompt rides above the touch buttons instead
+		local top = v.Y
+		for _, name in ipairs({ "Revive", "Jump", "Stick" }) do
+			local r = kit.Hud.RunRect(name)
+			if r and r.W > 0 then
+				top = math.min(top, r.Y)
+			end
+		end
+		bottom = top - 10
+	end
 	ui.Panel.Size = UDim2.fromOffset(w, math.max(64, W.TouchPx(kit.Scale and kit.Scale() or 1)))
 	ui.Panel.Position = UDim2.fromOffset(math.floor(v.X / 2 + 0.5), math.floor(bottom + 0.5))
 	if not ui.Panel.Visible then
