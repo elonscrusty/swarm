@@ -747,6 +747,9 @@ if parts.B then
 		check("B41 the boss's death is the victory, once", #ends == endsBefore + 1 and ends[#ends] == true and st:GetAttribute("RunStage") == "Victory" and st:GetAttribute("Phase") == "Results",
 			string.format("ends %d, stage %s, phase %s", #ends - endsBefore, tostring(st:GetAttribute("RunStage")), tostring(st:GetAttribute("Phase"))))
 		check("B42 results say Won (a full expedition)", #results > resultsBefore and res and res.Won == true and res.StagesCleared == Config.Stages.WinMinStages, res and tostring(res.Won))
+		local gs = rp.GoldSettlement
+		check("B42b the victory settles once, as an extraction (all run gold kept, win bonus paid)", rp.Committed == true and rp.Extracted == true and rp.WinPaid == true and gs ~= nil and gs.Rate == 1,
+			gs and string.format("earned %d kept %d", gs.Earned, gs.Retained) or "no settlement")
 		check("B43 terminal lock: spawns and hazards cleared, offers cancelled, no new panel", #Spawner.Active == 0 and Hazards.Count() == 0 and rp.Offer == nil and rp.PendingLevels == 0
 			and offers == offersBefore and not Spawner.IsDirector(), string.format("active %d hazards %d offers +%d", #Spawner.Active, Hazards.Count(), offers - offersBefore))
 		-- a wipe after the victory changes nothing
@@ -792,8 +795,9 @@ if parts.C then
 	check("C3 a stuck enemy repaths, then is despawned without rewards", stuck ~= nil and (not stuck.Alive or stuck.Uid ~= uid) and S.StuckRepaths > repath0
 		and S.StuckDespawns > despawn0 and rp.Kills == kills0, string.format("repaths +%d despawns +%d kills +%d", S.StuckRepaths - repath0, S.StuckDespawns - despawn0, rp.Kills - kills0))
 	Spawner.SetHold("director-sim", false)
-	-- the wipe
+	-- the wipe (with some run gold banked: a defeat keeps the loss share)
 	local endsBefore = #ends
+	preview.server("GoldSystem").AddRunGold(rp, 100)
 	rp.InvulnUntil = 0
 	rp.RevivesLeft = 0
 	rp.ProductReviveUsed = true
@@ -805,6 +809,9 @@ if parts.C then
 	local res = results[#results]
 	check("C4 a full wipe is a defeat, once", #ends == endsBefore + 1 and ends[#ends] == false and st:GetAttribute("RunStage") == "Defeat" and res and res.Won == false,
 		string.format("ends +%d, stage %s", #ends - endsBefore, tostring(st:GetAttribute("RunStage"))))
+	local gs = rp.GoldSettlement
+	check("C5 the defeat settles once with the loss share kept", rp.Committed == true and rp.Extracted ~= true and gs ~= nil and gs.Earned >= 100 and gs.Rate < 1 and gs.Retained > 0,
+		gs and string.format("earned %d kept %d (x%.2f)", gs.Earned, gs.Retained, gs.Rate) or "no settlement")
 	backToLobby()
 end
 
