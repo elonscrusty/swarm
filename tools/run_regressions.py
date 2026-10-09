@@ -57,8 +57,14 @@ def main():
     checks += [("layout", ["challenges", d, "extras=on"]) for d in ("iphone", "phone-portrait")]
     checks += [("layout", ["explore", d, "pad=on"]) for d in ("iphone", "phone-portrait")]
     checks += [("store-regression", [])]
+    # receipts / passes / profile lifecycle (docs/redesign/continuation/COMMERCE_AUDIT.md): PurchaseId idempotency,
+    # failed / concurrent saves, departure, a second server, receipt history, pass outages, loading / failed / released
+    checks += [("receipt-regression", [])]
     checks += [("layout", ["store", d, "section=Gift", "ids=on"]) for d in ("iphone", "phone-portrait")]
     checks += [("layout", ["store", d, "section=Pets"]) for d in ("iphone", "phone-portrait")]
+    # honest shop states: Roblox price lookup failing (PRICE UNAVAILABLE, buying disabled) and a paid purchase pending
+    checks += [("layout", ["store", d, "section=Pets", "ids=on", "price=fail"]) for d in ("iphone", "phone-portrait")]
+    checks += [("layout", ["store", d, "section=Pets", "ids=on", "pending=on"]) for d in ("iphone", "phone-portrait")]
     checks += [("heroes-regression", []), ("heroes-regression", ["coop=on"])]
     checks += [("layout", ["team", d, "mode=Duo", "wheel=on"]) for d in ("iphone", "phone-portrait")]
     checks += [("layout", ["meta", d, "screen=" + s]) for d in ("iphone", "phone-portrait") for s in ("Sigils", "Weekly", "Season", "Titles", "Collection", "Streak", "Play", "More")]
@@ -148,7 +154,7 @@ def main():
             "--max-time", "3000" if scene in ("corner-regression", "class-kits-sim", "cliffwood-run-sim", "swarm-v2-flow", "director-sim") else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")) or (scene == "analytics-regression" and settings == ["mode=published"]):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "receipt-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")) or (scene == "analytics-regression" and settings == ["mode=published"]):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
         if scene in ("results-flow", "leaderboards", "home-board-regression", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression", "analytics-client", "swarm-v2-flow"):

@@ -32,7 +32,8 @@
 	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage,
 	  MostKills, BestScore, BestScoreEndless, BestLevel, TimePlayed (seconds in clean runs)}
 	  (missing keys start at 0),
-	  PurchaseIds {string}, Settings {Music, Sfx, Shake, ReducedEffects, DamageNumbers,
+	  PurchaseIds {string} + PurchaseTimes {id → os.time()} (receipt history, RecordPurchase),
+	  PassesOwned {tostring(passId) → os.time()} (passes confirmed owned), Settings {Music, Sfx, Shake, ReducedEffects, DamageNumbers,
 	  Tips} (Config.Settings.Defaults), ReviveTokens, SelectedArena,
 	  Achievements {Progress {id → number}, Unlocked {id → os.time()}} (AchievementService),
 	  Title (worn achievement title, "" = none), NameColor (AchievementData.Colors id, ""),
@@ -101,6 +102,12 @@ local profiles: { [Player]: Profile } = {}
 -- next autosave would put the older data back.
 local releasing: { [number]: boolean } = {}
 local loadedCallbacks: { (Player, Profile) -> () } = {}
+-- Profile lifecycle (DataService.State): a player is "loading" from PlayerAdded until the
+-- load answers, "failed" when it never could (kicked; no empty replacement profile is ever
+-- made), then "ready" / "released" (handed off for a teleport) / "lost" (another server took
+-- the lock). Only "ready" may be changed and saved.
+local loading: { [Player]: boolean } = {}
+local failedLoad: { [Player]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 -- How long a same-server rejoin waits for that final save before it is turned away.
 local RELEASE_WAIT_SECONDS = 60
 local jobId = (game.JobId ~= "" and game.JobId) or ("studio-" .. tostring(math.random(1, 1e9)))
@@ -142,6 +149,11 @@ local function defaultData()
 		Skins = {},
 		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0, MostKills = 0, BestScore = 0, BestScoreEndless = 0, BestLevel = 0, TimePlayed = 0 },
 		PurchaseIds = {},
+		-- receipt history times {purchaseId → os.time() recorded} (RecordPurchase trims by age)
+		PurchaseTimes = {},
+		-- game passes a lookup confirmed owned {tostring(passId) → os.time()}: kept through a
+		-- lookup outage, cleared when Roblox answers "not owned" (MonetizationService)
+		PassesOwned = {},
 		Settings = table.clone(Config.Settings.Defaults),
 		ReviveTokens = 0,
 		SelectedArena = "Forest",
@@ -555,13 +567,35 @@ function DataService.Migrate(data: any): { [string]: any }
 	end
 	local tokens = tonumber(data.ReviveTokens)
 	data.ReviveTokens = (tokens and tokens == tokens and tokens < math.huge) and math.max(0, math.floor(tokens)) or 0
-	local purchaseIds = {}
+	local purchaseIds, seenIds = {}, {}
 	for _, id in ipairs(data.PurchaseIds) do
-		if type(id) == "string" then
+		if type(id) == "string" and not seenIds[id] then
+			seenIds[id] = true
 			table.insert(purchaseIds, id)
 		end
 	end
 	data.PurchaseIds = purchaseIds
+	-- PurchaseTimes only for ids in PurchaseIds; an id recorded before times existed is stamped
+	-- now, so it counts as recent for the whole keep window (RecordPurchase never drops it early)
+	local storedTimes = data.PurchaseTimes
+	local times = {}
+	local now = os.time()
+	for _, id in ipairs(purchaseIds) do
+		local t = tonumber(storedTimes[id])
+		times[id] = (t and t == t and math.abs(t) < math.huge) and math.floor(t) or now
+	end
+	data.PurchaseTimes = times
+	-- PassesOwned: numeric pass ids as strings → a finite time (anything else is dropped)
+	local passes, passCount = {}, 0
+	for key, at in pairs(data.PassesOwned) do
+		local t = tonumber(at)
+		if type(key) == "string" and #key <= 20 and string.match(key, "^%d+$") and t and t == t
+			and math.abs(t) < math.huge and passCount < 64 then
+			passes[key] = math.floor(t)
+			passCount += 1
+		end
+	end
+	data.PassesOwned = passes
 	if type(data.SelectedArena) ~= "string" or not table.find(Config.Arenas.Order, data.SelectedArena) then
 		data.SelectedArena = "Forest"
 	end
@@ -911,7 +945,7 @@ function DataService.SaveProfile(profile: Profile, release: boolean?): boolean
 	while profile.Saving do
 		task.wait(0.1)
 	end
-	if profile.Released then
+	if profile.Released or profile.LockLost then
 		return false
 	end
 	profile.Saving = true
@@ -952,6 +986,7 @@ function DataService.SaveProfile(profile: Profile, release: boolean?): boolean
 	if lostLock then
 		profile.LockLost = true
 		warn("[DataService] session lock lost for " .. profile.Key)
+		DataService.PublishState(profile.Player)
 		if profile.Player.Parent then
 			profile.Player:Kick("Your save was opened on another server. Please rejoin.")
 		end
@@ -959,6 +994,7 @@ function DataService.SaveProfile(profile: Profile, release: boolean?): boolean
 	end
 	if ok and release then
 		profile.Released = true
+		DataService.PublishState(profile.Player)
 	end
 	return ok
 end
@@ -974,6 +1010,38 @@ end
 function DataService.GetData(player: Player): { [string]: any }?
 	local p = profiles[player]
 	return p and p.Data
+end
+
+-- "loading" | "ready" | "released" | "lost" | "failed" | "none" (see `loading` above).
+function DataService.State(player: Player): string
+	local p = profiles[player]
+	if p then
+		if p.LockLost then
+			return "lost"
+		end
+		return p.Released and "released" or "ready"
+	end
+	if loading[player] then
+		return "loading"
+	end
+	return failedLoad[player] and "failed" or "none"
+end
+
+-- True only for a loaded profile this server still owns (not handed off, lock held): the
+-- one state where purchases, unlocks and settlement may change the save.
+function DataService.IsReady(player: Player): boolean
+	return DataService.State(player) == "ready"
+end
+
+-- Player attribute "ProfileState" (DataService.State) for the lobby: loading / failed /
+-- released are shown honestly instead of an empty profile.
+function DataService.PublishState(player: Player)
+	if player.Parent then
+		local state = DataService.State(player)
+		if player:GetAttribute("ProfileState") ~= state then
+			player:SetAttribute("ProfileState", state)
+		end
+	end
 end
 
 -- Calls fn(player, profile) for every profile loaded from now on (and already loaded).
@@ -1001,15 +1069,51 @@ function DataService.HasPurchase(player: Player, purchaseId: string): boolean
 	return table.find(data.PurchaseIds, purchaseId) ~= nil
 end
 
+--[[
+	Drops old receipt ids (oldest first) only while the history is above
+	Config.Data.MaxStoredPurchaseIds AND the oldest id is older than PurchaseIdKeepDays (an id
+	without a time counts as recent); PurchaseIdHardCap always applies (save size guard).
+	A recent receipt is never forgotten by count alone, so a replayed callback for it is
+	still recognised (the old 150-entry cap could forget one after 150 newer purchases).
+]]
+function DataService.TrimPurchases(data: { [string]: any }, now: number)
+	local ids = data.PurchaseIds
+	if type(data.PurchaseTimes) ~= "table" then
+		data.PurchaseTimes = {}
+	end
+	local times = data.PurchaseTimes
+	local D = Config.Data :: any
+	local soft = D.MaxStoredPurchaseIds or 1000
+	local hard = math.max(soft, D.PurchaseIdHardCap or soft * 5)
+	local keep = (D.PurchaseIdKeepDays or 365) * 86400
+	while #ids > soft do
+		local oldest = ids[1]
+		local at = tonumber(times[oldest])
+		if #ids <= hard and (at == nil or now - at < keep) then
+			break
+		end
+		table.remove(ids, 1)
+		times[oldest] = nil
+	end
+end
+
+-- Records a fulfilled receipt in the save (the same table as the grant, so one save commits
+-- both). Saved by the caller (MonetizationService: ForceSave before acknowledging).
 function DataService.RecordPurchase(player: Player, purchaseId: string)
 	local data = DataService.GetData(player)
 	if not data then
 		return
 	end
-	table.insert(data.PurchaseIds, purchaseId)
-	while #data.PurchaseIds > Config.Data.MaxStoredPurchaseIds do
-		table.remove(data.PurchaseIds, 1)
+	if table.find(data.PurchaseIds, purchaseId) == nil then
+		table.insert(data.PurchaseIds, purchaseId)
 	end
+	if type(data.PurchaseTimes) ~= "table" then
+		data.PurchaseTimes = {}
+	end
+	if data.PurchaseTimes[purchaseId] == nil then
+		data.PurchaseTimes[purchaseId] = os.time()
+	end
+	DataService.TrimPurchases(data, os.time())
 end
 
 --[[
@@ -1029,6 +1133,7 @@ function DataService.ReleaseForTeleport(player: Player): boolean
 	if store == nil then
 		-- memory only: nothing to hand over (the other server starts from defaults anyway)
 		p.Released = true
+		DataService.PublishState(player)
 		return true
 	end
 	return DataService.SaveProfile(p, true)
@@ -1056,6 +1161,7 @@ function DataService.Reclaim(player: Player): boolean
 	end
 	if store == nil then
 		p.Released = false
+		DataService.PublishState(player)
 		return true
 	end
 	local lockedByOther = false
@@ -1074,6 +1180,7 @@ function DataService.Reclaim(player: Player): boolean
 		DataService.SetSaveStatus(player, "failing")
 		if lockedByOther and player.Parent then
 			p.LockLost = true
+			DataService.PublishState(player)
 			player:Kick("Your save was opened on another server. Please rejoin.")
 		end
 		return false
@@ -1087,6 +1194,7 @@ function DataService.Reclaim(player: Player): boolean
 	p.Released = false
 	p.LastSave = os.clock()
 	DataService.SetSaveStatus(player, "ok")
+	DataService.PublishState(player)
 	return true
 end
 
@@ -1126,7 +1234,14 @@ local function onPlayerAdded(player: Player)
 		player:Kick("Your last session is still saving. Please wait a minute and rejoin.")
 		return
 	end
-	local profile = loadProfile(player)
+	loading[player] = true
+	DataService.PublishState(player)
+	local ok, profile = pcall(loadProfile, player)
+	loading[player] = nil
+	if not ok then
+		warn("[DataService] load error for " .. player.UserId .. ": " .. tostring(profile))
+		profile = nil
+	end
 	if not player.Parent then
 		-- left while loading: give the lock back so another server can load at once
 		if profile then
@@ -1135,17 +1250,22 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 	if not profile then
+		-- never an empty stand-in: nothing can be bought, queued or saved for this player
+		failedLoad[player] = true
+		DataService.PublishState(player)
 		player:Kick("Your save could not be opened. Please wait a minute and rejoin.")
 		return
 	end
 	profiles[player] = profile
 	DataService.SetSaveStatus(player, "ok")
+	DataService.PublishState(player)
 	for _, fn in ipairs(loadedCallbacks) do
 		task.spawn(fn, player, profile)
 	end
 end
 
 local function onPlayerRemoving(player: Player)
+	loading[player] = nil
 	local profile = profiles[player]
 	if not profile then
 		return
