@@ -34,6 +34,7 @@ UI.Layout = {
 	StickPx = 112,
 	JumpPx = 64,
 	DashPx = 64,
+	RevivePx = 84, -- the touch REVIVE button above JUMP (device points)
 	StickSnap = 1.5, -- a touch within this many resting radii of the resting stick starts it there
 	TouchMin = 48, -- no touch target is smaller
 	Gap = 8, -- smallest space kept between two HUD pieces
@@ -78,6 +79,8 @@ UI.Map = {
 ------------------------------------------------------------------------------------------
 UI.Cards = {
 	Live = true, -- compact docked cards that never freeze the screen (false: the previous full-screen panel)
+	SqueezeCardWidth = 150, -- narrowest a card gets when the panel must fit between the touch controls
+	BodyPoints = 16, -- the body lines (current -> next) come out at this many points on a phone
 	ArmSeconds = 0.35, -- a key / click held from play never confirms a card before this
 	TouchArmSeconds = 0.6,
 	TouchHoldSeconds = 0.6, -- a card tap must be a whole tap, lifted within this
@@ -150,9 +153,10 @@ UI.Downed = {
 ------------------------------------------------------------------------------------------
 UI.Results = {
 	SaveLabels = {
-		Pending = "Saving your progress...",
-		Saved = "Progress saved",
-		Failed = "Could not save yet. Your progress is kept and will retry.",
+		Pending = "Pending save...",
+		Saved = "Saved",
+		Failed = "Save failed. This run may not be stored.",
+		NotSaved = "Not saved: saving is unavailable on this server.",
 	},
 }
 

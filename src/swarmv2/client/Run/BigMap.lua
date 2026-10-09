@@ -172,6 +172,8 @@ function BigMap.Layout()
 	local panelW, panelH = viewPx + 24, viewPx + header + legendH + 16
 	ui.Panel.Size = UDim2.fromOffset(panelW, panelH)
 	ui.Panel.Position = UDim2.fromOffset(math.floor(v.X / 2 + 0.5), math.floor(v.Y / 2 + 0.5))
+	local tp = W.TouchPx(kit.Scale and kit.Scale() or 1)
+	ui.Close.Instance.Size = UDim2.fromOffset(tp, tp)
 	ui.View.Position = UDim2.fromOffset(12, header)
 	ui.View.Size = UDim2.fromOffset(viewPx, viewPx)
 	ui.Legend.Position = UDim2.fromOffset(12, header + viewPx + 8)

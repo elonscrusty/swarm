@@ -17,6 +17,8 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.Parent.Parent:WaitForChild("SwarmClient"):WaitForChild("UIKit"))
 local RunTheme = require(script.Parent.RunTheme)
+local RunConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
+local RunLayout = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunLayout"))
 
 local new, corner, stroke, TS = UIKit.new, UIKit.corner, UIKit.stroke, UIKit.TS
 
@@ -30,6 +32,11 @@ local FONTS = {
 	Heading = Theme.Font.Heading,
 	Number = Theme.Font.Number,
 }
+
+-- The side of a touch target in design px at this UI scale (48 device points on a phone).
+function Widgets.TouchPx(scale: number?): number
+	return RunLayout.TouchPx(scale or 1, RunConfig.UI.Layout, UIKit.IsCompact())
+end
 
 ------------------------------------------------------------------------------------------
 -- Panel + text

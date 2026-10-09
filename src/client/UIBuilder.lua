@@ -5177,7 +5177,7 @@ local function buildResults()
 		results.BossBadge.Size = UDim2.fromOffset(medalS / 2, medalS / 2)
 		local tileH = slim and math.max(48, TS(24) + TS(12) + 12) or 104 -- slim: value over caption, never overlapping
 		results.Divider.Visible = not slim
-		local btnH = slim and 42 or Theme.Size.Button
+		local btnH = math.max(slim and 42 or Theme.Size.Button, Hud.TouchPx()) -- [stream F] the buttons are touch targets
 		local headH = slim and math.max(medalS, titleSize + 4 + TS(13) + 6 + TS(15) + 2) or math.max(84, titleSize + 6 + TS(13) + 8 + TS(15) + 8)
 		head.Size = UDim2.new(1, 0, 0, headH)
 		results.TitleCol.Size = UDim2.fromOffset(math.max(160, math.min(480, inner - 96)), headH)
@@ -5711,6 +5711,9 @@ local function onRunResult(data)
 		if data.Abandoned == nil and data.Outcome == "Left" then
 			data.Abandoned = true
 		end
+	end
+	if data.Outcome == nil then
+		data.Outcome = results.Extras.OutcomeOf(data) -- the server's Won / Abandoned flags, said in words
 	end
 	if data.Time == nil and type(data.Duration) == "number" then
 		data.Time = data.Duration
@@ -6414,6 +6417,10 @@ function UIBuilder.Init(d: { [string]: any })
 			return r and (r.Y + r.H) or 70
 		end,
 		EquipmentTop = Hud.BarTop,
+		Hud = Hud,
+		Scale = function(): number
+			return uiScale.Scale
+		end,
 		Avoid = function(): { any } -- the map and the party column (cards keep clear of them when wide)
 			local out = {}
 			for _, name in ipairs({ "Map", "Party" }) do
@@ -6425,7 +6432,7 @@ function UIBuilder.Init(d: { [string]: any })
 			return out
 		end,
 		Thumbs = function(): { [string]: any }
-			return { Stick = Hud.RunRect("Stick"), Jump = Hud.RunRect("Jump"), Dash = Hud.RunRect("Dash") }
+			return { Stick = Hud.RunRect("Stick"), Jump = Hud.RunRect("Jump"), Dash = Hud.RunRect("Dash"), Revive = Hud.RunRect("Revive") }
 		end,
 		OpenMenu = function()
 			UIBuilder.OpenPause()

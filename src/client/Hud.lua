@@ -536,6 +536,10 @@ local function applyMetrics()
 	if INV.Tile ~= tile or INV.Gap ~= gap then
 		anim.TilesStale = true
 	end
+	if class ~= "desktop" then
+		-- the BUILD button is a touch target: 48 device points wide
+		build = math.max(build, RunLayout.TouchPx(host.Scale(), RunUI.Layout, true) + 10)
+	end
 	INV.Tile, INV.Gap, INV.Split, INV.Pad, INV.Build, INV.PipSize = tile, gap, split, pad, build, pip
 	INV.Pips = pip + 4
 end
@@ -1543,7 +1547,8 @@ local function layout()
 		timerW += OVERTIME_EXTRA
 	end
 	local countersW = ui.Counters.AbsoluteSize.X / scale
-	local cluster = { W = countersW + 8 + PAUSE, H = PAUSE }
+	local pause = math.max(PAUSE, RunLayout.TouchPx(scale, cfg, compact)) -- the menu button is at least a touch target
+	local cluster = { W = countersW + 8 + pause, H = pause }
 	-- health plate: both rows on desktop / portrait (fitted down on a narrow screen), health only on a phone in landscape
 	local healthW, healthH, plateK = VIT.W, VIT.H, 1
 	if class == "phone" then
@@ -1596,8 +1601,8 @@ local function layout()
 
 	-- utility group (top right): gold / kills pills + the menu button
 	local cr = rects.Counters
-	place(ui.Pause.Instance, cr.X + cr.W - PAUSE, cr.Y, PAUSE, PAUSE)
-	ui.Counters.Position = UDim2.fromOffset(math.floor(cr.X + cr.W - PAUSE - 8 + 0.5), math.floor(cr.Y + (PAUSE - PILL_H) / 2 + 0.5))
+	place(ui.Pause.Instance, cr.X + cr.W - pause, cr.Y, pause, pause)
+	ui.Counters.Position = UDim2.fromOffset(math.floor(cr.X + cr.W - pause - 8 + 0.5), math.floor(cr.Y + (pause - PILL_H) / 2 + 0.5))
 
 	-- timer (top centre)
 	local tr = rects.Timer
@@ -1778,6 +1783,11 @@ end
 -- The rectangle (design px) the run layout gave a named piece: Health, Timer, Objective, Boss,
 -- Counters, Map, Party, Equipment, XpStrip, Stick, Jump, Dash. nil when the piece does not exist
 -- on this device or before the first layout.
+-- The side of a touch target at this scale (design px): 48 device points on a phone.
+function Hud.TouchPx(): number
+	return RunLayout.TouchPx(host.Scale(), RunUI.Layout, UIKit.IsCompact())
+end
+
 function Hud.RunRect(name: string): RunLayout.Rect?
 	return runRects[name]
 end
@@ -2147,9 +2157,16 @@ updatePurse = function(dt: number)
 		else
 			hint, hintColor = "NEED " .. UIKit.formatNumber(purse.Price - gold), K.Danger
 		end
+	else
+		-- [stream E2] no chest in reach: the team's next chest price (SwarmState ChestCost) beside the team gold
+		local nextCost = tonumber(Remotes.State():GetAttribute("ChestCost"))
+		if nextCost and nextCost > 0 then
+			hint, hintColor = "CHEST " .. UIKit.formatNumber(nextCost), gold >= nextCost and K.Good or K.CreamMuted
+		end
 	end
 	if ui.PurseHint.Visible ~= (hint ~= "") then
 		ui.PurseHint.Visible = hint ~= ""
+		relayout() -- the counters cluster changed width
 	end
 	setText(ui.PurseHint, hint)
 	ui.PurseHint.TextColor3 = hintColor

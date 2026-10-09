@@ -268,7 +268,7 @@ section("layout", function()
 	local W, H, scale = virtualSize()
 	local env = { W = W, H = H, Insets = { Top = 0, Left = 0, Right = 0 }, Phone = false, Portrait = H > W, Touch = false, Scale = scale }
 	local layout = {}
-	local names = { "Health", "Timer", "Objective", "Boss", "Counters", "Map", "Party", "Equipment", "XpStrip", "Stick", "Jump", "Dash" }
+	local names = { "Health", "Timer", "Objective", "Boss", "Counters", "Map", "Party", "Equipment", "XpStrip", "Stick", "Jump", "Dash", "Revive" }
 	local have = {}
 	for _, n in ipairs(names) do
 		local r = Hud.RunRect(n)
@@ -288,10 +288,10 @@ section("layout", function()
 		check(RunLayout.Inside(r, env, 0), string.format("%s inside the screen (%.0f,%.0f %.0fx%.0f)", n, r.X, r.Y, r.W, r.H))
 	end
 	if touchDevice then
-		for _, n in ipairs({ "Stick", "Jump", "Dash" }) do
+		for _, n in ipairs({ "Stick", "Jump", "Dash", "Revive" }) do
 			check(layout[n] ~= nil, n .. " touch control placed")
 		end
-		for _, n in ipairs({ "Jump", "Dash" }) do
+		for _, n in ipairs({ "Jump", "Dash", "Revive" }) do
 			local r = layout[n]
 			check(r ~= nil and r.W * scale >= 48 - 0.5, n .. " is at least 48 pt")
 		end
@@ -569,17 +569,38 @@ section("interact", function()
 	local p3 = priority()
 	check(p3 == "Revive", "revive beats beacon and chest (" .. tostring(p3) .. ")")
 	check(string.find(RunInteract.Elements().Label.Text, "Ben") ~= nil, "revive prompt names the teammate (" .. RunInteract.Elements().Label.Text .. ")")
-	-- holding the key sends the hold; letting go sends the release
+	-- the revive hold is ReviveHoldClient's (E / X / the touch REVIVE button -> the ReviveHold remote): the
+	-- prompt never sends a second one
+	local holds = {}
+	local legacyHold = preview.remote("ReviveHold")
+	legacyHold.OnServerEvent:Connect(function(_, on)
+		table.insert(holds, on)
+	end)
 	local before = #fired
 	RunInteract.Press()
 	settle(0.2)
 	RunInteract.Release()
 	settle(0.2)
-	local sent = {}
-	for i = before + 1, #fired do
-		table.insert(sent, tostring(fired[i][1]) .. ":" .. tostring(fired[i][3]))
+	check(#fired == before and #holds == 0, "the prompt itself sends no Revive hold (ReviveHoldClient owns it)")
+	UIS.InputBegan:_fire(key(Enum.KeyCode.E), false)
+	settle(0.7)
+	UIS.InputEnded:_fire(key(Enum.KeyCode.E), false)
+	settle(0.4)
+	local first, last = holds[1], holds[#holds]
+	check(#holds >= 2 and first == true and last == false and #fired == before, "holding E beside a downed teammate sends ReviveHold on, letting go sends it off (" .. #holds .. " calls)")
+	-- on a touch device the REVIVE button is adopted into the HUD layout above JUMP and restyled
+	local rhMod = runFolder:FindFirstChild("ReviveHoldClient")
+	local rh = rhMod and preview.require(rhMod)
+	local btn = rh and rh.Button and rh.Button()
+	if touchDevice and btn then
+		local rr = Hud.RunRect("Revive")
+		check(btn.Parent ~= nil and btn.Parent.Name == "Root", "the REVIVE button lives in the UI root (adopted, not a second button)")
+		check(rr ~= nil and math.abs(btn.Position.X.Offset - rr.X) <= 1 and math.abs(btn.Position.Y.Offset - rr.Y) <= 1, "the REVIVE button sits at the layout's Revive rectangle above JUMP")
+		check(btn.BackgroundColor3 == RunTheme.Gold, "the REVIVE button uses the run's gold action colour")
+		check(btn.Visible and btn.AbsoluteSize.Y >= 48 - 0.5, "the REVIVE button shows beside a downed teammate and is at least 48 pt")
+		local jumpR = Hud.RunRect("Jump")
+		check(rr ~= nil and jumpR ~= nil and rr.Y + rr.H <= jumpR.Y + 1, "the REVIVE button is above JUMP")
 	end
-	check(#fired >= before + 2 and fired[before + 1][1] == "Revive" and fired[before + 1][3] == true and fired[#fired][3] == false, "Press / Release send Revive hold on / off (" .. table.concat(sent, ",") .. ")")
 	-- out of range / revived: nothing
 	ben:SetAttribute("Downed", false)
 	away(ben)
@@ -636,6 +657,37 @@ section("downed", function()
 	setP("HP", 90)
 	settle(0.8)
 	check(RunDowned.Mode() == "Alive", "back to alive when the attributes clear")
+end)
+
+------------------------------------------------------------------------------------------
+section("away", function()
+	local TeamUI = preview.client("TeamUI")
+	setS("AwayIds", ",9001,")
+	setS("AwayUntil", serverNow() + 42)
+	settle(0.6)
+	local E = TeamUI.Elements()
+	local row = E.Away and E.Away[9001]
+	check(row ~= nil, "a teammate in their disconnect window gets a row")
+	check(row ~= nil and string.find(string.upper(row.State.Text), "RECONNECTING") ~= nil and string.find(row.State.Text, "0:4") ~= nil, "the row says RECONNECTING with the time left (" .. (row and row.State.Text or "-") .. ")")
+	local party = Hud.RunRect("Party")
+	local rowsNow = 0
+	for _ in pairs(E.Rows) do
+		rowsNow += 1
+	end
+	rowsNow += 1
+	check(party ~= nil and party.H >= rowsNow * 50, "the party stack makes room for the reconnecting row")
+	setS("AwayIds", "")
+	setS("AwayUntil", 0)
+	settle(0.6)
+	check(next(TeamUI.Elements().Away) == nil, "the row goes when the window ends")
+	-- the spectate screen counts them too
+	setS("AwayIds", ",9001,")
+	setP("Eliminated", true)
+	settle(0.8)
+	check(textHas(RunDowned.Elements().Panel, "1 RECONNECTING"), "the Out screen counts reconnecting teammates")
+	setP("Eliminated", nil)
+	setS("AwayIds", "")
+	settle(0.5)
 end)
 
 ------------------------------------------------------------------------------------------
@@ -908,21 +960,23 @@ section("results", function()
 	check(#rows == 4 and rows[1][1] == "Kills" and rows[1][2] == "1,840", "stat rows: only real numbers, ordered (" .. table.concat(labels, ",") .. ")")
 	local t1, t2, t3 = ResultsExtras.OutcomeText("Victory"), ResultsExtras.OutcomeText("Defeat"), ResultsExtras.OutcomeText("Left")
 	check(t1 == "VICTORY" and t2 == "DEFEAT" and t3 == "YOU LEFT THE RUN" and ResultsExtras.OutcomeText("???") == nil, "outcome words for Victory / Defeat / Left")
-	check(ResultsExtras.UnlockName("granny_boom") ~= "" and ResultsExtras.UnlockName({ Id = "x", Name = "Coach Crunch" }) == "Coach Crunch", "new unlock names")
+	check(ResultsExtras.UnlockName("granny_boom") == "Granny Boom" and ResultsExtras.UnlockName({ Id = "x", Name = "Coach Crunch" }) == "Coach Crunch", "new unlock names (class catalog)")
+	check(ResultsExtras.OutcomeOf({ Won = true }) == "Victory" and ResultsExtras.OutcomeOf({ Won = false }) == "Defeat" and ResultsExtras.OutcomeOf({ Won = true, Abandoned = true }) == "Left" and ResultsExtras.OutcomeOf({}) == nil, "outcome from the server's Won / Abandoned flags")
 	-- the screen
 	C.setState({ Phase = "Results" })
 	C.sendProfile(C.profile({ Frame = "Gold", Account = { XP = 2240 } }))
-	setP("RunSaveStatus", nil)
+	setP("RunSaveState", nil)
 	local returned = 0
 	preview.remote("ReturnToLobby").OnServerEvent:Connect(function()
 		returned += 1
 	end)
 	C.fire("RunResult", {
-		Outcome = "Victory",
-		Duration = 927,
-		NewUnlocks = { "granny_boom", { Id = "coach_crunch", Name = "Coach Crunch" } },
-		SaveStatus = "Pending",
-		Stats = { Kills = 1840, Elites = 12, Chests = 7, Dashes = 96, Revives = 2, Distance = 9120, Bosses = 1 },
+		-- the real RunResult carries Won / Abandoned (not an Outcome word), class-goal run totals, class ids, SaveState
+		Won = true,
+		Abandoned = false,
+		NewUnlocks = { "granny_boom", "toastmaster" },
+		SaveState = "Pending",
+		ClassGoals = { Kills = 1840, Elites = 12, Chests = 7, Dashes = 96, Revives = 2, Distance = 9120, Bosses = 1, XP = 2240, BestSurvive = 927, CloseKills = 410, MostWeapons = 4 },
 		Mode = "Trio",
 		CharacterId = "Knight",
 		Build = { Weapons = { { Id = "Whip", Level = 5, Evolved = true }, { Id = "MagicOrb", Level = 3 } }, Passives = { { Id = "Might", Level = 3 } } },
@@ -935,16 +989,19 @@ section("results", function()
 	check(X.Outcome.Visible and X.OutcomeTitle.Text == "VICTORY", "results: the server-confirmed outcome")
 	check(string.find(string.upper(X.OutcomeLine.Text), "CONFIRMED BY THE SERVER") ~= nil, "results: says the server confirmed it")
 	check(X.Stats.Visible and #X.StatRows >= 5, "results: real run stats (" .. #X.StatRows .. " rows)")
-	check(X.Unlocks.Visible and string.find(X.UnlockNames.Text, "Coach Crunch") ~= nil, "results: new unlocks listed (" .. X.UnlockNames.Text .. ")")
+	check(X.Unlocks.Visible and string.find(X.UnlockNames.Text, "Granny Boom") ~= nil and string.find(X.UnlockNames.Text, "Toastmaster") ~= nil, "results: new unlocks listed (" .. X.UnlockNames.Text .. ")")
 	check(anyText("15:27") ~= nil, "results: the run duration 15:27")
 	check(X.Save.Visible and X.SaveText.Text == UI.Results.SaveLabels.Pending, "results: save status Pending (" .. X.SaveText.Text .. ")")
-	setP("RunSaveStatus", "Saved")
+	setP("RunSaveState", "Saved")
 	settle(0.4)
 	check(X.SaveText.Text == UI.Results.SaveLabels.Saved, "results: Pending -> Saved (" .. X.SaveText.Text .. ")")
-	setP("RunSaveStatus", "Failed")
+	setP("RunSaveState", "Failed")
 	settle(0.4)
 	check(X.SaveText.Text == UI.Results.SaveLabels.Failed and X.SaveText.TextColor3 == RunTheme.Danger, "results: save failure message in the danger colour (" .. X.SaveText.Text .. ")")
-	setP("RunSaveStatus", "Pending")
+	setP("RunSaveState", "NotSaved")
+	settle(0.4)
+	check(X.SaveText.Text == UI.Results.SaveLabels.NotSaved and X.Save.Visible, "results: NotSaved says saving is unavailable (" .. X.SaveText.Text .. ")")
+	setP("RunSaveState", "Pending")
 	settle(0.4)
 	local button = anyText("^RETURN TO LOBBY$")
 	check(button ~= nil, "results: RETURN TO LOBBY button")

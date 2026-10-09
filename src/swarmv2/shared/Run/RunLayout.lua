@@ -90,6 +90,15 @@ function RunLayout.Margin(env: Env, cfg: any): number
 	return if env.Phone then cfg.MarginPhone else cfg.MarginDesktop
 end
 
+-- A touch target's side in design px: cfg.TouchMin device points on a phone (the UI is drawn at
+-- `scale` of its design size), cfg.TouchMin design px elsewhere.
+function RunLayout.TouchPx(scale: number, cfg: any, compact: boolean): number
+	if not compact then
+		return cfg.TouchMin
+	end
+	return math.ceil(cfg.TouchMin / math.max(0.3, scale) - 0.001)
+end
+
 -- Moves `r` along the line away from `from` until the two rectangles no longer overlap.
 local function pushAway(r: Rect, from: Rect, gap: number, env: Env, margin: number): Rect
 	if not RunLayout.Overlaps(r, from, gap) then
@@ -159,14 +168,17 @@ function RunLayout.Thumbs(env: Env, cfg: any): Layout
 			dash = RunLayout.Clamp(circle(jcx + side * reach, dcy, dashD), env, margin)
 		end
 	end
-	return { Stick = stick, Jump = jump, Dash = dash }
+	-- the REVIVE button (stream E1's ReviveHoldClient, shown only beside a downed teammate) sits above JUMP
+	local reviveD = (cfg.RevivePx or 84) / s
+	local revive = RunLayout.Clamp(circle(jump.X + jump.W / 2, jump.Y - cfg.Gap - reviveD / 2, reviveD), env, margin)
+	return { Stick = stick, Jump = jump, Dash = dash, Revive = revive }
 end
 
 -- Where a touch thumb can be: the union rectangle of the three controls plus a gap.
 local function thumbList(t: Layout?): { Rect }
 	local out = {}
 	if t then
-		for _, k in ipairs({ "Stick", "Jump", "Dash" }) do
+		for _, k in ipairs({ "Stick", "Jump", "Dash", "Revive" }) do
 			if t[k] then
 				table.insert(out, t[k])
 			end
@@ -204,7 +216,7 @@ function RunLayout.Compute(env: Env, sizes: Sizes, cfg: any): Layout
 	local ins = env.Insets
 	local thumbs = if env.Touch then RunLayout.Thumbs(env, cfg) else nil
 	if thumbs then
-		out.Stick, out.Jump, out.Dash = thumbs.Stick, thumbs.Jump, thumbs.Dash
+		out.Stick, out.Jump, out.Dash, out.Revive = thumbs.Stick, thumbs.Jump, thumbs.Dash, thumbs.Revive
 	end
 	local phoneLandscape = env.Phone and not env.Portrait
 	local p = cfg.Phone
@@ -346,7 +358,7 @@ end
 -- Overlaps among the named pieces: { "A vs B", ... } (empty when the layout is clean).
 -- `allowed` names pairs that may touch, written "A|B". The touch controls are round: they
 -- conflict when their discs touch, not their bounding squares.
-local ROUND: { [string]: boolean } = { Stick = true, Jump = true, Dash = true }
+local ROUND: { [string]: boolean } = { Stick = true, Jump = true, Dash = true, Revive = true }
 
 function RunLayout.Conflicts(layout: Layout, names: { string }, gap: number?, allowed: { [string]: boolean }?): { string }
 	local out = {}

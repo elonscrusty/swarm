@@ -189,13 +189,28 @@ end
 
 local CARD_MIN_H = 150
 local HEAD_H = 52
+local headH = HEAD_H -- the header grows with the touch size of the reroll button
 local cardH = CARD_MIN_H -- the tallest card's content (set per offer)
+
+-- The body lines (current -> next) are what people read: on a phone they are sized so they come out
+-- at 16 pt on the device whatever the UI scale is (design px x scale = points).
+local function lineSize(): number
+	if not UIKit.IsCompact() then
+		return 16
+	end
+	local scale = math.max(0.3, kit.Scale and kit.Scale() or 1)
+	return math.clamp(math.ceil(RunConfig.UI.Cards.BodyPoints / (scale * Theme.TextScaleCompact)), 16, 24)
+end
+
+local function lineHeight(): number
+	return UIKit.TS(lineSize()) + 4
+end
 
 -- Height one card needs for its rows (rarity, name, category, up to three lines, slot, synergy).
 local function needHeight(c: any): number
 	local rows = { 24, 34, 18 }
 	for _ = 1, math.min(#c.Lines, 3) do
-		table.insert(rows, 21)
+		table.insert(rows, lineHeight())
 	end
 	if c.Slot then
 		table.insert(rows, 20)
@@ -294,19 +309,20 @@ local function cardWidth(): number
 end
 
 local function lineRow(parent: Instance, line: any, order: number)
-	local row = new("Frame", { Name = "Line", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 21), LayoutOrder = order, Active = false }, parent)
+	local size = lineSize()
+	local row = new("Frame", { Name = "Line", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, lineHeight()), LayoutOrder = order, Active = false }, parent)
 	if line.Text then
-		W.Text(row, line.Text, { Name = "Text", Size = 16, Font = "Body", Box = UDim2.fromScale(1, 1), Fit = 11, Color = RunTheme.Cream })
+		W.Text(row, line.Text, { Name = "Text", Size = size, Font = "Body", Box = UDim2.fromScale(1, 1), Fit = 11, Color = RunTheme.Cream })
 		return
 	end
 	local label = line.Label
 	if line.From and line.To then
 		-- "Damage  12 -> 14": the label, the current value muted, an arrow, the next value bright
 		local text = string.format('%s<font color="%s">%s</font>  →  <font color="%s"><b>%s</b></font>', label and (label .. "   ") or "", UIKit.hex(RunTheme.CreamMuted), line.From, UIKit.hex(RunTheme.Gold), line.To)
-		W.Text(row, text, { Name = "Change", Size = 16, Font = "Body", Box = UDim2.fromScale(1, 1), Fit = 11, Color = RunTheme.Cream, RichText = true })
+		W.Text(row, text, { Name = "Change", Size = size, Font = "Body", Box = UDim2.fromScale(1, 1), Fit = 11, Color = RunTheme.Cream, RichText = true })
 	else
 		local value = line.To or line.From or ""
-		W.Text(row, (label and (label .. "  ") or "") .. tostring(value), { Name = "Stat", Size = 16, Font = "Body", Box = UDim2.fromScale(1, 1), Fit = 11, Color = RunTheme.Cream })
+		W.Text(row, (label and (label .. "  ") or "") .. tostring(value), { Name = "Stat", Size = size, Font = "Body", Box = UDim2.fromScale(1, 1), Fit = 11, Color = RunTheme.Cream })
 	end
 end
 
@@ -426,8 +442,12 @@ function RunCards.Layout()
 	local v = kit.VirtualSize()
 	local count = math.max(1, #cards + emptySlots)
 	local cw = cardWidth()
-	local panelH = HEAD_H + cardH + 10
+	local touch = W.TouchPx(kit.Scale and kit.Scale() or 1)
+	headH = math.max(HEAD_H, touch + 6)
+	local panelH = headH + cardH + 10
+	ui.Cards.Position = UDim2.fromOffset(8, headH)
 	ui.Cards.Size = UDim2.new(1, -16, 0, cardH)
+	ui.Reroll.Instance.Size = UDim2.fromOffset(150, touch)
 	local top = (kit.TopBottom and kit.TopBottom() or 140) + 8
 	-- stay between the party column and the map when the screen is wide enough to (a phone has no
 	-- room: the cards then cover them for the few seconds the offer is open)
@@ -451,13 +471,52 @@ function RunCards.Layout()
 	end
 	local panelW = count * cw + (count - 1) * 8 + 16
 	local x = math.clamp((v.X - panelW) / 2, left, math.max(left, right - panelW))
-	-- keep off the touch controls: above them when the panel would sit on one
+	-- keep off the touch controls (the resting joystick, JUMP, DASH): 1. under the objective strip, 2. right
+	-- under the timer (covering the strip for the few seconds the offer is open), 3. squeezed into the widest
+	-- gap between them. The REVIVE button is adopted above this panel (RunInteract), so it never needs room.
 	local thumbs = kit.Thumbs and kit.Thumbs() or nil
-	if thumbs then
-		for _, name in ipairs({ "Stick", "Jump", "Dash" }) do
-			local t = thumbs[name]
-			if t and x < t.X + t.W + 4 and x + panelW > t.X - 4 and top + panelH > t.Y - 4 and top < t.Y + t.H then
-				top = math.max((kit.TimerBottom and kit.TimerBottom() or 70) + 6, t.Y - 6 - panelH)
+	local function blocked(t0: number, t1: number): { { number } }
+		local out = {}
+		if thumbs then
+			for _, name in ipairs({ "Stick", "Jump", "Dash" }) do
+				local t = thumbs[name]
+				if t and t.W > 0 and t.Y - 4 < t1 and t.Y + t.H + 4 > t0 then
+					table.insert(out, { t.X - 6, t.X + t.W + 6 })
+				end
+			end
+		end
+		return out
+	end
+	local function hits(x0: number, x1: number, list: { { number } }): boolean
+		for _, b in ipairs(list) do
+			if x0 < b[2] and x1 > b[1] then
+				return true
+			end
+		end
+		return false
+	end
+	if hits(x, x + panelW, blocked(top, top + panelH)) then
+		top = math.max((kit.TimerBottom and kit.TimerBottom() or 70) + 6, 6)
+		local band = blocked(top, top + panelH)
+		if hits(x, x + panelW, band) then
+			table.sort(band, function(a, b)
+				return a[1] < b[1]
+			end)
+			local bestL, bestR, cursor = 0, 0, left + 6
+			for _, b in ipairs(band) do
+				if b[1] - cursor > bestR - bestL then
+					bestL, bestR = cursor, b[1]
+				end
+				cursor = math.max(cursor, b[2])
+			end
+			if (right - 6) - cursor > bestR - bestL then
+				bestL, bestR = cursor, right - 6
+			end
+			local fit = math.floor((bestR - bestL - 16 - (count - 1) * 8) / count)
+			if fit >= CFG.SqueezeCardWidth then
+				cw = math.min(cw, fit)
+				panelW = count * cw + (count - 1) * 8 + 16
+				x = bestL + ((bestR - bestL) - panelW) / 2
 			end
 		end
 	end

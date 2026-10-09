@@ -129,7 +129,13 @@ function RunDowned.Layout()
 	local phone = UIKit.IsCompact()
 	local margin = phone and LAYOUT.MarginPhone or LAYOUT.MarginDesktop
 	local w = math.min(440, v.X - 2 * margin)
-	local h = mode == "Out" and 138 or 146
+	local tp = W.TouchPx(kit.Scale and kit.Scale() or 1)
+	ui.TouchPx = tp
+	ui.Prev.Instance.Size = UDim2.fromOffset(tp, tp)
+	ui.Next.Instance.Size = UDim2.fromOffset(tp, tp)
+	ui.Next.Instance.Position = UDim2.fromOffset(16 + tp, 8)
+	ui.Menu.Instance.Size = UDim2.fromOffset(150, tp)
+	local h = mode == "Out" and (tp + 90) or 146
 	local top = (kit.TopBottom and kit.TopBottom() or 140) + 10
 	ui.Panel.Size = UDim2.fromOffset(w, h)
 	ui.Panel.Position = UDim2.fromOffset(math.floor((v.X - w) / 2 + 0.5), math.floor(top + 0.5))
@@ -197,7 +203,22 @@ end
 -- Per frame
 ------------------------------------------------------------------------------------------
 
-function RunDowned.Update(_dt: number, _state: Instance, inRun: boolean)
+-- Teammates inside their disconnect window (SwarmState AwayIds ",id,id," from stream E1).
+local function awayCount(state: Instance): number
+	local n = 0
+	local text = state:GetAttribute("AwayIds")
+	if type(text) == "string" then
+		for id in string.gmatch(text, "%d+") do
+			local uid = tonumber(id)
+			if uid and uid ~= player.UserId and not Players:GetPlayerByUserId(uid) then
+				n += 1
+			end
+		end
+	end
+	return n
+end
+
+function RunDowned.Update(_dt: number, state: Instance, inRun: boolean)
 	if not ui.Panel then
 		return
 	end
@@ -235,9 +256,10 @@ function RunDowned.Update(_dt: number, _state: Instance, inRun: boolean)
 	ui.Prev.Instance.Visible = isOut
 	ui.Next.Instance.Visible = isOut
 	ui.Menu.Instance.Visible = isOut
-	ui.Title.Position = UDim2.fromOffset(isOut and 10 or 116, isOut and 62 or 8)
+	local tp = ui.TouchPx or 48
+	ui.Title.Position = UDim2.fromOffset(isOut and 10 or 116, isOut and (tp + 14) or 8)
 	ui.Title.Size = UDim2.new(1, isOut and -20 or -126, 0, 30)
-	ui.Line.Position = UDim2.fromOffset(isOut and 10 or 116, isOut and 92 or 40)
+	ui.Line.Position = UDim2.fromOffset(isOut and 10 or 116, isOut and (tp + 44) or 40)
 	ui.Line.Size = UDim2.new(1, isOut and -20 or -126, 0, isOut and 40 or 40)
 	if isOut then
 		ui.Title.Text = "YOU ARE OUT"
@@ -257,6 +279,10 @@ function RunDowned.Update(_dt: number, _state: Instance, inRun: boolean)
 		else
 			head = "No teammates are left"
 		end
+		local away = awayCount(state)
+		if away > 0 then
+			head = head .. string.format(" (%d reconnecting)", away)
+		end
 		W.Set(ui.Line, head .. ". " .. tail)
 		ui.Mate.Visible = false
 		ui.Revive.Frame.Visible = false
@@ -267,7 +293,7 @@ function RunDowned.Update(_dt: number, _state: Instance, inRun: boolean)
 		local wname = watched and string.upper(watched.DisplayName) or "NO ONE TO WATCH"
 		ui.Prev.Instance.Visible = true
 		ui.Next.Instance.Visible = true
-		ui.WatchLabel = ui.WatchLabel or W.Text(ui.Face, "", { Name = "Watching", Size = 16, Font = "Label", Position = UDim2.fromOffset(126, 8), Box = UDim2.new(1, -126 - 170, 0, LAYOUT.TouchMin), Fit = 10, Color = RunTheme.Cyan, ZIndex = 4 })
+		ui.WatchLabel = ui.WatchLabel or W.Text(ui.Face, "", { Name = "Watching", Size = 16, Font = "Label", Position = UDim2.fromOffset(40 + 2 * (ui.TouchPx or 48), 8), Box = UDim2.new(1, -(40 + 2 * (ui.TouchPx or 48)) - 170, 0, ui.TouchPx or LAYOUT.TouchMin), Fit = 10, Color = RunTheme.Cyan, ZIndex = 4 })
 		ui.WatchLabel.Visible = true
 		W.Set(ui.WatchLabel, "WATCHING  " .. wname)
 		return

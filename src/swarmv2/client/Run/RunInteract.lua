@@ -49,6 +49,8 @@ local FLAT = Vector3.new(1, 0, 1)
 
 local ui: { [string]: any } = {}
 local kit: { [string]: any } = {}
+local SD = RunConfig.Survival and RunConfig.Survival.Downed
+local reviveHoldMod: any = nil -- stream E1's ReviveHoldClient (E / X / the touch REVIVE button), false = absent
 local cur: { [string]: any }? = nil -- the target now: { Kind, Id, Name, ... }
 local holding = false
 local holdStart = 0
@@ -82,6 +84,19 @@ local function findRemote(): Instance?
 	return remote
 end
 
+local function reviveHold(): any
+	if reviveHoldMod == nil then
+		local mod = script.Parent:FindFirstChild("ReviveHoldClient")
+		if mod and mod:IsA("ModuleScript") then
+			local ok, m = pcall(require, mod)
+			reviveHoldMod = ok and m or false
+		else
+			reviveHoldMod = false
+		end
+	end
+	return reviveHoldMod or nil
+end
+
 local function legacyReviveRemote(): Instance?
 	local folder = ReplicatedStorage:FindFirstChild("Remotes")
 	return folder and folder:FindFirstChild("ReviveHold") or nil
@@ -107,10 +122,11 @@ local function canAct(kind: string): boolean
 	if kind == "Chest" then
 		return LootUI ~= nil
 	end
-	if findRemote() then
-		return true
+	if kind == "Revive" then
+		-- E1's ReviveHoldClient sends the hold; without it the older ReviveHold remote still does
+		return reviveHold() ~= nil or legacyReviveRemote() ~= nil
 	end
-	return kind == "Revive" and legacyReviveRemote() ~= nil
+	return findRemote() ~= nil
 end
 
 ------------------------------------------------------------------------------------------
@@ -139,7 +155,7 @@ local function findTarget(state: Instance): { [string]: any }?
 			local r = p.Character and p.Character.PrimaryPart
 			if r then
 				local d = ((r.Position - root.Position) * FLAT).Magnitude
-				if d <= CFG.ReviveRange and d < bestD then
+				if d <= (SD and SD.ReviveRange + 1 or CFG.ReviveRange) and d < bestD then
 					best, bestD = p, d
 				end
 			end
@@ -174,8 +190,59 @@ end
 -- Build
 ------------------------------------------------------------------------------------------
 
+-- The touch REVIVE button is E1's (ReviveHoldClient): the run HUD adopts it, places it above JUMP
+-- (RunLayout "Revive") and gives it the run tokens; its input and visibility stay with that module.
+local function adoptReviveButton()
+	local rh = reviveHold()
+	local b = rh and rh.Button and rh.Button() or nil
+	if not b or not ui.Root then
+		return
+	end
+	if ui.ReviveBtn ~= b then
+		ui.ReviveBtn = b
+		b.Parent = ui.Root
+		b.AnchorPoint = Vector2.zero
+		b.ZIndex = Theme.Z.LevelUp + 3 -- above the upgrade cards: a revive is never blocked by a panel
+		b.BackgroundColor3 = RunTheme.Gold
+		local st = b:FindFirstChildOfClass("UIStroke")
+		if st then
+			st.Color = RunTheme.Navy
+		end
+		local fill = b:FindFirstChild("Fill")
+		if fill then
+			fill.BackgroundColor3 = RunTheme.Cyan
+			fill.BackgroundTransparency = 0.25
+		end
+		local label = b:FindFirstChild("Label")
+		if label then
+			label.Text = "HOLD\nREVIVE"
+			label.FontFace = Theme.Font.Heading
+			label.TextColor3 = RunTheme.OnGold
+			label.ZIndex = 2
+		end
+	end
+	local Hud = kit.Hud
+	local r = Hud and Hud.RunRect("Revive")
+	if r then
+		local pos, size = UDim2.fromOffset(math.floor(r.X + 0.5), math.floor(r.Y + 0.5)), UDim2.fromOffset(math.floor(r.W + 0.5), math.floor(r.H + 0.5))
+		if b.Position ~= pos then
+			b.Position = pos
+		end
+		if b.Size ~= size then
+			b.Size = size
+		end
+		local label = b:FindFirstChild("Label")
+		local scale = math.max(0.3, kit.Scale and kit.Scale() or 1)
+		local px = math.ceil(18 / scale)
+		if label and label.TextSize ~= px then
+			label.TextSize = px
+		end
+	end
+end
+
 function RunInteract.Build(root: Instance, k: any)
 	kit = k
+	ui.Root = root
 	local holder, face = W.Panel(root, { Name = "RunInteract", Visible = false, ZIndex = Theme.Z.Loot })
 	holder.AnchorPoint = Vector2.new(0.5, 1)
 	ui.Panel, ui.Face = holder, face
@@ -224,6 +291,9 @@ function RunInteract.Press()
 	local t = cur
 	if not t or holding or not UIState.WorldInputAllowed() then
 		return
+	end
+	if t.Kind == "Revive" then
+		return -- ReviveHoldClient binds E / X and the touch REVIVE button; this prompt only shows it
 	end
 	if t.Kind == "Chest" then
 		if LootUI and LootUI.Press then
@@ -281,6 +351,7 @@ function RunInteract.Update(_dt: number, state: Instance, inRun: boolean)
 	if not ui.Panel then
 		return
 	end
+	adoptReviveButton()
 	local now = os.clock()
 	if now - lastPoll >= CFG.Poll then
 		lastPoll = now
@@ -309,8 +380,10 @@ function RunInteract.Update(_dt: number, state: Instance, inRun: boolean)
 	-- the words
 	local label, sub, ok = "", "", true
 	local progress = 0
+	local touchMode = InputPrompts.Mode() == "Touch"
+	ui.Hit.Visible = t.Kind ~= "Revive" -- a revive is held on the REVIVE button / E / X, not on the prompt
 	if t.Kind == "Revive" then
-		label = "Hold to revive " .. tostring(t.Name)
+		label = (touchMode and "Hold REVIVE to revive " or "Hold to revive ") .. tostring(t.Name)
 		local serverProgress = tonumber(t.Player:GetAttribute("ReviveProgress")) or 0
 		if holding and serverProgress <= 0 and lastProgress > 0.05 then
 			interruptedUntil = now + RunConfig.UI.Downed.InterruptedShow
@@ -342,11 +415,12 @@ function RunInteract.Update(_dt: number, state: Instance, inRun: boolean)
 		keyLabel.Text = keyText
 	end
 	ui.Key.Size = UDim2.fromOffset(mode == "Touch" and 46 or 36, 32)
+	ui.KeyHolder.Visible = not (mode == "Touch" and t.Kind == "Revive")
 	-- place above the equipment row, centred
 	local v = kit.VirtualSize()
 	local w = math.min(v.X - 24, UIKit.IsCompact() and 360 or 400)
 	local bottom = (kit.EquipmentTop and kit.EquipmentTop() or (v.Y - 120)) - 12
-	ui.Panel.Size = UDim2.fromOffset(w, 64)
+	ui.Panel.Size = UDim2.fromOffset(w, math.max(64, W.TouchPx(kit.Scale and kit.Scale() or 1)))
 	ui.Panel.Position = UDim2.fromOffset(math.floor(v.X / 2 + 0.5), math.floor(bottom + 0.5))
 	if not ui.Panel.Visible then
 		ui.Panel.Visible = true

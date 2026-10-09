@@ -222,6 +222,114 @@ local function rebuildRows(list: { Player })
 	end
 end
 
+------------------------------------------------------------------------------------------
+-- [stream F] Teammates inside their disconnect window (stream E1: SwarmState AwayIds ",id,id," and
+-- AwayUntil, the server time the last window ends). They are no Player any more, so their row is
+-- built from the id: a name looked up once, "RECONNECTING 0:42" counting to AwayUntil.
+------------------------------------------------------------------------------------------
+
+local awayRows: { [number]: any } = {}
+local awayNames: { [number]: string } = {}
+
+local function awayName(uid: number): string
+	local cached = awayNames[uid]
+	if cached then
+		return cached
+	end
+	awayNames[uid] = "Teammate"
+	task.spawn(function()
+		local ok, name = pcall(function()
+			return Players:GetNameFromUserIdAsync(uid)
+		end)
+		if ok and type(name) == "string" and name ~= "" then
+			awayNames[uid] = name
+		end
+	end)
+	return "Teammate"
+end
+
+-- The user ids in AwayIds that are not in this server right now (a hero who came back is a Player again).
+local function awayList(state: Configuration): { number }
+	local out = {}
+	local text = state:GetAttribute("AwayIds")
+	if type(text) == "string" and text ~= "" then
+		for id in string.gmatch(text, "%d+") do
+			local uid = tonumber(id)
+			if uid and uid ~= player.UserId and not Players:GetPlayerByUserId(uid) then
+				table.insert(out, uid)
+			end
+		end
+	end
+	table.sort(out)
+	return out
+end
+TeamUI.AwayList = awayList
+
+local function buildAwayRow(uid: number, order: number): any
+	local w, h = rowSize()
+	local holder, face = RunWidgets.Panel(ui.List, { Name = "Away_" .. uid, Radius = K.Radius.Panel, Size = UDim2.fromOffset(w, h), LayoutOrder = order })
+	holder.Active = false
+	UIKit.padding(face, 5, 10, 5, 8)
+	local iconHolder = new("Frame", { Name = "Hero", BackgroundColor3 = K.NavyDeep, BackgroundTransparency = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(32, 32) }, face)
+	UIKit.corner(iconHolder, 999)
+	UIKit.stroke(iconHolder, K.Warn, 1.5, 0.3)
+	Icons.Draw(iconHolder, "hourglass", { Size = 18, Color = K.Warn, Back = K.NavyDeep, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	local nameLabel = UIKit.Role(face, "Label", awayName(uid), {
+		Name = "Name",
+		Position = UDim2.fromOffset(40, 0),
+		Size = UDim2.new(1, -40, 0, TS(Theme.Type.Label.Size) + 2),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = K.CreamMuted,
+	})
+	local stateLabel = UIKit.Role(face, "Caption", "RECONNECTING", {
+		Name = "State",
+		Position = UDim2.fromOffset(40, TS(Theme.Type.Label.Size) + 3),
+		Size = UDim2.new(1, -40, 0, TS(Theme.Type.Caption.Size) + 2),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = K.Warn,
+	})
+	return { Uid = uid, Holder = holder, Name = nameLabel, State = stateLabel }
+end
+
+-- Builds, updates and removes the reconnecting rows; true when the number of rows changed.
+local function updateAway(state: Configuration, meInRun: boolean): boolean
+	local list = meInRun and awayList(state) or {}
+	local changed = false
+	local wanted: { [number]: boolean } = {}
+	local untilAt = tonumber(state:GetAttribute("AwayUntil")) or 0
+	local ok, now = pcall(function()
+		return workspace:GetServerTimeNow()
+	end)
+	local left = (ok and untilAt > 0) and math.max(0, math.ceil(untilAt - now)) or nil
+	for i, uid in ipairs(list) do
+		wanted[uid] = true
+		local r = awayRows[uid]
+		if not r then
+			r = buildAwayRow(uid, 100 + i)
+			awayRows[uid] = r
+			changed = true
+		end
+		r.Holder.LayoutOrder = 100 + i
+		local name = awayName(uid)
+		if r.Name.Text ~= name then
+			r.Name.Text = name
+		end
+		local word = left and string.format("RECONNECTING · %d:%02d", left // 60, left % 60) or "RECONNECTING"
+		if r.State.Text ~= word then
+			r.State.Text = word
+		end
+	end
+	for uid, r in pairs(awayRows) do
+		if not wanted[uid] then
+			r.Holder:Destroy()
+			awayRows[uid] = nil
+			changed = true
+		end
+	end
+	return changed
+end
+
 local STATE_TEXT = {
 	alive = "",
 	choosing = "CHOOSING",
@@ -577,6 +685,9 @@ function TeamUI.Layout()
 	for _ in pairs(rows) do
 		n += 1
 	end
+	for _ in pairs(awayRows) do
+		n += 1
+	end
 	-- the shared run layout (Hud.RunRect): the compact party stack down the left, under the health
 	-- plate (phones: 4% / 25% of the safe area); it tells the layout how tall the stack is
 	local gap = 6
@@ -611,6 +722,9 @@ function TeamUI.Layout()
 	for _, row in pairs(rows) do
 		row.Holder.Size = UDim2.fromOffset(w, h)
 	end
+	for _, row in pairs(awayRows) do
+		row.Holder.Size = UDim2.fromOffset(w, h)
+	end
 end
 
 function TeamUI.Update(_dt: number, state: Configuration, meInRun: boolean)
@@ -629,7 +743,12 @@ function TeamUI.Update(_dt: number, state: Configuration, meInRun: boolean)
 		rebuildRows(list)
 		TeamUI.Layout()
 	end
-	ui.List.Visible = #list > 0
+	local awayChanged = updateAway(state, meInRun)
+	if awayChanged then
+		TeamUI.Layout()
+	end
+	local anyAway = next(awayRows) ~= nil
+	ui.List.Visible = #list > 0 or anyAway
 	for _, r in pairs(rows) do
 		updateRow(r, state)
 	end
@@ -665,7 +784,7 @@ end
 
 -- For the preview tool / tests.
 function TeamUI.Elements(): { [string]: any }
-	return { List = ui.List, Rows = rows, Markers = markers, Rings = worldRings }
+	return { List = ui.List, Rows = rows, Away = awayRows, Markers = markers, Rings = worldRings }
 end
 
 function TeamUI.Build(root: Frame, k: { [string]: any })

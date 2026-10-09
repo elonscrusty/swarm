@@ -85,6 +85,12 @@ function ReviveHoldClient.Target(): Player?
 	return target
 end
 
+-- [stream F] The touch REVIVE button: the run HUD adopts it (places it above JUMP in its layout and
+-- restyles it); its input handling and visibility stay here.
+function ReviveHoldClient.Button(): TextButton?
+	return button
+end
+
 local function send(on: boolean)
 	local r = remote
 	if not r then

@@ -372,7 +372,7 @@ end
 -- their size to the layout so the party stack, the touch controls and the equipment keep clear.
 local function place()
 	local touch = UserInputService.TouchEnabled
-	local btnW = touch and RunUI.Layout.TouchMin or 40
+	local btnW = touch and Hud.TouchPx() or 40
 	local panelW, panelH = ui.Holder.Size.X.Offset, ui.Holder.Size.Y.Offset
 	Hud.SetPieceSize("Map", panelW + BTN_GAP + btnW, panelH)
 	local r = Hud.RunRect("Map")

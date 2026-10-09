@@ -204,11 +204,11 @@ elseif view == "results" then
 	local outcome = preview.args.outcome or "Victory"
 	local save = preview.args.save or "Pending"
 	C.fire("RunResult", {
-		Outcome = outcome,
-		Duration = 927,
-		NewUnlocks = outcome == "Victory" and { "granny_boom", { Id = "coach_crunch", Name = "Coach Crunch" } } or nil,
-		SaveStatus = save ~= "none" and save or nil,
-		Stats = { Kills = 1840, Elites = 12, Chests = 7, Dashes = 96, Revives = 2, Distance = 9120, Bosses = outcome == "Victory" and 1 or 0 },
+		Won = outcome == "Victory",
+		Abandoned = outcome == "Left",
+		NewUnlocks = outcome == "Victory" and { "granny_boom", "toastmaster" } or nil,
+		SaveState = save ~= "none" and save or nil,
+		ClassGoals = { Kills = 1840, Elites = 12, Chests = 7, Dashes = 96, Revives = 2, Distance = 9120, Bosses = outcome == "Victory" and 1 or 0, XP = 2240, BestSurvive = 927, CloseKills = 410, MostWeapons = 4 },
 		Mode = "Trio",
 		CharacterId = "Knight",
 		Build = { Weapons = { { Id = "Whip", Level = 5, Evolved = true }, { Id = "MagicOrb", Level = 3 } }, Passives = { { Id = "Might", Level = 3 } } },

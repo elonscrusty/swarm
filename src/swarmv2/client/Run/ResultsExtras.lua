@@ -25,6 +25,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
+local ClassCatalog = (function()
+	local v2 = ReplicatedStorage:FindFirstChild("SwarmV2")
+	local mod = v2 and v2:FindFirstChild("ClassCatalog")
+	local ok, m = pcall(function()
+		return mod and require(mod)
+	end)
+	return ok and m or nil
+end)()
 local RunConfig = require(ReplicatedStorage:WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
 local Client = script.Parent.Parent.Parent:WaitForChild("SwarmClient")
 local UIKit = require(Client:WaitForChild("UIKit"))
@@ -70,6 +78,10 @@ function ResultsExtras.UnlockName(entry: any): string
 		return tostring(entry.Name or entry.DisplayName or pretty(tostring(entry.Id or "?")))
 	end
 	local id = tostring(entry)
+	local class = ClassCatalog and ClassCatalog.Get and ClassCatalog.Get(id)
+	if class then
+		return class.Name
+	end
 	local def = CharacterData.Characters[id]
 	return def and def.Name or pretty(id)
 end
@@ -111,6 +123,24 @@ function ResultsExtras.StatRows(stats: any): { { string } }
 		add(key)
 	end
 	return rows
+end
+
+-- The outcome the server confirmed: payload.Outcome, else its Abandoned (left from the menu) / Won flags.
+function ResultsExtras.OutcomeOf(payload: any): string?
+	if type(payload) ~= "table" then
+		return nil
+	end
+	if type(payload.Outcome) == "string" then
+		return payload.Outcome
+	end
+	if payload.Abandoned == true then
+		return "Left"
+	elseif payload.Won == true then
+		return "Victory"
+	elseif payload.Won == false then
+		return "Defeat"
+	end
+	return nil
 end
 
 -- "Victory" | "Defeat" | "Left" -> (title line, meaning) or nil
@@ -164,7 +194,7 @@ function ResultsExtras.Build(body: Instance, content: Instance)
 	ui.Save = save
 	ui.SaveIcon = new("Frame", { Name = "Icon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(22, 22), Active = false }, save)
 	ui.SaveText = W.Text(save, "", { Name = "Text", Size = 16, Font = "Strong", Position = UDim2.fromOffset(40, 0), Box = UDim2.new(1, -50, 1, 0), Fit = 11, Color = RunTheme.Cream })
-	player:GetAttributeChangedSignal("RunSaveStatus"):Connect(function()
+	player:GetAttributeChangedSignal("RunSaveState"):Connect(function()
 		ResultsExtras.RefreshSave()
 	end)
 end
@@ -177,19 +207,19 @@ local SAVE_STYLE = {
 	Pending = { Icon = "hourglass", Color = "CreamMuted" },
 	Saved = { Icon = "check", Color = "Good" },
 	Failed = { Icon = "warning", Color = "Danger" },
+	NotSaved = { Icon = "warning", Color = "Warn" },
 }
 
--- The save line: payload SaveStatus, then the attribute RunSaveStatus as it changes.
+-- The save line (stream E2): the player attribute RunSaveState as it changes (Pending until DataService
+-- confirms, then Saved / Failed; NotSaved when saving is unavailable on this server), the payload's
+-- SaveState for the moment the results opened.
 function ResultsExtras.RefreshSave()
 	if not ui.Save then
 		return
 	end
-	local status = player:GetAttribute("RunSaveStatus")
+	local status = player:GetAttribute("RunSaveState")
 	if type(status) ~= "string" and data then
-		status = data.SaveStatus
-		if status == nil and type(data.Saved) == "boolean" then
-			status = data.Saved and "Saved" or "Pending"
-		end
+		status = data.SaveState
 	end
 	local style = type(status) == "string" and SAVE_STYLE[status] or nil
 	ui.Save.Visible = style ~= nil
@@ -205,7 +235,7 @@ function ResultsExtras.RefreshSave()
 		Icons.Draw(ui.SaveIcon, style.Icon, { Size = 22, Color = RunTheme[style.Color], Back = RunTheme.Navy })
 		ui.SaveText.Text = CFG.SaveLabels[status] or status
 		ui.SaveText.TextColor3 = RunTheme[style.Color]
-		ui.Save.UIStroke.Color = status == "Failed" and RunTheme.Danger or RunTheme.NavyEdge
+		ui.Save.UIStroke.Color = (status == "Failed" and RunTheme.Danger) or (status == "NotSaved" and RunTheme.Warn) or RunTheme.NavyEdge
 	end
 end
 
@@ -215,7 +245,7 @@ function ResultsExtras.Fill(payload: any)
 		return
 	end
 	-- outcome
-	local title, line = ResultsExtras.OutcomeText(payload.Outcome)
+	local title, line = ResultsExtras.OutcomeText(ResultsExtras.OutcomeOf(payload))
 	ui.Outcome.Visible = title ~= nil
 	if title then
 		ui.OutcomeTitle.Text = title
@@ -223,7 +253,7 @@ function ResultsExtras.Fill(payload: any)
 		ui.OutcomeTitle.TextColor3 = payload.Outcome == "Defeat" and RunTheme.Danger or RunTheme.Gold
 	end
 	-- stats
-	local rows = ResultsExtras.StatRows(payload.Stats or payload.RunStats)
+	local rows = ResultsExtras.StatRows(payload.Stats or payload.RunStats or payload.ClassGoals)
 	for _, c in ipairs(ui.StatsGrid:GetChildren()) do
 		if c:IsA("GuiObject") then
 			c:Destroy()
