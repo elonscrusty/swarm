@@ -411,6 +411,31 @@ for ci, cls in ipairs(classes) do
 	check(cls .. ": enemies stand on the ground (|dy| < 1.5)", samples > 0 and offGround == 0,
 		string.format("%d of %d samples off, worst %.1f", offGround, samples, worst))
 	check(cls .. ": no enemy in an unwalkable cell", samples > 0 and unwalk == 0, string.format("%d of %d", unwalk, samples))
+	if gemSamples == 0 then
+		-- personal shards of kills beside the hero are picked up at once (stream E2): drop one 25
+		-- studs out on walkable ground and check where it rests
+		local XPS = preview.server("XPSystem")
+		local p = rp.Root.Position
+		for k = 0, 15 do
+			local a = k * math.pi / 8
+			local x, z = p.X + math.cos(a) * 25, p.Z + math.sin(a) * 25
+			if HG.IsWalkable(x, z) then
+				XPS.SpawnGem(Vector3.new(x, HG.GroundY(x, z), z), 1)
+				break
+			end
+		end
+		advance(0.1, 30)
+		local folder = workspace:FindFirstChild("SwarmGems")
+		for _, gem in ipairs(folder and folder:GetChildren() or {}) do
+			local base = gem:GetAttribute("Base")
+			if gem:GetAttribute("Active") == true and gem:GetAttribute("Fly") == nil and typeof(base) == "Vector3" then
+				gemSamples += 1
+				if math.abs(base.Y - XP_HEIGHT - HG.GroundY(base.X, base.Z)) > 1.5 then
+					gemOff += 1
+				end
+			end
+		end
+	end
 	check(cls .. ": XP gems rest on the ground", gemSamples > 0 and gemOff == 0, string.format("%d of %d off", gemOff, gemSamples))
 
 	-- a dash through the server handler (class variant), then the client's move

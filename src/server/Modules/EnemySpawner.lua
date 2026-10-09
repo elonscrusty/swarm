@@ -558,7 +558,14 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.ChargeHits = nil
 	e.SpawnMinute = dirEntry and dirT or nil -- the director minute and party size it was scaled for
 	e.SpawnN = dirEntry and dirN or nil
-	e.Kind = isBoss and "Boss" or (elite and "Elite") or (dirEntry and dirEntry.Kind) or def.Kind or "Normal"
+	-- the XP / gold kind (stream E2's XPSystem.KindOf): boss, elite, the roster's / def's Kind,
+	-- else E2's own rule (Tough from its HP threshold); boss objects have none (no rewards)
+	e.Kind = nil
+	local kind = isBoss and "Boss" or (elite and "Elite") or (dirEntry and dirEntry.Kind) or def.Kind
+	if not kind and not def.Object and ctx.XPSystem and ctx.XPSystem.KindOf then
+		kind = ctx.XPSystem.KindOf(e)
+	end
+	e.Kind = (not def.Object) and (kind or "Normal") or nil
 	if dirEntry and F then
 		e.DmgScale = F.PartyDamage(dirN) * F.TimeDamage(dirT) * dirEliteDmg * stages.DamageMult()
 		if dirEntry.Attack then

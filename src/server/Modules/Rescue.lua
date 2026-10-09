@@ -21,6 +21,10 @@
 	             teammate still in the run (a downed one waiting for a revive too) gets an item (ItemSystem.Roll with Rescue.Weights + ItemSystem.Grant,
 	             the reward reel like a chest); if no item can be granted, run gold instead
 	             (GoldSystem.AddRunGold). Exactly once.
+	             [stream D] On a director run (the Cliffwood beacon run) the ring is the Stone
+	             Circle's (the beacon's landmark, the director's portal spot) and every chest
+	             recipient (LootSystem.ChestRecipients) gets one passive choice instead
+	             (LevelUpSystem.QueueChoice "Chest", "PassiveOnly").
 	  Lost       its HP reached 0: a message says so; nothing is granted.
 	Nothing happens to a villager nobody finds. Frozen runs (level-up, pause, reward reel)
 	freeze it too (it only steps while the run simulates; hits use the run clock).
