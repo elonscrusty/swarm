@@ -114,6 +114,10 @@ function Dash.GetClassId(rp: any): string
 	if type(id) ~= "string" or id == "" then
 		id = rp.Player and rp.Player:GetAttribute("SwarmClass")
 	end
+	if type(id) ~= "string" or id == "" then
+		-- the run's hero (RunManager sets it from the admitted class; never a client claim)
+		id = rp.CharacterId
+	end
 	return if type(id) == "string" then id else ""
 end
 

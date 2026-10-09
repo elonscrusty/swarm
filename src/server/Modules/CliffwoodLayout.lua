@@ -102,8 +102,11 @@ Layout.WindingRamp = {
 -- The broad stone bridge: starts on the apron (ground) and ends on the Overlook.
 Layout.Bridge = { Name = "StoneBridge", S0 = 100, S1 = 398, Y0 = 0, Y1 = 36.2, W = 36 }
 
--- The spring launch pad (optional shortcut basin -> terrace) and where it throws.
-Layout.LaunchPad = { Pos = { 50, -44 }, Target = { 312, -40 }, Radius = 6 }
+-- The spring launch pad (optional shortcut basin -> terrace) and where it throws. The pad keeps
+-- ~55 studs of basin floor before the 32-64 tall rock between the basin and the terrace, so the
+-- arc (LaunchPads.ApexFor, about 85 studs high) clears it; at x 50 the rock face stood 8 studs
+-- from the pad and no arc could clear it.
+Layout.LaunchPad = { Pos = { 0, -44 }, Target = { 312, -40 }, Radius = 6 }
 
 -- Main loop in walking order: control points of each leg (the legs reuse the roads above).
 -- Legs flagged Ramp are straight sloped lines (3D length).

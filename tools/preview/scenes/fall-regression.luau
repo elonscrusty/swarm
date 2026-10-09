@@ -26,9 +26,12 @@ local function settle()
 		LU.Cancel(rp)
 	end
 end
+-- a colliding floor slab: the old arenas' "Floor" parts or the Cliffwood map's NavGround slabs
+-- (its basin floor is at the same height; HeightGrid stays flat here, the mock's rays hit nothing)
+local CollectionService = game:GetService("CollectionService")
 local function floorUnder(pos: Vector3): BasePart?
 	for _, d in ipairs(workspace:GetDescendants()) do
-		if d:IsA("BasePart") and d.Name == "Floor" and d.CanCollide then
+		if d:IsA("BasePart") and (d.Name == "Floor" or CollectionService:HasTag(d, "NavGround")) and d.CanCollide then
 			local top = d.Position.Y + d.Size.Y / 2
 			if math.abs(top - FLOOR) < 0.05 and math.abs(pos.X - d.Position.X) <= d.Size.X / 2
 				and math.abs(pos.Z - d.Position.Z) <= d.Size.Z / 2 then
@@ -100,17 +103,35 @@ local function expedition(first: string)
 		preview.log("travelled to stage", stageN, name)
 	end
 end
-expedition("Desert")
-local missing = nil
-for name, def in pairs(Config.Arenas) do
-	if type(def) == "table" and def.DisplayName and not seen[name] then
-		missing = name
+-- every arena may be the first stage here (Desert needs BestStage 5 in the lobby)
+for _, p in ipairs(players) do
+	local data = preview.server("DataService").GetData(p)
+	if data then
+		data.Stats.BestStage = math.max(data.Stats.BestStage or 0, 10)
 	end
 end
-if missing then
-	-- finish this expedition, then start one in the arena the tour skipped
-	RM.FinishFromPortal()
-	expedition(missing)
+-- the single map first (Cliffwood: every stage on one map), then the old biome tour, then any
+-- arena the tour skipped; the rescue checks below run on the last (flat) arena
+local function missingArena(): string?
+	local names = {}
+	for name, def in pairs(Config.Arenas) do
+		if type(def) == "table" and def.DisplayName and not seen[name] then
+			table.insert(names, name)
+		end
+	end
+	table.sort(names)
+	return names[1]
+end
+local starts = { "Cliffwood", "Desert" }
+for i = 1, 6 do
+	local first = starts[i] or missingArena()
+	if not first then
+		break
+	end
+	if i > 1 then
+		RM.FinishFromPortal() -- finish this expedition, then start the next one
+	end
+	expedition(first)
 end
 for name, def in pairs(Config.Arenas) do
 	if type(def) == "table" and def.DisplayName and not seen[name] then

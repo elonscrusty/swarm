@@ -114,6 +114,9 @@ def main():
     checks += [("analytics-regression", ["mode=published"]), ("analytics-regression", ["mode=studio"]), ("analytics-client", [])]
     # redesign: ground height + flow fields (server HeightGrid; flat fallback, ramp / cliff, routing, cave)
     checks += [("heightgrid-regression", [])]
+    # redesign: the four class kits (signature weapons, passives, dash reactions) and an integrated
+    # Cliffwood run per class (HeightGrid, class rig, weapon kills, stage 2 on the same map, pads, dash)
+    checks += [("class-kits-sim", []), ("cliffwood-run-sim", [])]
 
     def run(check):
         scene, settings = check
@@ -122,7 +125,7 @@ def main():
         command = [args.lune, "run", "tools/" + scripts[scene], *settings] if scene in scripts else [
             args.lune, "run", "tools/preview/runtime/main.luau", "--", "--scene", scene,
             "--studio", "--device", "pc", "--out", str(args.out / (name + ".json")),
-            "--max-time", "3000" if scene == "corner-regression" else "400", "--set", "headless=on",
+            "--max-time", "3000" if scene in ("corner-regression", "class-kits-sim", "cliffwood-run-sim") else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
         if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")) or (scene == "analytics-regression" and settings == ["mode=published"]):
@@ -147,7 +150,7 @@ def main():
             # Long client scenes: 220-290 s each when run alone (menu was 267 s before the
             # features batch too, so this is Lune time, not game cost); with three workers in
             # parallel they pass 360 s, so they get 600 s.
-            limit = 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim", "run-entry-regression") else (
+            limit = 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim", "run-entry-regression", "class-kits-sim", "cliffwood-run-sim") else (
                 600 if scene in ("menu", "ui", "run-intro", "events-fx", "loot-focus-regression", "perf-regression", "results-flow", "textfit-regression", "comeback-regression", "analytics-client")
                 or (scene == "layout" and settings[0] == "smart-tutorial-regression") else 360)
             result = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=limit)
