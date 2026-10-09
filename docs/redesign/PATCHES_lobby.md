@@ -74,12 +74,16 @@ basecamp's gates + `Transfer`. Keep `RunServers` for its return / reconnect help
 gameplay track still needs them. The basecamp sits at `LobbyConfig.Origin` (0, 0, 4000), more than 3000
 studs from `Config.Lobby.Origin` and from the arenas.
 
-## L6. Party re-forming after a return (optional)
+## L6. Party re-forming after a return (DONE, offline-tested)
 
-`MatchAdmission.ReturnToLobby` sends `TeleportData { SwarmV2Return = { schemaVersion = 1 } }`. Parties don't
-re-form automatically on the lobby server (the frozen `MatchTicket` shape has no party field). If wanted:
-add an optional `party = { leader, members }` to the ticket (both tracks + owner OK, `Types.lua` is frozen)
-and pass it as `SwarmReturn = { Party = ... }`, which `PartyService.reformAfterRun` already understands.
+`MatchTicket` got an optional `party = { leader, members }` (user ids, validated by
+`MatchAdmission.CleanParty`; Transfer fills it from `PartyService.PartyOf`). On the way home
+`MatchAdmission.ReturnToLobby` writes a short record `p/<matchId>` (`TicketStore.WriteParty`, 300 s) and
+sends `TeleportData { SwarmV2Return = { schemaVersion, matchId } }` (a lookup hint only). The lobby
+(`LobbyBoot` onLoaded -> `MatchAdmission.ReturnHint` -> `Lobby/PartyReturn.Arrive`) re-creates the party
+through `PartyService.Regroup(leader, members)` only for players listed in the stored record who are
+present, once the leader is present (60 s grace). Local role: the same path without a teleport.
+Checks: `lobby-queue-regression` section 9 (30 checks).
 
 ## L7. Regressions registration (done in this branch)
 

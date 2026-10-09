@@ -45,6 +45,9 @@ export type MatchTicket = {
 	expectedUserIds: { number },
 	classesByUserId: { [string]: ClassId }, -- keys are tostring(userId)
 	lobbyPlaceId: number,
+	-- optional: the party that queued together (leader + members, all in expectedUserIds); the
+	-- return trip uses it to put them back into one party (Lobby/PartyReturn)
+	party: { leader: number, members: { number } }?,
 }
 
 -- The only TeleportData a client can see: a lookup hint, never proof of anything.

@@ -21,6 +21,7 @@ local LobbyNet = require(SwarmV2Shared:WaitForChild("Lobby"):WaitForChild("Lobby
 local MatchAdmission = require(script.Parent.Parent:WaitForChild("MatchAdmission"))
 local ClassOwnership = require(script.Parent:WaitForChild("ClassOwnership"))
 local Transfer = require(script.Parent:WaitForChild("Transfer"))
+local PartyReturn = require(script.Parent:WaitForChild("PartyReturn"))
 local QueueService = require(script.Parent:WaitForChild("QueueService"))
 local ClassService = require(script.Parent:WaitForChild("ClassService"))
 local Avatars = require(script.Parent:WaitForChild("Avatars"))
@@ -183,12 +184,25 @@ local function startBasecamp(role: string)
 		end)
 	end
 
+	PartyReturn._SetDeps({
+		Regroup = ctx.PartyService and ctx.PartyService.Regroup or nil,
+	})
 	Transfer.Start()
 	Avatars.Start()
 	Players.PlayerRemoving:Connect(QueueService.OnPlayerRemoving)
 	local function onLoaded(p: Player)
 		local data = ctx.DataService.GetData(p)
 		ClassOwnership.EnsureDefault(data)
+		-- back from a run with a party record: put the party together again (lookup hint only)
+		local returnedFrom = MatchAdmission.ReturnHint(p)
+		if returnedFrom then
+			task.spawn(function()
+				local ok, err = pcall(PartyReturn.Arrive, p, returnedFrom, nil, nil)
+				if not ok then
+					warn("[SwarmV2 LobbyBoot] party return: " .. tostring(err))
+				end
+			end)
+		end
 		-- after the other load callbacks (the old lobby hero), the avatar wins
 		task.defer(function()
 			if p.Parent == Players and not Transfer.IsBusy(p) and MatchAdmission.LocalMatchOf(p.UserId) == nil then

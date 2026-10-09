@@ -52,6 +52,7 @@ local LobbyFolder = script.Parent:WaitForChild("Lobby")
 local TicketStore = require(LobbyFolder:WaitForChild("TicketStore"))
 local ClassOwnership = require(LobbyFolder:WaitForChild("ClassOwnership"))
 local Clock = require(LobbyFolder:WaitForChild("Clock"))
+local PartyReturn = require(LobbyFolder:WaitForChild("PartyReturn"))
 
 type AdmissionResult = Types.AdmissionResult
 type ReturnResult = Types.ReturnResult
@@ -204,6 +205,7 @@ function MatchAdmission.SanitizeTicket(raw: any): MatchTicket?
 	end
 	return {
 		schemaVersion = raw.schemaVersion,
+		party = MatchAdmission.CleanParty(raw.party, ids),
 		matchId = raw.matchId,
 		targetMatchPlaceId = raw.targetMatchPlaceId,
 		reservedPrivateServerId = raw.reservedPrivateServerId,
@@ -216,14 +218,39 @@ function MatchAdmission.SanitizeTicket(raw: any): MatchTicket?
 end
 
 -- Lobby side: a fresh ticket for a frozen roster. Server only; never sent to a client.
-function MatchAdmission.BuildTicket(matchId: string, reservedPrivateServerId: string, roster: { { userId: number, classId: string } }): MatchTicket
+-- A party record reduced to what is valid: a leader and at least one other member, all of them in
+-- `ids` (the roster / the members of the match). nil when nothing valid is left.
+function MatchAdmission.CleanParty(raw: any, ids: { number }): { leader: number, members: { number } }?
+	if type(raw) ~= "table" or not validId(raw.leader) or not table.find(ids, raw.leader) or type(raw.members) ~= "table" then
+		return nil
+	end
+	local members: { number } = { raw.leader }
+	for i = 1, LobbyConfig.MaxPlayers + 1 do
+		local id = raw.members[i]
+		if id == nil then
+			break
+		end
+		if i > LobbyConfig.MaxPlayers then
+			return nil
+		end
+		if validId(id) and table.find(ids, id) and not table.find(members, id) then
+			table.insert(members, id)
+		end
+	end
+	if #members < 2 then
+		return nil
+	end
+	return { leader = raw.leader, members = members }
+end
+
+function MatchAdmission.BuildTicket(matchId: string, reservedPrivateServerId: string, roster: { { userId: number, classId: string } }, party: { leader: number, members: { number } }?): MatchTicket
 	local now = Clock.Unix()
 	local ids, classes = {}, {}
 	for _, r in ipairs(roster) do
 		table.insert(ids, r.userId)
 		classes[tostring(r.userId)] = r.classId
 	end
-	return {
+	local ticket: MatchTicket = {
 		schemaVersion = Types.SchemaVersion,
 		matchId = matchId,
 		targetMatchPlaceId = deps.PlaceId(),
@@ -234,6 +261,10 @@ function MatchAdmission.BuildTicket(matchId: string, reservedPrivateServerId: st
 		classesByUserId = classes,
 		lobbyPlaceId = deps.PlaceId(),
 	}
+	if party then
+		ticket.party = MatchAdmission.CleanParty(party, ids)
+	end
+	return ticket
 end
 
 -- local role: matchId each user is heading to (in-memory "teleport hint")
@@ -253,6 +284,9 @@ function MatchAdmission.RegisterLocalMatch(ticket: MatchTicket): boolean
 	end
 	return true
 end
+
+-- matchId → the party the ticket recorded (kept for the way home; dropped after the record's lifetime)
+local matchParty: { [string]: { leader: number, members: { number } } } = {}
 
 local cache: { [string]: PlayerRunContext } = {} -- matchId/userId → admitted context
 local pending: { [string]: boolean } = {}
@@ -365,6 +399,12 @@ local function resolveNow(player: Player, role: ServerRole, matchId: string): Ad
 		end
 		bound = matchId
 	end
+	if t.party and matchParty[matchId] == nil then
+		matchParty[matchId] = t.party
+		task.delay(LobbyConfig.PartyReturnTTLSeconds, function()
+			matchParty[matchId] = nil
+		end)
+	end
 	local roster = table.clone(t.expectedUserIds)
 	table.freeze(roster)
 	local context: PlayerRunContext = {
@@ -445,9 +485,14 @@ local function notify(player: Player, text: string, kind: string)
 	end
 end
 
-local function makeReturnOptions(): Instance
+-- TeleportData is only a lookup hint: the party itself goes into the store (PartyReturn.Record).
+local function makeReturnOptions(matchId: string?): Instance
 	local options = Instance.new("TeleportOptions")
-	options:SetTeleportData({ SwarmV2Return = { schemaVersion = Types.SchemaVersion } })
+	local hint: { [string]: any } = { schemaVersion = Types.SchemaVersion }
+	if matchId and matchParty[matchId] and PartyReturn.Record("live", matchId, matchParty[matchId]) then
+		hint.matchId = matchId
+	end
+	options:SetTeleportData({ SwarmV2Return = hint })
 	return options
 end
 
@@ -525,6 +570,9 @@ function MatchAdmission.ReturnToLobby(players: { Player }): { ReturnResult }
 			local matchId = localHint[p.UserId]
 			local ok = deps.LocalReturn ~= nil and (deps.LocalReturn :: (Player) -> boolean)(p) == true
 			if ok then
+				if matchId and matchParty[matchId] then
+					PartyReturn.Arrive(p, matchId, matchParty[matchId], "memory")
+				end
 				localHint[p.UserId] = nil
 				if matchId then
 					cache[matchId .. "/" .. tostring(p.UserId)] = nil
@@ -551,7 +599,7 @@ function MatchAdmission.ReturnToLobby(players: { Player }): { ReturnResult }
 		end
 		return out
 	end
-	local trip: Trip = { Options = makeReturnOptions(), Tries = {} }
+	local trip: Trip = { Options = makeReturnOptions(bound), Tries = {} }
 	local ready: { Player } = {}
 	local ds = deps.DataService
 	for _, p in ipairs(group) do
@@ -583,6 +631,21 @@ end
 ------------------------------------------------------------------------------------------
 
 local started = false
+
+-- Lobby server: the matchId a player came home from when the match server recorded their party
+-- (a lookup hint only; PartyReturn checks the stored record), else nil.
+function MatchAdmission.ReturnHint(player: Player): string?
+	local ok: boolean, data: any = pcall(deps.JoinData, player)
+	if not ok or type(data) ~= "table" or data.SourcePlaceId == nil then
+		return nil
+	end
+	local td = data.TeleportData
+	local hint = type(td) == "table" and td.SwarmV2Return or nil
+	if type(hint) ~= "table" or hint.schemaVersion ~= Types.SchemaVersion or not validMatchId(hint.matchId) then
+		return nil
+	end
+	return hint.matchId
+end
 
 function MatchAdmission.Init(ctx: any)
 	deps.DataService = ctx and ctx.DataService or deps.DataService

@@ -1168,6 +1168,146 @@ do
 	drop({ b })
 end
 
+------------------------------------------------------------------------------------------
+-- 9. Party re-forms after a run (PATCHES_lobby L6): ticket party, return record, regroup
+------------------------------------------------------------------------------------------
+do
+	local PR = preview.require(Lobby.PartyReturn)
+	local regroups: { any } = {}
+	PR._SetDeps({ Regroup = function(leader, members)
+		table.insert(regroups, { leader = leader, members = table.clone(members) })
+	end })
+	Transfer._SetDeps({ PartyService = PS })
+	local function snapOf(list: { Player })
+		local classes = {}
+		for _, p in ipairs(list) do
+			classes[p] = "ruckus"
+		end
+		return { Players = list, Classes = classes, GateId = "PublicA" }
+	end
+
+	-- the ticket records the party (leader + the members that queued with them)
+	reset()
+	local ps = mk(3)
+	local a, b, c = ps[1], ps[2], ps[3]
+	party(a, b)
+	local roster = Transfer.RosterParty({ a, b, c })
+	check("ret: RosterParty = leader + party members in the roster, the solo player is not in it", roster ~= nil and roster.leader == a.UserId and #roster.members == 2 and table.find(roster.members, b.UserId) ~= nil and table.find(roster.members, c.UserId) == nil)
+	check("ret: a lone party member in the roster has no party", Transfer.RosterParty({ b, c }) == nil)
+	check("ret: no party → none", Transfer.RosterParty({ c }) == nil)
+	local m = Transfer.Begin(snapOf({ a, b, c }), "live")
+	preview.advance(0.2)
+	local t = liveSpy.sets[1] and liveSpy.sets[1].value
+	check("ret: live ticket carries the party", t ~= nil and t.party ~= nil and t.party.leader == a.UserId and #t.party.members == 2, t and t.party)
+	check("ret: ticket with party passes SanitizeTicket and keeps it", t ~= nil and MA.SanitizeTicket(t) ~= nil and MA.SanitizeTicket(t).party ~= nil and MA.SanitizeTicket(t).party.leader == a.UserId)
+	local forged = table.clone(t)
+	forged.party = { leader = a.UserId, members = { a.UserId, 999999 } }
+	check("ret: a party member outside the roster is dropped (party of one = none)", MA.SanitizeTicket(forged) ~= nil and MA.SanitizeTicket(forged).party == nil)
+	forged.party = { leader = 999999, members = { 999999, a.UserId } }
+	check("ret: a leader outside the roster = no party", MA.SanitizeTicket(forged).party == nil)
+	local matchId = m.Id
+
+	-- match server: admit, then send everyone home
+	local sent: { any } = {}
+	MA._SetDeps({
+		IsStudio = function()
+			return false
+		end,
+		PrivateServerId = function()
+			return "ps-1"
+		end,
+		PrivateServerOwnerId = function()
+			return 0
+		end,
+		JobId = function()
+			return "job-match"
+		end,
+		JoinData = function(p)
+			return { SourcePlaceId = PLACE, TeleportData = { SwarmV2 = { schemaVersion = 1, matchId = matchId } } }
+		end,
+		Teleport = function(placeId, players, options)
+			table.insert(sent, { players = table.clone(players), data = options:GetTeleportData() })
+		end,
+	})
+	for _, p in ipairs({ a, b, c }) do
+		ds.released[p] = nil
+		check("ret: match server admits " .. p.Name, MA.ResolvePlayer(p).ok)
+	end
+	local res = MA.ReturnToLobby({ a, b, c })
+	check("ret: ReturnToLobby sent them in one teleport", res[1].ok and res[2].ok and res[3].ok and #sent == 1 and #sent[1].players == 3)
+	local d = sent[1] and sent[1].data
+	check("ret: return TeleportData is a hint only (schemaVersion + matchId, no ids, no party)", d ~= nil and d.SwarmV2Return ~= nil and d.SwarmV2Return.matchId == matchId and keys(d.SwarmV2Return) == 2 and not deepHas(d, tostring(a.UserId)) and not deepHas(d, "members"))
+	local rec = TicketStore.ReadParty("live", matchId)
+	check("ret: the party record is in the store, with the roster's party", rec ~= nil and rec.leader == a.UserId and #rec.members == 2)
+	local ttlOk = false
+	for _, row in ipairs(liveSpy.sets) do
+		if row.key == "p/" .. matchId then
+			ttlOk = row.ttl == LobbyConfig.PartyReturnTTLSeconds
+		end
+	end
+	check("ret: the record expires on its own", ttlOk)
+
+	-- lobby server: arrivals one by one
+	local function lobbyArrival(who: Player, hintMatch: string?): string?
+		MA._SetDeps({
+			IsStudio = function()
+				return false
+			end,
+			PrivateServerId = function()
+				return ""
+			end,
+			JoinData = function()
+				return { SourcePlaceId = PLACE, TeleportData = hintMatch and { SwarmV2Return = { schemaVersion = 1, matchId = hintMatch } } or nil }
+			end,
+		})
+		return MA.ReturnHint(who)
+	end
+	regroups = {}
+	local hb = lobbyArrival(b, matchId)
+	check("ret: arrival reads the hint", hb == matchId)
+	check("ret: a member arriving first does not regroup (leader not here)", PR.Arrive(b, hb :: string, nil, nil) == 0 and #regroups == 0)
+	local hc = lobbyArrival(c, matchId)
+	check("ret: a forged hint (not in the record) changes nothing", PR.Arrive(c, hc :: string, nil, nil) == 0 and #regroups == 0)
+	local ha = lobbyArrival(a, matchId)
+	check("ret: the leader arriving pulls the waiting member in", PR.Arrive(a, ha :: string, nil, nil) == 1 and #regroups == 1 and regroups[1].leader == a and #regroups[1].members == 1 and regroups[1].members[1] == b)
+	check("ret: the solo player is never regrouped", #regroups == 1 and regroups[1].members[1] ~= c)
+	check("ret: no hint / bad hint = no party work", lobbyArrival(a, nil) == nil and lobbyArrival(a, "x") == nil and lobbyArrival(a, "bad id with spaces") == nil)
+	-- a player absent from this server is skipped
+	preview.removePlayer(b)
+	regroups = {}
+	check("ret: a member who left is not regrouped", PR.Arrive(a, matchId, nil, nil) == 0 and #regroups == 0)
+	-- an expired / missing record
+	check("ret: unknown record = nothing", PR.Arrive(a, "match-none-0001", nil, nil) == 0)
+	drop({ a, b, c })
+
+	-- local role: the same server, members return at different times
+	reset()
+	setRole("local")
+	regroups = {}
+	ps = mk(3)
+	a, b, c = ps[1], ps[2], ps[3]
+	party(a, b)
+	m = Transfer.Begin(snapOf({ a, b, c }), "local")
+	preview.advance(0.2)
+	local lt = TicketStore.Read("memory", m.Id)
+	check("ret: local ticket carries the party", lt ~= nil and lt.party ~= nil and lt.party.leader == a.UserId and #lt.party.members == 2)
+	for _, p in ipairs({ a, b, c }) do
+		check("ret: local admits " .. p.Name, MA.ResolvePlayer(p).ok)
+	end
+	MA._SetDeps({ LocalReturn = function()
+		return true
+	end })
+	MA.ReturnToLobby({ b })
+	check("ret: local member home first → waits for the leader", #regroups == 0)
+	MA.ReturnToLobby({ c })
+	check("ret: local solo player home → no regroup", #regroups == 0)
+	MA.ReturnToLobby({ a })
+	check("ret: local leader home → party re-formed with the member", #regroups == 1 and regroups[1].leader == a and #regroups[1].members == 1 and regroups[1].members[1] == b)
+	drop(ps)
+	setRole("lobby")
+	PR._SetDeps({ Regroup = false })
+end
+
 preview.log(string.format("lobby-queue-regression: %d checks, %d passed, %d failed", passes + fails, passes, fails))
 Clock._Set(function()
 	return os.time()

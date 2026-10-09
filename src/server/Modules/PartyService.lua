@@ -689,6 +689,18 @@ function PartyService.MembersOf(player: Player): { Player }
 	return list
 end
 
+-- Puts these players into `leader`'s party (the lobby's "back from a run together"; the caller has
+-- validated who was in the run). Members already in it are skipped; a full party stops the loop.
+function PartyService.Regroup(leader: Player, members: { Player }): number
+	local n = 0
+	for _, m in ipairs(members) do
+		if m ~= leader and m.Parent and joinParty(m, leader) == nil then
+			n += 1
+		end
+	end
+	return n
+end
+
 function PartyService.PartyOf(player: Player): Party?
 	return partyOf[player]
 end

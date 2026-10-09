@@ -47,6 +47,8 @@ LobbyConfig.StoreRetryDelay = 0.5 -- seconds, doubled after each failed try
 LobbyConfig.TeleportRetries = 2 -- extra TeleportAsync tries for players whose teleport failed
 LobbyConfig.TeleportRetryDelays = { 1, 3 } -- seconds before retry 1, retry 2
 LobbyConfig.TeleportTimeoutSeconds = 25 -- still here this long after a teleport call: failed
+LobbyConfig.PartyReturnTTLSeconds = 300 -- how long a "party went home together" record lives
+LobbyConfig.PartyReturnGraceSeconds = 60 -- the leader / members may arrive this far apart
 LobbyConfig.ReturnRetries = 2 -- match server: extra tries of the return-to-lobby teleport
 
 -- Destination admission (match server).

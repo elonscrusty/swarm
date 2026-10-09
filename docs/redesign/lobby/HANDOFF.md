@@ -129,6 +129,6 @@ conflict with the gameplay track's merge): rebuild once after the merge.
 
 - PATCHES_lobby.md L1-L4 are required for the basecamp to be playable (old lobby hero, movement block,
   menu camera, first-run auto start).
-- Pedestal figures are temporary part previews; swap in the real class models when they exist.
-- Old hero skins in the Store are still listed (the Store was not changed); decide whether to hide them.
-- Parties don't re-form after a return (PATCHES L6, needs a shared ticket field).
+- Pedestal figures: the real class models replace the part previews once their meshes load (Basecamp swapRealModel).
+- Skins of the 11 hidden old heroes are hidden from the Store and the skin picker (CosmeticData.IsLegacySkin); owned ones stay in saves.
+- Parties re-form after a return (PATCHES L6, optional ticket field `party`; not tested live).

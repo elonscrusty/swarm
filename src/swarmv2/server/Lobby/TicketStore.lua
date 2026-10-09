@@ -171,6 +171,24 @@ function TicketStore.Remove(kind: string, matchId: string)
 	end)
 end
 
+-- The "this party went home together" record, key "p/<matchId>": written by the match server's
+-- return trip, read by the lobby server the players land on. Short lived.
+function TicketStore.WriteParty(kind: string, matchId: string, party: { [string]: any }, ttl: number): boolean
+	local b = TicketStore.Backend(kind)
+	local ok = attempt(function()
+		b.Set("p/" .. matchId, party, math.max(1, math.floor(ttl)))
+	end)
+	return ok
+end
+
+function TicketStore.ReadParty(kind: string, matchId: string): any
+	local b = TicketStore.Backend(kind)
+	local ok, value = attempt(function()
+		return b.Get("p/" .. matchId)
+	end)
+	return ok and value or nil
+end
+
 --[[
 	Atomic admission mark for (matchId, userId), held by `serverKey` (the match server's
 	JobId). The first server to mark wins; the same server marking again is fine (retries,

@@ -74,6 +74,8 @@ local deps = {
 		task.wait(seconds)
 	end,
 	Notify = nil :: ((Player, string, string) -> ())?,
+	-- PartyService (PartyOf): the party that queued together goes into the ticket
+	PartyService = nil :: any,
 	-- the player leaves the camp (local match) / comes back (failed start)
 	OnLocalStart = nil :: ((Player) -> ())?,
 	OnLocalCancel = nil :: ((Player) -> ())?,
@@ -239,6 +241,42 @@ function Transfer.OnPlayerRemoving(p: Player)
 	end
 end
 
+-- The party that queued together, for the ticket (so the way home can regroup it), or nil: the roster
+-- members that share one party, as user ids; the leader must be in the roster and there must be two.
+function Transfer.RosterParty(players: { Player }): { leader: number, members: { number } }?
+	local ps = deps.PartyService
+	if not ps or not ps.PartyOf then
+		return nil
+	end
+	local ok, result = pcall(function(): any
+		local party: any = nil
+		for _, p in ipairs(players) do
+			local pp = ps.PartyOf(p)
+			if pp and party == nil then
+				party = pp
+			end
+		end
+		if not party then
+			return nil
+		end
+		local ids = {}
+		for _, p in ipairs(players) do
+			if ps.PartyOf(p) == party then
+				table.insert(ids, p.UserId)
+			end
+		end
+		if #ids < 2 or not table.find(ids, party.Leader.UserId) then
+			return nil
+		end
+		return { leader = party.Leader.UserId, members = ids }
+	end)
+	return ok and result or nil
+end
+
+local function rosterParty(m: Match): { leader: number, members: { number } }?
+	return Transfer.RosterParty(m.Players)
+end
+
 local function runLive(m: Match, snap: Snapshot)
 	-- 1. reservation
 	local code: string?, privateId: string? = nil, nil
@@ -262,7 +300,7 @@ local function runLive(m: Match, snap: Snapshot)
 	for _, p in ipairs(m.Players) do
 		table.insert(roster, { userId = p.UserId, classId = snap.Classes[p] })
 	end
-	local ticket = MatchAdmission.BuildTicket(m.Id, privateId, roster)
+	local ticket = MatchAdmission.BuildTicket(m.Id, privateId, roster, rosterParty(m))
 	if not TicketStore.Write("live", ticket :: any) then
 		failAll(m, "Couldn't save the match ticket. Try again.")
 		return
@@ -312,7 +350,7 @@ local function runLocal(m: Match, snap: Snapshot)
 	for _, p in ipairs(m.Players) do
 		table.insert(roster, { userId = p.UserId, classId = snap.Classes[p] })
 	end
-	local ticket = MatchAdmission.BuildTicket(m.Id, "local", roster)
+	local ticket = MatchAdmission.BuildTicket(m.Id, "local", roster, rosterParty(m))
 	if not MatchAdmission.RegisterLocalMatch(ticket) then
 		failAll(m, "Couldn't start the run. Try again.")
 		return
@@ -393,6 +431,7 @@ end
 
 function Transfer.Init(ctx: any)
 	deps.DataService = ctx and ctx.DataService or deps.DataService
+	deps.PartyService = ctx and ctx.PartyService or deps.PartyService
 end
 
 local started = false
