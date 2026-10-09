@@ -175,6 +175,7 @@ boot("AffixIcons", function() require(script.Parent:WaitForChild("AffixIcons")).
 boot("BossIntro", function() require(script.Parent:WaitForChild("BossIntro")).Init() end)
 boot("Announcer", function() require(script.Parent:WaitForChild("Announcer")).Init() end)
 boot("HitFeel", function() require(script.Parent:WaitForChild("HitFeel")).Init() end)
+boot("ClassSfx", function() require(script.Parent:WaitForChild("ClassSfx")).Init() end) -- [stream G] class cues, run-stage stingers + hum, down / revive cues
 -- LOBBY (docs/features/LOBBY.md): weapon mastery glows + menu, the COURTYARD (idle while switched off)
 boot("WeaponMastery", function() require(script.Parent:WaitForChild("WeaponMastery")).Init() end)
 boot("LobbyFun", function() require(script.Parent:WaitForChild("LobbyFun")).Init() end)

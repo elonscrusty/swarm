@@ -45,7 +45,7 @@ function ClassOwnership.Selected(data: any): string
 	return ClassCatalog.Default
 end
 
--- { [classId] = true } for the four classes this save owns.
+-- { [classId] = true } for the classes this save owns.
 function ClassOwnership.OwnedSet(data: any): { [string]: boolean }
 	local out = {}
 	for _, id in ipairs(ClassCatalog.Order) do
@@ -92,6 +92,9 @@ function ClassOwnership.Buy(data: any, classId: any): string?
 	if ClassOwnership.Owns(data, classId) then
 		return "OWNED"
 	end
+	if info.GoalOnly then
+		return "GOAL_ONLY" -- earned by play only (DECISIONS C2)
+	end
 	local gold = type(data.Gold) == "number" and data.Gold == data.Gold and data.Gold or 0
 	if gold < info.Cost then
 		return "NO_GOLD"
@@ -101,6 +104,75 @@ function ClassOwnership.Buy(data: any, classId: any): string?
 	data.OwnedCharacters[info.Id] = true
 	data.SelectedCharacter = info.Id
 	return nil
+end
+
+------------------------------------------------------------------------------------------
+-- [integration, continuation pack] earnable goals (DECISIONS C2/C3). The run settlement fills
+-- data.Stats.ClassGoals (SwarmV2.Run.ClassGoals); a met goal unlocks its class once, for free.
+------------------------------------------------------------------------------------------
+
+local function goalCount(data: any, stat: string): number
+	local goals = type(data) == "table" and type(data.Stats) == "table" and data.Stats.ClassGoals
+	local v = type(goals) == "table" and goals[stat]
+	return (type(v) == "number" and v == v) and v or 0
+end
+
+-- True when this save meets the class's goal (any one of Goal.Any when present).
+function ClassOwnership.GoalMet(data: any, classId: any): boolean
+	local info = ClassCatalog.Get(classId)
+	local goal = info and info.Goal
+	if not goal then
+		return false
+	end
+	if type(goal.Any) == "table" then
+		for _, g in ipairs(goal.Any) do
+			if type(g.Stat) == "string" and type(g.Need) == "number" and goalCount(data, g.Stat) >= g.Need then
+				return true
+			end
+		end
+		return false
+	end
+	return goalCount(data, goal.Stat) >= goal.Need
+end
+
+-- Progress toward a class goal for the class browser: (have, need) of the main stat.
+function ClassOwnership.GoalProgress(data: any, classId: any): (number, number)
+	local info = ClassCatalog.Get(classId)
+	local goal = info and info.Goal
+	if not goal then
+		return 0, 0
+	end
+	return math.min(goalCount(data, goal.Stat), goal.Need), goal.Need
+end
+
+-- Unlocks every class whose goal is met and that this save doesn't own yet. Pure; returns the
+-- newly unlocked ids (never removes anything, never charges gold).
+function ClassOwnership.EarnGoals(data: any): { string }
+	local out = {}
+	if type(data) ~= "table" then
+		return out
+	end
+	for _, id in ipairs(ClassCatalog.Order) do
+		if not ClassOwnership.Owns(data, id) and ClassOwnership.GoalMet(data, id) then
+			ClassOwnership.EnsureDefault(data)
+			data.OwnedCharacters[id] = true
+			table.insert(out, id)
+		end
+	end
+	return out
+end
+
+-- The run side's call after its settlement (ClassGoals.RefreshEarned): grants met goals on the
+-- player's loaded save; the normal DataService save persists them. Newly unlocked ids.
+function ClassOwnership.RefreshEarned(player: Player): { string }
+	local modules = game:GetService("ServerScriptService"):FindFirstChild("Modules")
+	local ds = modules and modules:FindFirstChild("DataService")
+	if not ds or not ds:IsA("ModuleScript") then
+		return {}
+	end
+	local DataService = require(ds) :: any
+	local data = DataService.GetData(player)
+	return ClassOwnership.EarnGoals(data)
 end
 
 return ClassOwnership

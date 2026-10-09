@@ -46,6 +46,71 @@ effect the player hears often was replaced on 2026-10-03 with sounds made for th
 | Tip | 133320151991833 | Tip, HealPulse |
 | ReelTick | 111197240897473 | ReelTick |
 
+### Second batch: class cues, run stages, crits (stream G, 2026-10-09)
+
+26 more original sounds, made the same way (`python3 tools/synth_sfx.py --new`; each is reseeded from its own
+name, so `--only Name` renders the same file as a full run; never run `synth_sfx.py` with no flag to "refresh":
+it re-renders the first 26 too and their files would no longer match the ids above). Uploaded with
+`ROBLOX_USER_ID=20194281 python3 tools/upload_audio.py`; **all 26 are `Approved`, asset type Audio** (checked with
+`--check`, ids in `art/audio/uploaded_ids.json`). NOT heard by anyone yet: spectrum and loudness numbers only
+(every file has most of its energy above 250 Hz for phone speakers; volumes from each file's loudest 100 ms,
+target about -29 dB effective for the frequent class cues, like Hit and Coin).
+
+| File | Asset id | Cue and what plays it |
+|---|---|---|
+| ScrapClatter | 126675498482317 | Ruckus: Scrap Shot leaves the hero (visual 57), lighter at its impact; dash (rolling cans) |
+| ToastPop | 89543620087020 | Toastmaster: Toast Toss (visuals 58, 62); spring jump; landing blast pop (>= 0.35 s in the air) |
+| BubbleBloop | 132010916160149 | Captain Croak: Bubble Bomb (59, 63), higher at the burst; leap |
+| YarnPop | 81759392777602 | Granny Boom: Yarn Bomb (60), full pop at the blast; rocket boost |
+| DodgeballThump | 130806214212181 | Coach Crunch: Dodgeball (visual 45), impact |
+| DodgeballWhistle | 125785610035813 | Coach Crunch: shoulder-tackle dash |
+| MopSwoosh | 100812590264480 | Doug: every Mop Sweep slash |
+| MopSqueak | 130304148137330 | Doug: every 3rd sweep, and the dash |
+| ConfettiRattle | 125336972916367 | Rambozo: Confetti Minigun burst (visual 24; five pellets are one rattle) |
+| ConfettiHonk | 123550918869276 | Rambozo: every 6th burst, and the dash balloon |
+| GymScrape | 123947392192969 | Swolverine: every Protein Claws swipe; dash |
+| PuckClack | 101673143804604 | Crash Cassidy: Ricochet Puck (visual 49) leaving and every bounce / end |
+| SkateRoll | 78117229124778 | Crash Cassidy: body-check dash |
+| GloveThud | 87565218066949 | Knuckles: every punch; dash |
+| GloveBell | 111533137471424 | Knuckles: the uppercut (slash tier 3), with a thud |
+| ShoeBoing | 98678378204244 | Peter: Returning Sneakers throw (visual 5), every jump (lower when charged), dash |
+| SeedSprout | 104808793216642 | Barry: seed flick (visual 45), a plant taking root (visual 51), dash |
+| CritTick | 130747321535480 | the local hero's own critical hit (the server says who rolled it: FxBatch `ku`) |
+| BeaconActivate | 101983713680096 | RunStage `Rally`: the beacon is lit |
+| BeaconCharge | 116632965410778 | RunStage `Charge`: a seamless 2 s hum (loop), louder and higher as `BeaconCharge` fills, quieter when the hero is far from the beacon |
+| BossSpawn | 77012636523636 | RunStage `Boss`: swell, brass stab, drum (+ a boss-kind camera shake) |
+| RunVictory | 135733489539540 | RunStage `Victory`: the stinger; the results `Victory` fanfare waits 6 s for it |
+| RunDefeat | 122212551428474 | RunStage `Defeat`: the stinger; the results `ResultsLose` waits 6 s |
+| Downed | 116846841000990 | the local hero goes down (`Downed` attribute); teammates' falls keep the global `Death` sound |
+| ReviveBeat | 96148528483086 | a revive hold on a downed hero (own or one within 14 studs): one pulse per 0.45 s, rising in pitch with `ReviveProgress`; the finished revive is the existing `Revive` |
+| ChestBuy | 127806368430108 | the team pays for a chest (SwarmState `ChestCost` steps up / `TeamRunGold` drops by about a price) |
+
+`RunStage` `BeaconAvailable` plays the existing `PortalAppear` (the reveal). Every cue above lives in
+`Config.Sounds` (class cues and the crit tick in the new **Weapon** group, stingers in UI / Boss, the hum in
+**Stage**) and is wired by `src/client/ClassSfx.lua`; the fire / impact / swing hooks are in `VFX.lua`
+(new projectile next to a hero, a projectile ending, a slash), the crit tick in `CombatFx.Crit`.
+
+**Limits (Config.Feel.ClassSfx, Config.Audio).** A hero's cue repeats at most every 0.12 s; all class cues
+together start at most 9 per second; the Weapon group holds at most 3 voices (the oldest gives way) and sits
+at priority 2 under the Combat slider, so hits, pickups, UI, player and warning sounds always win; a teammate's
+cue plays at 45 % and only within 70 studs (teammates' crit ticks are silent); the group is ducked to 50 % while
+a warning or boss cue plays. The beacon hum is a loop outside the 12-voice mix (its own group, ducked to 60 %
+by warnings). `RunVictory` / `RunDefeat` have `Keep = true`: the end-of-run sound sweep (`Audio.StopEffects`)
+lets them finish.
+
+**Music pressure.** `Audio.SetIntensity(level)` (ClassSfx, from `RunStage`: Survive 0, BeaconAvailable 0.25,
+Rally 0.6, Charge 0.8, Boss 1) lifts the playing track by up to 14 % (`Config.Audio.Music.IntensityBoost`,
+2.5 s ease). While raised, a warning or boss cue dips the music to 75 % for its duck, so a telegraph is never
+masked. Track choice and crossfades are unchanged; 0 outside a run.
+
+**Camera shake (Config.Camera, CameraController).** Ordinary feedback (hurt, explosions) shakes at most
+0.4 studs for 0.11 s (< 0.12 s); a boss event (Queen roar, phase change, the Boss stage, a huge kill) is the one
+longer shake: at most 0.55 studs for 0.3 s. Reduced effects and Screen shake 0 give none. The 35 ms camera-only
+hold in HitFeel is unchanged (it never touches the simulation) and is off with Reduced effects.
+
+**Checks.** `class-sfx-regression` (client: 12 class cues, limits, movement, run stages, down / revive / chest,
+crits, shake, recoil; about 100 PASS lines), `crit-owner-regression` (real server), `audio-sim`.
+
 Still on Roblox built-in sounds (they ship with every client and are short warning ticks):
 FuseTick, BossMine (`clickfast.wav`), SpitterWindup, BossSummon, BurrowWarn (`splat.wav`),
 Lunge, BossBanner (`unsheath.wav`).
@@ -170,5 +235,10 @@ docs/features/FEEL.md section 4.
 - In a dense fight, danger warnings remain audible over hits, deaths and low-health feedback.
 - Exit or die repeatedly; no old warning or heartbeat continues outside its run.
 - With Reduced Effects on, low-health danger remains readable without an animated flash.
+- Second batch (listen once per class on the phone speaker): each class's fire / swing, impact and dash cue is quiet, short and
+  never repeats like a machine gun; a dense co-op fight keeps boss telegraphs clearly audible over the class cues and the louder
+  Charge / Boss music; the crit tick is easy to pick out but not tiring; the hum rises as the beacon fills and stops with the Boss stage;
+  the Victory / Defeat stinger plays once and the results screen's own sound follows ~6 s later, not on top. Any cue you dislike can be
+  silenced with `Id = ""` in its `Config.Sounds` entry (the call then does nothing).
 
 Offline audio simulation checks mixer state, voice caps, ducking and crossfades. It is silent and cannot substitute for listening in Roblox.

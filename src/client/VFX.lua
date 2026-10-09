@@ -50,6 +50,11 @@ local GroundHeight = require(script.Parent.GroundHeight)
 local VFX = {}
 -- Tuning constants live in one table: a module chunk may hold at most 200 locals.
 local K: any = {}
+-- [stream G] class signature cues (ClassSfx.lua) and the attacker's recoil; on K because this chunk is near
+-- the 200-locals limit
+K.ClassSfx = require(script.Parent.ClassSfx)
+K.FEEL = (Config.Feel :: any).ClassSfx
+K.recoils = {} :: { [number]: { Start: number, Strength: number } }
 
 local P = Theme.Palette
 local FX = Theme.Fx
@@ -505,6 +510,16 @@ local function startPose(userId: number, kind: string, sweep: number?, back: boo
 		end
 	end
 	poses[userId] = { Kind = kind, Start = now, Sweep = sweep or 1, Back = back == true, Half = half or 1.3 }
+	-- [stream G] a short squash and lean back on the attacker (a swing hits hardest, a cast least)
+	if not ClientSettings.Reduced() then
+		local strength = kind == "Swing" and 1 or (kind == "Throw" and 0.7 or 0.4)
+		local r = K.recoils[userId]
+		if r then
+			r.Start, r.Strength = now, strength
+		else
+			K.recoils[userId] = { Start = now, Strength = strength }
+		end
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -688,6 +703,7 @@ local function releaseProjectile(id: number, silent: boolean?)
 		return
 	end
 	if not silent then
+		K.ClassSfx.Impact(e.Visual, e.Drawn) -- [stream G] the local class's impact cue
 		projectileImpact(e)
 	end
 	for _, piece in ipairs(e.Pieces) do
@@ -709,7 +725,7 @@ local function releaseProjectile(id: number, silent: boolean?)
 end
 
 -- A new projectile right next to a player = that player threw / cast it.
-local function poseFromSpawn(pos: Vector3, style: string?, noPose: boolean?)
+local function poseFromSpawn(pos: Vector3, style: string?, noPose: boolean?, classCue: boolean?)
 	if style == nil or style == "Stinger" or noPose then
 		return
 	end
@@ -720,8 +736,8 @@ local function poseFromSpawn(pos: Vector3, style: string?, noPose: boolean?)
 			local d = Vector3.new(root.Position.X - pos.X, 0, root.Position.Z - pos.Z)
 			if d.Magnitude < 3.5 then
 				startPose(other.UserId, style == "Orb" and "Cast" or "Throw")
-				if other == player then
-					Audio.Play("Throw") -- the local hero's attack cue (MinGap keeps it quiet)
+				if other == player and not classCue then
+					Audio.Play("Throw") -- the local hero's attack cue (MinGap keeps it quiet); a class cue replaces it
 				end
 				return
 			end
@@ -791,7 +807,8 @@ local function onProjectileBatch(b: buffer)
 				BaseYaw = yaw,
 				Aim = yaw,
 			}
-			poseFromSpawn(pos, def.Style, def.NoPose)
+			local classCue = K.ClassSfx.Spawned(visual, pos) -- [stream G] the class's fire cue
+			poseFromSpawn(pos, def.Style, def.NoPose, classCue)
 		else
 			-- continue from where it is drawn now
 			local alpha = math.clamp(e.T, 0, 1)
@@ -1205,7 +1222,9 @@ local function slash(x: number, z: number, yaw: number, reach: number, sweep: nu
 		back = look.X * dir.X + look.Z * dir.Z < 0
 	end
 	startPose(userId, "Swing", sweep, back, K.SWING_ARC / 2)
-	if userId == player.UserId then
+	-- [stream G] a class hero's swing has its own cue (mop, claws, glove); teammates' play quieter
+	local classCue = K.ClassSfx.Swing(userId, tier)
+	if userId == player.UserId and not classCue then
 		Audio.Play("Swing")
 	end
 end
@@ -1773,11 +1792,19 @@ local function onFxBatch(batch)
 		end
 	end
 	if type(batch.k) == "table" then
-		-- critical hits: a gold star on the enemy (a few per batch)
+		-- critical hits: a gold star on the enemy (a few per batch); [stream G] ku says who rolled each one, so
+		-- the local hero's own crits get the bigger burst and the crit tick (once per batch)
+		local owners = type(batch.ku) == "table" and batch.ku or nil
+		local ticked = false
 		for i, id in ipairs(batch.k) do
-			local pos = i <= K.SPARKS_PER_BATCH and type(id) == "number" and EnemyRenderer.Position(id)
+			local own = owners ~= nil and owners[i] == player.UserId
+			local pos = (i <= K.SPARKS_PER_BATCH or own) and type(id) == "number" and EnemyRenderer.Position(id)
 			if pos then
-				CombatFx.Crit(pos)
+				CombatFx.Crit(pos, own and not ticked)
+				ticked = ticked or own
+			elseif own and not ticked then
+				ticked = true
+				CombatFx.CritTick(true) -- (the enemy is not drawn: still say it crit)
 			end
 		end
 	end
@@ -1798,7 +1825,7 @@ local function onFxBatch(batch)
 		for _, name in ipairs(batch.n) do
 			Audio.Play(name)
 			if name == "BossRoar" then
-				CameraController.Shake(0.55)
+				CameraController.Shake(0.55, "boss")
 			end
 		end
 	end
@@ -3776,6 +3803,18 @@ local function animateRig(other: Player, rig: Rig, dt: number, now: number)
 	local bob = -0.7 * rig.Leg * (1 - math.cos(legA)) + 0.035 * breath
 	local lean = -0.09 * walk
 	local twist = 0.09 * walk * s
+	local recoil = K.recoils[other.UserId]
+	if recoil then
+		-- [stream G] the attacker's recoil: leans back and drops a little, over RecoilSeconds
+		local u = (now - recoil.Start) / K.FEEL.RecoilSeconds
+		if u >= 1 or ClientSettings.Reduced() then
+			K.recoils[other.UserId] = nil
+		else
+			local k = math.sin(u * math.pi) * recoil.Strength
+			lean += K.FEEL.RecoilLean * k
+			bob -= K.FEEL.RecoilSquash * k
+		end
+	end
 	local rs = CFrame.Angles(-armA, 0, 0.07 + 0.03 * breath)
 	local ls = CFrame.Angles(armA, 0, -0.07 - 0.03 * breath)
 	local spin = 0

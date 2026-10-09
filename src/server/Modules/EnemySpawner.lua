@@ -25,6 +25,12 @@
 	the Bargain Shrine's enemy HP (LootSystem.EnemyHPMult) in Spawn.
 	Replication: the boss HP attributes and each player's "Kills" attribute are written at
 	10 Hz from Step (not on every hit / kill); rp.Kills itself is always exact.
+	[stream D] Director run (StageManager.IsDirector, SetDirector): waves, nests, top-ups and
+	scheduled elites are off; stepDirector spawns the Cliffwood roster at the brief's rate
+	(RunConfig.Director.Spawn) within the alive caps, 35-70 studs from a living hero on reachable
+	ground (directorSpawnPoint, also used by SpawnPoint / recycling). Extra record fields: Kind
+	(Normal / Tough / Elite / Boss), ContactCooldown, AttackDamage (ranged / slam hits), StuckAt /
+	StuckPos / StuckCount / RepathUntil / RepathDir (EnemyAI stuck repath), SlamReady, ChargeHits.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -37,7 +43,10 @@ local DamageNumbers = require(script.Parent.DamageNumbers)
 local AffixSight = require(script.Parent.AffixSight) -- first-sight notice for elite affixes (AffixIcons)
 local BossAI = require(script.Parent.BossAI)
 local HeightGrid = require(script.Parent.HeightGrid)
-local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
+local RunConfig = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig)
+local Nav = RunConfig.Nav
+-- [stream D] the run director (RunConfig.Director; StageManager runs its phases)
+local Dir: { [string]: any } = (RunConfig :: any).Director or {}
 local BossData = require(game:GetService("ReplicatedStorage").Shared.BossData)
 
 local EnemySpawner = {}
@@ -81,6 +90,18 @@ local nestStage = 0
 local nestStageTime = 0
 local nestsMade = 0
 local nextNestAt = 0
+-- [stream D] director spawning (stepDirector): on for a single-map director run
+local directorOn = false
+local dirBudget = 0 -- enemies owed by the spawn rate (capped: no burst after a full cap)
+local dirTick = 0
+local rosterByType: { [string]: any } = {}
+for _, entry in ipairs(Dir.Roster or {}) do
+	if type(entry) == "table" and type(entry.Type) == "string" then
+		rosterByType[entry.Type] = entry
+	end
+end
+-- what the director did this run (tests, the DEV panel): reset by SetDirector(true)
+EnemySpawner.DirectorStats = {} :: { [string]: any }
 
 ------------------------------------------------------------------------------------------
 -- Helpers
@@ -195,10 +216,64 @@ local function gridSpawnPoint(rp, radius: number, angle: number?): Vector3?
 	return fallback
 end
 
+--[[
+	[stream D] Director spawn point: on reachable walkable ground MinDistance-MaxDistance (flat)
+	from `rp`, at least MinDistance from every living hero (never inside a player), its whole
+	footprint on walkable cells and clear of colliders (never inside walls), and, once rp's flow
+	field exists, a walking distance of at most MaxPathFactor x MaxDistance (a spot on a ledge
+	with no way down is skipped). nil when no try fits (the budget waits).
+]]
+local function directorSpawnPoint(rp, radius: number, angle: number?): Vector3?
+	local S = Dir.Spawn or {}
+	local p = rp.Root.Position
+	local minD, maxD = S.MinDistance or 35, S.MaxDistance or 70
+	local maxPath = maxD * (S.MaxPathFactor or 2)
+	local grid = HeightGrid.IsActive()
+	local hasField = grid and HeightGrid.HasField(rp)
+	for attempt = 1, S.Tries or 12 do
+		local a = (angle and attempt == 1) and angle or rng:NextNumber(0, math.pi * 2)
+		local r = rng:NextNumber(minD, maxD)
+		local x, z = clampToArena(p.X + math.cos(a) * r, p.Z + math.sin(a) * r, 4 + radius)
+		local dx, dz = x - p.X, z - p.Z
+		local d2 = dx * dx + dz * dz
+		local ok = d2 >= minD * minD and d2 <= maxD * maxD and HeightGrid.IsWalkable(x, z)
+		if ok and grid then
+			-- the whole body on walkable ground (not half over a cliff edge or in water)
+			ok = HeightGrid.IsWalkable(x + radius, z) and HeightGrid.IsWalkable(x - radius, z)
+				and HeightGrid.IsWalkable(x, z + radius) and HeightGrid.IsWalkable(x, z - radius)
+		end
+		if ok then
+			ok = not ctx.EnemyAI.IsBlocked(x, z, radius + 0.5)
+		end
+		if ok then
+			for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
+				local root = other.Root
+				if root and (other.Alive or other.AwaitingRevive or other.Downed) and not other.Eliminated then
+					local ox, oz = root.Position.X - x, root.Position.Z - z
+					if ox * ox + oz * oz < minD * minD then
+						ok = false
+						break
+					end
+				end
+			end
+		end
+		if ok and hasField then
+			ok = HeightGrid.PathDistance(rp, x, z) <= maxPath
+		end
+		if ok then
+			return Vector3.new(x, HeightGrid.GroundY(x, z), z)
+		end
+	end
+	return nil
+end
+
 function EnemySpawner.SpawnPoint(radius: number, angle: number?, around: any?): Vector3?
 	local rp = (around and around.Alive and around.Root) and around or randomAlivePlayer()
 	if not rp then
 		return nil
+	end
+	if directorOn then
+		return directorSpawnPoint(rp, radius, angle)
 	end
 	if HeightGrid.IsActive() then
 		return gridSpawnPoint(rp, radius, angle)
@@ -301,8 +376,15 @@ end
 	opts.Boss: boss stats (opts.BossData = the BossData entry: HPMult, ContactDamage).
 	opts.Force: past the MaxLive cap (boss objects: a banner, eggs; the pool still limits).
 	opts.HP: a fixed max HP (a War Banner's share of the boss's HP).
+	opts.BossHP / BossContact / BossDmgScale: a boss's exact max HP, contact damage and attack
+	damage multiplier (the director's Basin Breaker).
+	[stream D] On a director run the Cliffwood roster's types (RunConfig.Director.Roster) get the
+	director's stats whatever spawns them: HP = coeff x B x party x minute, contact / attack damage
+	= coeff x H0 x party x minute (N and t at this spawn), the roster speed; elites x Elite.HPMult /
+	DamageMult (no affix unless Elite.Affixes). Every enemy gets e.Kind (Normal / Tough / Elite /
+	Boss) for the XP / gold rules.
 ]]
-function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: boolean?, Boss: boolean?, Affix: string?, Force: boolean?, HP: number?, BossData: any? }?)
+function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: boolean?, Boss: boolean?, Affix: string?, Force: boolean?, HP: number?, BossData: any?, BossHP: number?, BossContact: number?, BossDmgScale: number? }?)
 	local def = EnemyData.Enemies[typeId]
 	if not def then
 		return nil
@@ -326,20 +408,37 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	local stages = ctx.StageManager
 	local hp
 	local bossData = opts and opts.BossData
+	-- [stream D] director stats for the roster types (N and the minute at this spawn)
+	local dirEntry = (directorOn and not isBoss) and rosterByType[typeId] or nil
+	local F = dirEntry and stages.Formula or nil
+	local dirN = dirEntry and stages.PartyN() or 1
+	local dirT = dirEntry and stages.DirectorMinutes() or 0
+	local EliteCfg = Dir.Elite or {}
 	if isBoss then
-		hp = Config.Boss.HP * (bossData and bossData.HPMult or 1) * (1 + Config.Boss.HPPerExtraPlayer * (playerCount() - 1)) * stages.BossHPMult()
+		hp = (opts and opts.BossHP) or Config.Boss.HP * (bossData and bossData.HPMult or 1) * (1 + Config.Boss.HPPerExtraPlayer * (playerCount() - 1)) * stages.BossHPMult()
 	elseif opts and opts.HP then
 		hp = opts.HP
+	elseif dirEntry and F then
+		hp = F.EnemyHP(dirEntry.HP or 1, dirN, dirT) * stages.EnemyHPMult()
+		if elite then
+			hp *= EliteCfg.HPMult or 3
+		end
 	else
 		hp = def.HP * (1 + statTier * D.HPPerMinute) * (1 + D.HPPerExtraPlayer * (playerCount() - 1)) * stages.EnemyHPMult()
 		if elite then
 			hp *= Config.Enemies.EliteHPMult
 		end
 	end
-	if not (opts and opts.HP) then
+	if not (opts and (opts.HP or opts.BossHP)) then
 		hp *= ctx.LootSystem.EnemyHPMult() -- the Bargain Shrine (1 unless sealed this stage)
 	end
 	local damage = (isBoss and (bossData and bossData.ContactDamage or Config.Boss.ContactDamage) or def.Damage * (1 + statTier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1)) * stages.DamageMult()
+	local dirEliteDmg = elite and (EliteCfg.DamageMult or 1.25) or 1
+	if isBoss and opts and opts.BossContact then
+		damage = opts.BossContact
+	elseif dirEntry and F then
+		damage = F.EnemyDamage(dirEntry.Contact or 0, dirN, dirT) * dirEliteDmg * stages.DamageMult()
+	end
 
 	uidCounter += 1
 	e.Uid = uidCounter
@@ -362,7 +461,7 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.Pos = Vector3.new(px, HeightGrid.GroundY(px, pz), pz)
 	e.HP = hp
 	e.MaxHP = hp
-	e.Speed = def.Speed * math.min(1 + tier * D.SpeedPerMinute, D.SpeedCap)
+	e.Speed = dirEntry and (dirEntry.Speed or def.Speed) or def.Speed * math.min(1 + tier * D.SpeedPerMinute, D.SpeedCap)
 	if not isBoss then
 		e.Speed *= ctx.RunModifiers and ctx.RunModifiers.EnemySpeedMult() or 1 -- the Frenzy curse
 	end
@@ -399,6 +498,8 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.Patches = nil
 	e.BurnTimer = nil
 	e.SlowUntil = nil -- Chilling Aura (Garlic perk) slow
+	e.StaggerUntil = nil -- the combat core's stagger and its immunity window (a recycled pool
+	e.StaggerImmuneUntil = nil -- slot must not inherit them)
 	e.SlowMult = nil
 	e.TerrainSlow = nil -- mud / quicksand slow (BiomeHazards)
 	e.Harmless = false
@@ -444,9 +545,38 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.HitAt = nil
 	e.SpawnGrace = isBoss and 0 or Config.Enemies.SpawnGrace
 	e.DmgScale = (1 + statTier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1) * stages.DamageMult()
-	-- elites: exactly one affix
+	-- [stream D] director fields (EnemyAI): per-player contact cooldown, attack damage, stuck
+	-- tracking, the XP / gold kind
+	e.ContactCooldown = dirEntry and dirEntry.ContactCooldown or nil
+	e.AttackDamage = nil
+	e.StuckAt = nil
+	e.StuckPos = nil
+	e.StuckCount = 0
+	e.RepathUntil = nil
+	e.RepathDir = nil
+	e.SlamReady = nil
+	e.ChargeHits = nil
+	e.SpawnMinute = dirEntry and dirT or nil -- the director minute and party size it was scaled for
+	e.SpawnN = dirEntry and dirN or nil
+	-- the XP / gold kind (stream E2's XPSystem.KindOf): boss, elite, the roster's / def's Kind,
+	-- else E2's own rule (Tough from its HP threshold); boss objects have none (no rewards)
+	e.Kind = nil
+	local kind = isBoss and "Boss" or (elite and "Elite") or (dirEntry and dirEntry.Kind) or def.Kind
+	if not kind and not def.Object and ctx.XPSystem and ctx.XPSystem.KindOf then
+		kind = ctx.XPSystem.KindOf(e)
+	end
+	e.Kind = (not def.Object) and (kind or "Normal") or nil
+	if dirEntry and F then
+		e.DmgScale = F.PartyDamage(dirN) * F.TimeDamage(dirT) * dirEliteDmg * stages.DamageMult()
+		if dirEntry.Attack then
+			e.AttackDamage = F.EnemyDamage(dirEntry.Attack, dirN, dirT) * dirEliteDmg * stages.DamageMult()
+		end
+	elseif isBoss and opts and opts.BossDmgScale then
+		e.DmgScale = opts.BossDmgScale
+	end
+	-- elites: exactly one affix (director elites: none unless Elite.Affixes or asked for)
 	local affix: string? = nil
-	if elite then
+	if elite and not (dirEntry and EliteCfg.Affixes == false and not (opts and opts.Affix)) then
 		local list = Config.Enemies.EliteAffixes
 		affix = (opts and opts.Affix and table.find(list, opts.Affix)) and opts.Affix or list[rng:NextInteger(1, #list)]
 	end
@@ -535,6 +665,9 @@ end
 
 -- Normal spawning toward the live target for this minute.
 local function progressionTime(): number
+	if directorOn then
+		return ctx.StageManager.DirectorClock() -- [stream D] the director's minute (roster rows)
+	end
 	local from = (ctx.StageManager.GetStage() - 1) * Config.Spawn.StageProgressionSeconds
 	return math.clamp(ctx.RunManager.GetRunTime(), from, from + (Config.Spawn.StageRowSpan or math.huge))
 end
@@ -1079,7 +1212,7 @@ end
 
 -- The stage boss (BossData id, default the Scorpion Queen) at `at` (the stage portal),
 -- or at a spawn point near a player.
-function EnemySpawner.SpawnBoss(at: Vector3?, bossId: string?)
+function EnemySpawner.SpawnBoss(at: Vector3?, bossId: string?, stats: { BossHP: number?, BossContact: number?, BossDmgScale: number? }?)
 	if Config.Boss.ClearMinionsOnSpawn then
 		for i = #EnemySpawner.Active, 1, -1 do
 			EnemySpawner.Despawn(EnemySpawner.Active[i])
@@ -1088,7 +1221,7 @@ function EnemySpawner.SpawnBoss(at: Vector3?, bossId: string?)
 	local data = BossData.Get(bossId)
 	local typeId = EnemyData.Enemies[data.EnemyType] and data.EnemyType or "Boss"
 	local pos = at or EnemySpawner.SpawnPoint(EnemyData.Enemies[typeId].Radius) or Config.ArenaOrigin
-	local boss = EnemySpawner.Spawn(typeId, pos, { Boss = true, BossData = data })
+	local boss = EnemySpawner.Spawn(typeId, pos, { Boss = true, BossData = data, BossHP = stats and stats.BossHP, BossContact = stats and stats.BossContact, BossDmgScale = stats and stats.BossDmgScale })
 	Fx.Sound("BossRoar")
 	if boss then
 		Fx.Ring(boss.Pos, 30, Color3.fromRGB(255, 40, 60))
@@ -1236,8 +1369,13 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		-- killer (burnt up by the open portal's sweep, or an elite Bomb Tick blowing itself
 		-- up) was not beaten: gems only, no free chest (WORLD audit W-04).
 		if not e.Guard and rp then
-			ctx.XPSystem.SpawnChest(pos)
-			table.insert(drops, "Chest")
+			-- [stream D] a director run pays elites in team gold and XP only (the brief); no free
+			-- chest (RunConfig.Director.Rewards.EliteFloorChest)
+			local R = Dir.Rewards
+			if not (directorOn and R and R.EliteFloorChest == false) then
+				ctx.XPSystem.SpawnChest(pos)
+				table.insert(drops, "Chest")
+			end
 			if ctx.MetaService and not e.WaveId then
 				ctx.MetaService.OnEliteKilled(rp) -- META: the killer's Sigil roll (wave elites never)
 			end
@@ -1344,9 +1482,9 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 	end
 	Fx.Hit(e.Id)
 	if crit then
-		Fx.Crit(e.Id) -- gold crit star (client CombatFx)
+		Fx.Crit(e.Id, rp and rp.Player and rp.Player.UserId or nil) -- gold crit star (client CombatFx); [stream G] + who crit
 	end
-	if knockDir and knockback and knockback > 0 then
+	if knockDir and knockback and knockback > 0 and not e.Boss then -- bosses ignore knockback
 		local resist = e.Def.KnockbackResist or 0
 		if resist < 1 then
 			e.Knock += knockDir * knockback * (1 - resist)
@@ -1449,6 +1587,173 @@ function EnemySpawner.DamageScale(e): number
 end
 
 ------------------------------------------------------------------------------------------
+-- [stream D] Director spawning (single-map run; RunConfig.Director)
+------------------------------------------------------------------------------------------
+
+-- Roster weights unlocked by this director minute (FromMinute gates).
+local function directorWeights(minutes: number): { [string]: number }
+	local w: { [string]: number } = {}
+	for _, entry in ipairs(Dir.Roster or {}) do
+		if minutes >= (entry.FromMinute or 0) and EnemyData.Enemies[entry.Type] then
+			w[entry.Type] = (w[entry.Type] or 0) + (entry.Weight or 1)
+		end
+	end
+	return w
+end
+EnemySpawner.DirectorWeights = directorWeights
+
+-- Ordinary enemies alive (bosses and their objects / static things do not count to the cap).
+local function ordinaryAlive(): number
+	local n = 0
+	for _, e in ipairs(EnemySpawner.Active) do
+		if e.Alive and not e.Boss and not (e.Def and (e.Def.Object or e.Def.Static)) then
+			n += 1
+		end
+	end
+	return n
+end
+EnemySpawner.OrdinaryAlive = ordinaryAlive
+
+local function resetDirectorStats()
+	EnemySpawner.DirectorStats = {
+		Spawned = 0,
+		Elites = 0,
+		ByType = {},
+		FirstAt = {}, -- type -> director minute of its first spawn
+		MinDist = math.huge, -- flat distance to the hero it spawned around
+		MaxDist = 0,
+		MinToAnyHero = math.huge,
+		NoSpot = 0, -- ticks that found no valid spot
+		StuckRepaths = 0,
+		StuckDespawns = 0,
+		LastRate = 0,
+		LastCap = 0,
+	}
+end
+resetDirectorStats()
+
+--[[
+	On (StageManager, a director run starts) / off (victory, run end). On: the roster rows are
+	installed as EnemyData.RowOverride (encounters and altars spawn the Cliffwood roster), the
+	stats reset. Off: the old spawn table again.
+]]
+function EnemySpawner.SetDirector(on: boolean)
+	directorOn = on
+	dirBudget = 0
+	dirTick = 0
+	if on then
+		resetDirectorStats()
+		EnemyData.RowOverride = function(seconds: number)
+			local n = ctx.StageManager.PartyN and ctx.StageManager.PartyN() or 1
+			local cap = ctx.StageManager.Formula and ctx.StageManager.Formula.AliveCap(n) or 55
+			return { Target = cap, Weights = directorWeights((seconds or 0) / 60) }
+		end
+	else
+		EnemyData.RowOverride = nil
+	end
+end
+
+function EnemySpawner.IsDirector(): boolean
+	return directorOn
+end
+
+--[[
+	The director's pressure: SpawnRate(t, N) enemies per second (x the Horde curse), banked as a
+	budget (at most MaxBank ahead, so a full cap never turns into a burst) and spent every
+	TickSeconds up to MaxPerTick, while ordinary enemies alive < AliveCap(N) (BossRateMult /
+	BossCapMult during the boss). Types from the minute's roster weights; elites from
+	Elite.FromMinute at Elite.Chance. Each spawn surrounds a random living hero
+	(directorSpawnPoint). Nothing spawns after the victory / defeat or while the first-run
+	walkthrough holds the swarm (EnemySpawner.Holds).
+]]
+local function stepDirector(dt: number)
+	local SM = ctx.StageManager
+	local stage = SM.RunStage and SM.RunStage() or nil
+	if stage == nil or stage == "Victory" or stage == "Defeat" then
+		return
+	end
+	if next(EnemySpawner.Holds) ~= nil then
+		return
+	end
+	local S = Dir.Spawn or {}
+	local F = SM.Formula
+	local t = SM.DirectorMinutes()
+	local n = SM.PartyN()
+	local rate = F.SpawnRate(t, n) * (ctx.RunModifiers and ctx.RunModifiers.SpawnMult() or 1)
+	local cap = F.AliveCap(n)
+	if stage == "Boss" then
+		rate *= S.BossRateMult or 0.5
+		cap = math.floor(cap * (S.BossCapMult or 0.5))
+	end
+	local tick = S.TickSeconds or 0.25
+	dirBudget = math.min(dirBudget + rate * dt, (S.MaxBank or 3) + rate * tick)
+	dirTick += dt
+	if dirTick < tick then
+		return
+	end
+	dirTick = 0
+	local stats = EnemySpawner.DirectorStats
+	stats.LastRate = rate
+	stats.LastCap = cap
+	local alive = ordinaryAlive()
+	local made = 0
+	local E = Dir.Elite or {}
+	local eliteMult = ctx.RunModifiers and ctx.RunModifiers.EliteChanceMult() or 1
+	while dirBudget >= 1 and alive < cap and made < (S.MaxPerTick or 6) do
+		local rp = randomAlivePlayer()
+		if not rp then
+			break
+		end
+		local typeId = weightedPick(directorWeights(t))
+		local def = EnemyData.Enemies[typeId]
+		if not def then
+			break
+		end
+		local elite = t >= (E.FromMinute or 5) and rng:NextNumber() < (E.Chance or 0.05) * eliteMult
+		local pos = directorSpawnPoint(rp, def.Radius * (elite and Config.Enemies.EliteSizeMult or 1))
+		if not pos then
+			stats.NoSpot += 1
+			break -- no valid spot this tick: the budget waits
+		end
+		local e = EnemySpawner.Spawn(typeId, pos, { Elite = elite })
+		if not e then
+			break
+		end
+		dirBudget -= 1
+		alive += 1
+		made += 1
+		stats.Spawned += 1
+		stats.ByType[typeId] = (stats.ByType[typeId] or 0) + 1
+		if stats.FirstAt[typeId] == nil then
+			stats.FirstAt[typeId] = t
+		end
+		if elite then
+			stats.Elites += 1
+		end
+		local root = rp.Root
+		if root then
+			local d = ((pos - root.Position) * Vector3.new(1, 0, 1)).Magnitude
+			stats.MinDist = math.min(stats.MinDist, d)
+			stats.MaxDist = math.max(stats.MaxDist, d)
+		end
+		for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
+			if other.Alive and other.Root then
+				local d = ((pos - other.Root.Position) * Vector3.new(1, 0, 1)).Magnitude
+				stats.MinToAnyHero = math.min(stats.MinToAnyHero, d)
+			end
+		end
+	end
+end
+
+-- A stuck enemy that repathing did not free (EnemyAI): gone without rewards.
+function EnemySpawner.DespawnStuck(e)
+	if e.Alive and not e.Boss then
+		EnemySpawner.Despawn(e)
+		EnemySpawner.DirectorStats.StuckDespawns += 1
+	end
+end
+
+------------------------------------------------------------------------------------------
 -- Lifecycle
 ------------------------------------------------------------------------------------------
 
@@ -1504,6 +1809,10 @@ function EnemySpawner.Step(dt: number)
 	calmLeft = math.max(0, calmLeft - dt)
 	lullLeft = math.max(0, lullLeft - dt)
 	sinceWave += dt
+	if directorOn then
+		stepDirector(dt) -- [stream D] no waves, nests, top-ups or scheduled elites on a director run
+		return
+	end
 	if runTime >= nextEliteAt and ctx.StageManager.GetPhase() == "Explore" and not Config.Waves.Enabled then
 		nextEliteAt = runTime + Config.Pacing.EliteEvery / (1 + 0.12 * math.min(8, ctx.StageManager.GetStage() - 1))
 		scheduledElite()

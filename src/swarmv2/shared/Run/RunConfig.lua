@@ -8,6 +8,8 @@
 	                             (docs/redesign/gameplay/DESIGN.md sections 1 and 2).
 	  Builds / Combat            [stream B] weapon ranks, offers, evolutions, damage rules
 	                             (docs/redesign/gameplay/BUILDS.md).
+	  Classes                    [stream C] the twelve class rosters and kits
+	                             (docs/redesign/gameplay/CLASSES.md).
 ]]
 
 export type DashDef = {
@@ -70,11 +72,15 @@ RunConfig.Movement = {
 
 RunConfig.Dash = {
 	Default = { Kind = "Dash", Speed = 70, Duration = 0.22, Cooldown = 2.5 } :: DashDef,
-	-- per class (canonical ids)
+	-- per class (canonical ids) [stream C: the continuation brief's class movement]
 	Variants = {
+		-- Granny: rocket boost 80 studs/s for 0.25 s, cooldown 3 s
 		granny_boom = { Kind = "Dash", Speed = 80, Duration = 0.25, Cooldown = 3.0 },
-		-- Croak: a leap, ballistic arc, 31 studs forward, 7 up at the apex, about 0.55 s
-		captain_croak = { Kind = "Leap", Speed = 0, Duration = 0.55, Cooldown = 2.5, Horizontal = 31, Apex = 7 },
+		-- Croak: a leap, ballistic arc ~30 studs forward over ~0.45 s (apex 5 = 2 sqrt(2 x 5 / 196.2)
+		-- = 0.45 s at the default gravity), cooldown 3 s; the normal jump is unchanged
+		captain_croak = { Kind = "Leap", Speed = 0, Duration = 0.45, Cooldown = 3.0, Horizontal = 30, Apex = 5 },
+		-- Crash: the body-check dash, the shared dash with a 2.20 s cooldown
+		crash_cassidy = { Kind = "Dash", Speed = 70, Duration = 0.22, Cooldown = 2.2 },
 	} :: { [string]: DashDef },
 	AllowMult = 1.15, -- speed check allows DashSpeed * this
 	LeapAllowMult = 1.2, -- ... for a leap's horizontal speed
@@ -132,106 +138,210 @@ RunConfig.Map = {
 }
 
 ------------------------------------------------------------------------------------------
--- CLASS KITS
+-- CLASS KITS  [stream C] (continuation brief "Twelve approved classes"; docs/redesign/gameplay/CLASSES.md)
 ------------------------------------------------------------------------------------------
+--[[
+	The twelve classes: roster numbers (price, start weapon, HP / speed / crit modifiers, unlock goal,
+	Hero Mastery signature) and every kit number (passives and movement hooks). Damage coefficients
+	(`Coeff`) are multiples of B and go through the shared rank formula with the rank of the class
+	signature (WeaponSystem.KitBurst / Damage). Hook cooldowns ignore attack speed. H0 = the normal
+	player maximum HP (Config.Player.BaseMaxHP, 120): `maxHpMult` -0.10 = 0.90 H0.
+	Code: ClassRoster (shared, roster), ClassKits (server, kits), WeaponSystem (signature behaviours).
+]]
+export type ClassGoal = {
+	Stat: string, -- data.Stats.ClassGoals key (DECISIONS C3)
+	Need: number,
+	Text: string,
+	Any: { { Stat: string, Need: number } }?, -- Knuckles: any one of these (boss OR revive)
+}
+
 RunConfig.Classes = {
-	-- ids of the playable classes (also ClassCatalog.Order, lobby track)
-	Order = { "ruckus", "toastmaster", "captain_croak", "granny_boom" },
+	-- ids of the playable classes, in roster order (also the lobby's ClassCatalog.Order)
+	Order = {
+		"ruckus", "toastmaster", "captain_croak", "granny_boom",
+		"coach_crunch", "doug_janitor", "peter_parkour", "barry_plotter",
+		"rambozo", "swolverine", "crash_cassidy", "knuckles_mcgee",
+	},
 	Default = "ruckus",
 	-- A run whose selected hero is one of the 11 hidden old heroes plays the Default class instead
 	-- (safety net for saves that still select one). Tests of the old heroes switch it off.
 	MapLegacyToDefault = true,
 
-	-- Roster stats (shape of CharacterData.Characters). Cost = gold; Bonus keys = PassiveData keys.
+	--[[
+		Roster (shape of CharacterData.Characters; ClassRoster copies it). Cost = gold (0 = free for
+		ruckus; the first four keep the owner's prices, DECISIONS C2). Goal = the pack's earnable
+		goal ({Stat, Need, Text}, counted by stream E2 into data.Stats.ClassGoals, granted by the lobby
+		track's ClassOwnership.RefreshEarned); the 8 newer classes have NO gold price (GoalOnly: their
+		CharacterData entry gets Unlock = { Goal = ... }, which the old buy path refuses). Bonus keys
+		= StatSheet bonus keys: maxHpMult (x H0), pickupFlat (studs). BaseSpeed = walking speed
+		(studs/s; Config.Player.BaseSpeed 22 when absent). CritBase = base crit chance (default 5 %).
+		Signature = the Hero Mastery upgrade (account progression, 5 levels, nothing innate: Base 0).
+	]]
 	Roster = {
 		ruckus = {
 			Cost = 0,
 			StartWeapon = "ScrapToss",
-			Bonus = { pickup = 0.25 },
-			-- Signature upgrade (Hero Mastery): trait % now, + per level (5 levels)
-			Signature = { Base = 25, Per = 4, PerLevel = { pickup = 0.04 } },
+			Bonus = {},
+			Signature = { Base = 0, Per = 4, PerLevel = { pickup = 0.04 } },
 		},
 		toastmaster = {
 			Cost = 10000,
 			StartWeapon = "ToastVolley",
-			Bonus = { maxHpMult = 0.10 },
-			Signature = { Base = 10, Per = 3, PerLevel = { maxHpMult = 0.03 } },
+			Bonus = { maxHpMult = -0.10 }, -- 0.90 H0
+			Goal = { Stat = "XP", Need = 300, Text = "Collect 300 XP in runs" },
+			Signature = { Base = 0, Per = 3, PerLevel = { maxHpMult = 0.03 } },
 		},
 		captain_croak = {
 			Cost = 20000,
 			StartWeapon = "BubbleBomb",
-			Bonus = { growth = 0.10 },
-			Signature = { Base = 10, Per = 2, PerLevel = { growth = 0.02 } },
+			Bonus = {},
+			Goal = { Stat = "Distance", Need = 3000, Text = "Travel 3,000 studs in runs" },
+			Signature = { Base = 0, Per = 2, PerLevel = { growth = 0.02 } },
 		},
 		granny_boom = {
 			Cost = 30000,
 			StartWeapon = "YarnBomb",
-			Bonus = { area = 0.10 },
-			Signature = { Base = 10, Per = 3, PerLevel = { area = 0.03 } },
+			Bonus = { maxHpMult = 0.10 }, -- 1.10 H0
+			BaseSpeed = 20,
+			Goal = { Stat = "Elites", Need = 3, Text = "Defeat 3 elite enemies" },
+			Signature = { Base = 0, Per = 3, PerLevel = { area = 0.03 } },
 		},
-	},
+		coach_crunch = {
+			GoalOnly = true,
+			StartWeapon = "Dodgeball",
+			Bonus = {},
+			Goal = { Stat = "BestSurvive", Need = 180, Text = "Survive 3 minutes in one run" },
+			Signature = { Base = 0, Per = 2, PerLevel = { speed = 0.02 } },
+		},
+		doug_janitor = {
+			GoalOnly = true,
+			StartWeapon = "MopSweep",
+			Bonus = { maxHpMult = 0.10, pickupFlat = 4 }, -- 1.10 H0; Clean Route +4 studs pickup
+			Goal = { Stat = "Chests", Need = 5, Text = "Open 5 reward chests" },
+			Signature = { Base = 0, Per = 4, PerLevel = { pickup = 0.04 } },
+		},
+		peter_parkour = {
+			GoalOnly = true,
+			StartWeapon = "ReturningSneakers",
+			Bonus = { maxHpMult = -0.05 }, -- 0.95 H0
+			Goal = { Stat = "Dashes", Need = 30, Text = "Dash 30 times" },
+			Signature = { Base = 0, Per = 2, PerLevel = { speed = 0.02 } },
+		},
+		barry_plotter = {
+			GoalOnly = true,
+			StartWeapon = "SeedSlinger",
+			Bonus = {},
+			Goal = { Stat = "MostWeapons", Need = 3, Text = "Hold 3 different weapons in one run" },
+			Signature = { Base = 0, Per = 3, PerLevel = { area = 0.03 } },
+		},
+		rambozo = {
+			GoalOnly = true,
+			StartWeapon = "ConfettiMinigun",
+			Bonus = {},
+			Goal = { Stat = "Kills", Need = 300, Text = "Defeat 300 enemies" },
+			Signature = { Base = 0, Per = 1, PerLevel = { critChance = 0.01 } },
+		},
+		swolverine = {
+			GoalOnly = true,
+			StartWeapon = "ProteinClaws",
+			Bonus = { maxHpMult = 0.15 }, -- 1.15 H0
+			CritBase = 0, -- base critical chance zero
+			Goal = { Stat = "CloseKills", Need = 100, Text = "Defeat 100 enemies up close" },
+			Signature = { Base = 0, Per = 3, PerLevel = { maxHpMult = 0.03 } },
+		},
+		crash_cassidy = {
+			GoalOnly = true,
+			StartWeapon = "RicochetPuck",
+			Bonus = { maxHpMult = -0.10 }, -- 0.90 H0
+			Goal = { Stat = "Distance", Need = 10000, Text = "Travel 10,000 studs in runs" },
+			Signature = { Base = 0, Per = 2, PerLevel = { speed = 0.02 } },
+		},
+		knuckles_mcgee = {
+			GoalOnly = true,
+			StartWeapon = "GloveCombo",
+			Bonus = {},
+			Goal = {
+				Stat = "Bosses",
+				Need = 1,
+				Any = { { Stat = "Bosses", Need = 1 }, { Stat = "Revives", Need = 1 } },
+				Text = "Defeat a boss or revive a teammate",
+			},
+			Signature = { Base = 0, Per = 3, PerLevel = { maxHpMult = 0.03 } },
+		},
+	} :: { [string]: any },
 
-	-- Ruckus, Loot Rush: chest / shrine / item pickups (not XP gems) charge one Scrap Barrage.
-	LootRush = {
-		PickupsPerCharge = 5,
-		MaxStored = 1,
-		RingCount = 8, -- scraps in the ring fired with the next volley
-		RingBounces = 0, -- bounces of a ring scrap
-	},
-	-- Ruckus, dash: drops rolling cans (Dash.OnDash).
-	DashCans = {
-		Count = 2,
-		Fuse = 0.8, -- seconds until a can explodes
-		Radius = 6,
-		DamageMult = 1.2, -- x the Scrap Toss damage
-		RollSpeed = 16, -- studs/s, slows to a stop
-		SpreadDegrees = 35, -- the two cans roll out to the sides, behind the dash
-		MaxLive = 6, -- per player
-	},
+	-- CloseKills (stream E2, ClassGoals): the melee signatures carry WeaponData Melee = true; dash
+	-- effects (cans, tackle, body-check, balloon) are credited to a source with Dash = true and the
+	-- landing blast to one with Close = true (WeaponSystem.KitBurst).
 
-	-- Toastmaster, Overheat: Hits hits on the same enemy within Window s = a Burn.
-	Overheat = {
-		Hits = 3,
-		Window = 4,
-		BurnSeconds = 3, -- refresh only, never stacks
-		TickEvery = 0.5,
-		TickShare = 0.2, -- x the Toast Volley damage per tick
-	},
-	-- Toastmaster, landing blast (Dash.OnLanded).
-	LandingBlast = {
-		MinAirtime = 0.35,
-		Radius = 8,
-		DamageMult = 1.0, -- x the Toast Volley damage
-		Cooldown = 2,
-	},
+	-- server-measured horizontal speed (Warm-Up, Stride, Momentum): studs moved over this window
+	SpeedWindow = 0.25,
 
-	-- Captain Croak, Big Splash: a leap landing with an enemy near empowers the next bubble.
-	BigSplash = {
-		EnemyRange = 10,
-		DamageMult = 1.8,
-		RadiusMult = 1.4,
-		MaxStored = 1,
-	},
+	-- Ruckus, Junk Collector: chest / item rewards (not XP shards) charge it; the next Scrap Shot
+	-- becomes a barrage of Shots projectiles (Coeff each, the weapon's bounces), consuming one charge.
+	JunkCollector = { RewardsPerCharge = 5, MaxStored = 1, Shots = 3, Coeff = 0.60, Spread = 10 },
+	-- Ruckus, dash: rolling cans; each explodes after Fuse for Coeff in Radius; one can hit per target
+	-- per dash (one cast ledger per dash)
+	DashCans = { Count = 2, Fuse = 0.90, Radius = 5, Coeff = 0.40, RollSpeed = 16, SpreadDegrees = 35, MaxLive = 4 },
 
-	-- Granny Boom, Tangled Up: a yarn explosion tangles what it hits (EnemyAI SlowUntil/SlowMult).
-	TangledUp = {
-		Seconds = 0.75,
-		Slow = 0.35, -- 35% slower
-		BossSeconds = 0.3,
-		BossSlow = 0.15,
-		CapSeconds = 1.5, -- most tangle time an enemy takes ...
-		CapWindow = 3, -- ... per this many seconds
-	},
-	-- Granny Boom, Rocket Boost scorch trail (Dash.OnDash kind "boost" leaves patches along the path).
-	Scorch = {
-		DamageMult = 0.6, -- x the Yarn Bomb damage per tick
-		Radius = 3,
-		Life = 1.4,
-		Spacing = 4, -- studs between patches
-		Tick = 0.4,
-		Duration = 0.35, -- seconds after OnDash the boost keeps dropping patches (the boost is 0.25 s)
-		MaxPatches = 12, -- per player
-	},
+	-- Toastmaster, Overheat: Hits direct toast hits on one target within Window s = scorch, counter reset
+	Overheat = { Hits = 3, Window = 5, ScorchMult = 1 },
+	-- Toastmaster, spring jump landing blast (apex 12: RunConfig.Movement.JumpApexByClass). Only a
+	-- landing after an intentional jump (the server saw the root rise faster than JumpRiseSpeed studs/s,
+	-- at most JumpMaxAir s before the landing; stairs, slopes, falls, launch pads and rescues never count).
+	LandingBlast = { MinAirtime = 0.35, Radius = 6, Coeff = 0.35, Cooldown = 2, JumpRiseSpeed = 30, JumpMaxAir = 3 },
+
+	-- Captain Croak, Big Splash: a leap landing within EnemyRange of a living enemy stores one
+	-- empowered bubble (+30 % burst damage), expiring after Expiry s. The leap: RunConfig.Dash.Variants.
+	BigSplash = { EnemyRange = 10, DamageMult = 1.30, RadiusMult = 1.0, MaxStored = 1, Expiry = 6 },
+
+	-- Granny Boom, Tangled Up: yarn damage slows 35 % for 0.75 s (refresh only, strongest slow kept;
+	-- bosses capped at RunConfig.Combat.BossSlowCap 10 %). Her rocket boost: RunConfig.Dash.Variants.
+	TangledUp = { Slow = 0.35, Seconds = 0.75 },
+
+	-- Coach Crunch, Warm-Up: Seconds above Speed studs/s charges it; the shoulder-tackle dash hits up
+	-- to MaxTargets enemies once (ChargedCoeff charged, Coeff uncharged) with a Stagger (immunity rules)
+	WarmUp = { Speed = 18, Seconds = 2 },
+	Tackle = { ChargedCoeff = 0.60, Coeff = 0.30, MaxTargets = 4, Stagger = 0.25, HitRadius = 3 },
+
+	-- Doug the Janitor, Clean Route: +4 studs pickup (Roster Bonus pickupFlat; shards are personal).
+	-- Dash: a Length-stud wet trail along the dash for Seconds: Slow on enemies within Width studs, no damage
+	WetTrail = { Length = 16, Seconds = 2, Slow = 0.25, Width = 3, Tick = 0.2 },
+
+	-- Peter Parkour, Stride: Seconds continuously above Speed studs/s charges it; the next signature
+	-- attack deals +DamageBonus (additive damage bonus, inside the 0..2 clamp); expires after Expiry s.
+	Stride = { Speed = 20, Seconds = 2, DamageBonus = 0.30, Expiry = 6 },
+	-- Peter, charged jump (client JumpController): a jump reaches Apex studs once per Cooldown s
+	ChargedJump = { peter_parkour = { Apex = 11, Cooldown = 6 } } :: { [string]: { Apex: number, Cooldown: number } },
+
+	-- Barry Plotter, Garden Company: plants within Range of Barry deal +DamageBonus (additive).
+	-- Dash: one extra seed planted at the dash origin, once per Cooldown s (shares the plant cap).
+	GardenCompany = { Range = 12, DamageBonus = 0.15 },
+	DashSeed = { Cooldown = 6 },
+
+	-- Rambozo, Punchline: +CritBonus crit chance against enemies above HpShare of their max HP.
+	Punchline = { HpShare = 0.70, CritBonus = 0.10 },
+	-- Rambozo, dash: one balloon grenade at the dash origin: Fuse, then Coeff in Radius, then MiniCount
+	-- mini-pops (MiniCoeff, MiniRadius, MiniOffset studs out, MiniDelay later; each target takes at most
+	-- one mini-pop of a grenade; mini-pops never explode again)
+	BalloonGrenade = { Fuse = 0.80, Radius = 6, Coeff = 0.40, MiniCount = 2, MiniCoeff = 0.15, MiniRadius = 3, MiniOffset = 3.5, MiniDelay = 0.2 },
+
+	-- Swolverine, Gains: HealShare of max HP after every KillsPerHeal credited kills, at most one heal
+	-- per MinGap s (extra heals wait, at most MaxBanked).
+	Gains = { KillsPerHeal = 10, HealShare = 0.01, MinGap = 1, MaxBanked = 5 },
+	-- Swolverine, dash recovery: +DamageBonus for Seconds after a dash ends (refreshed, never stacked)
+	DashRecovery = { DamageBonus = 0.15, Seconds = 2 },
+
+	-- Crash Cassidy, Momentum: +0..MaxBonus weapon damage as horizontal speed rises MinSpeed..MaxSpeed
+	Momentum = { MinSpeed = 12, MaxSpeed = 30, MaxBonus = 0.15 },
+	-- Crash, body-check dash (cooldown 2.20: RunConfig.Dash.Variants): Coeff once to each of at most
+	-- MaxTargets enemies touched, Knock studs/s (normal enemies; elites half, bosses none)
+	BodyCheck = { Coeff = 0.35, MaxTargets = 4, Knock = 20, HitRadius = 3 },
+
+	-- Knuckles McGee, Heavy Hands: x KnockMult knockback on normal enemies (inside the shared cap).
+	HeavyHands = { KnockMult = 1.25 },
+	-- Knuckles, close dodge: a dash ending within Range studs of an enemy adds one Glove Combo charge
+	CloseDodge = { Range = 6 },
 }
 
 ------------------------------------------------------------------------------------------
@@ -342,7 +452,125 @@ RunConfig.Combat = {
 	SplinterCoeff = 0.15,
 	SplinterCount = 2,
 }
-RunConfig.Director = {} -- [stream D] run clock, beacon, boss, enemy pressure
+--[[
+	[stream D] RUN DIRECTOR (docs/redesign/DECISIONS.md C5; brief "Enemy pressure and final objective").
+	One 15-minute run on the single map (Map.MapName) replaces the 5-stage portal loop:
+	  Survive -> (12:30) BeaconAvailable -> Rally (30 s) -> Charge (60 s, r35) -> Boss -> Victory,
+	  or Defeat on a full wipe. Overtime (past RunMinutes) only ramps the spawn rate.
+	StageManager runs the phases, Beacon.lua the beacon, EnemySpawner the pressure, BossAI the
+	Basin Breaker. Every number below is a proposed default from the brief and can be changed.
+	B / H0: the brief's baselines (weapon/enemy HP coefficients x B, player damage x H0).
+	  B  = Builds.B (stream B, 10 = the starter damage), else Combat.B, else DefaultB
+	  H0 = Builds.H0 / Survival.H0 when set, else Config.Player.BaseMaxHP (120, the existing
+	       normal player maximum HP)
+]]
+RunConfig.Director = {
+	Enabled = true,
+	-- true: the single map plays the old 5-stage portal loop again (other arenas always do)
+	LegacyStages = false,
+	-- tests only: the director clock runs this many times faster. Honoured in Studio only
+	-- (RunService:IsStudio(), the preview runs with --studio); live servers always use 1.
+	TimeScale = 1,
+	RunMinutes = 15, -- the target length; past it the overtime ramp starts (no timer defeat)
+	DefaultB = 10,
+
+	-- the final objective (Beacon.lua)
+	Beacon = {
+		RevealAt = 750, -- seconds of director clock (12:30)
+		Landmark = "Stone Circle", -- arena.Landmarks name; the landmark centre on the ground
+		ActivateRadius = 20, -- a living, non-downed hero this close activates it (once)
+		RallySeconds = 30, -- warning broadcast before the charge starts
+		ChargeSeconds = 60, -- charge time with at least one living hero inside ChargeRadius
+		ChargeRadius = 35,
+		HeightBand = 8, -- |dy| of ground heights that still counts as "at the beacon"
+		PromptHold = 0.5, -- the ProximityPrompt hold (E / touch); TryActivate checks the rules
+		PublishStep = 0.01, -- BeaconCharge attribute resolution
+	},
+
+	-- party size N (1..Max): initialised heroes at start, raised by late admissions, never lowered
+	Party = {
+		Max = 4,
+		HPPerExtra = 0.30, -- ordinary HP x (1 + 0.30 (N-1))
+		DamagePerExtra = 0.10, -- contact / attack damage x (1 + 0.10 (N-1)); the boss too
+		SpawnPerExtra = 0.45, -- spawn rate x (1 + 0.45 (N-1))
+	},
+	-- t = director minutes at the enemy's spawn (living enemies are never rescaled)
+	Time = {
+		HPPerMinute = 0.07, -- ordinary HP x (1 + 0.07 t)
+		DamagePerMinute = 0.025, -- damage x (1 + 0.025 t)
+	},
+	Spawn = {
+		Base = 0.60, -- enemies/s at t = 0 ...
+		PerMinute = 0.14, -- ... + this per minute
+		OvertimePerMinute = 0.10, -- past RunMinutes: rate x min(OvertimeCap, 1 + 0.10 (t - 15))
+		OvertimeCap = 1.5,
+		AliveCaps = { 55, 95, 145, 200 }, -- ordinary enemies alive by N (perf limits to test)
+		MinDistance = 35, -- spawn ring around a living hero (flat studs) ...
+		MaxDistance = 70,
+		MaxPathFactor = 2.0, -- reachable: walking distance (flow field) at most this x MaxDistance
+		Tries = 12,
+		TickSeconds = 0.25, -- spawn checks per second = 4
+		MaxPerTick = 6,
+		MaxBank = 3, -- budget kept while capped / no spot (no burst when room opens)
+		BossRateMult = 0.5, -- during the boss fight
+		BossCapMult = 0.5,
+	},
+	Elite = {
+		FromMinute = 5,
+		Chance = 0.05, -- share of spawns
+		HPMult = 3, -- x the archetype HP
+		DamageMult = 1.25,
+		Affixes = false, -- true: the old elite affixes (Swift / Shielded / Burning) as well
+	},
+	--[[
+		Roster of the single map (other EnemyData types are kept but never spawned there).
+		HP x B, Contact / Attack x H0; Kind is the XP / gold tag (Normal / Tough / Elite / Boss).
+		The attack timings live in EnemyData (FloatingEye / SapLobber Ranged, StumpBrute Slam).
+		Contact values marked "proposed" are not in the brief.
+	]]
+	Roster = {
+		{ Type = "Skeleton", Name = "Beetle", FromMinute = 0, Weight = 60, HP = 2, Speed = 14, Contact = 0.05, ContactCooldown = 0.8, Kind = "Normal" },
+		{ Type = "FloatingEye", FromMinute = 0, Weight = 25, HP = 3, Speed = 10, Contact = 0.02, Attack = 0.07, Kind = "Normal" }, -- contact proposed
+		{ Type = "RootRunner", FromMinute = 2, Weight = 30, HP = 1.5, Speed = 20, Contact = 0.04, Kind = "Normal" },
+		{ Type = "StumpBrute", FromMinute = 4, Weight = 14, HP = 5, Speed = 8, Contact = 0.05, Attack = 0.10, Kind = "Tough" }, -- contact proposed
+		{ Type = "SapLobber", FromMinute = 6, Weight = 16, HP = 3, Speed = 9, Contact = 0.02, Attack = 0.06, Kind = "Normal" }, -- contact proposed
+	} :: { any },
+	-- stuck enemies (EnemyAI): no progress for CheckSeconds -> a short sideways repath, at most
+	-- Repaths times, then a quiet despawn (no rewards)
+	Stuck = {
+		CheckSeconds = 3,
+		MinMove = 2, -- studs moved per check while trying to walk
+		NearTarget = 12, -- closer than this to its hero: crowding, never "stuck"
+		Repaths = 2,
+		RepathSeconds = 1.2,
+	},
+	--[[
+		Rewards on a director run (the brief: elites pay team gold and XP, chests are bought with team
+		gold and give passive choices; nothing grants the old run items):
+		  EliteFloorChest = false   no free chest from an elite kill (its Sigil roll stays)
+		  OptionalLocations = false no guarded altar, runes, treasure or caravan; no Shrine of Chance
+		                            or Bargain; no chest variants (cursed chests) (LootSystem)
+		  Encounters                the feature encounters that may start (EncounterDirector); the
+		                            others (merchant, mini-boss, secret room, cursed chests) grant old
+		                            items. The villager rescue pays one passive choice per recipient
+		                            and is delivered to the Stone Circle (the beacon's landmark).
+	]]
+	Rewards = {
+		EliteFloorChest = false,
+		OptionalLocations = false,
+		Encounters = { "Rescue", "Weather", "MapEvents", "TrialShrine" } :: { string },
+	},
+	-- the Basin Breaker (BossData BasinBreaker): HP = HPB x B x [1 + 0.80 (N-1)] x [1 + 0.07 t]
+	Boss = {
+		Id = "BasinBreaker",
+		HPB = 200,
+		HPPerExtra = 0.80,
+		HPPerMinute = 0.07,
+		Contact = 0.10, -- walking into it, x H0 x party damage (proposed; attacks in BossData)
+		SpawnDistance = 22, -- from the beacon, on walkable ground
+		SlowCap = 0.10, -- every boss: slows take at most 10% of its speed (no knockback, no stun)
+	},
+}
 -- [stream E1] downed, revive, protection, falls, disconnects, movement feel
 -- (server RunManager "HP, death, revive" / fallRescue / speedCheck / reconnect sections, Dash.lua
 -- landings; client JumpController, MobileControls, DashClient, ReviveHoldClient; pure maths in

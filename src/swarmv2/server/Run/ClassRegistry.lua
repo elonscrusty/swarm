@@ -1,9 +1,11 @@
 --!strict
 --[[
 	SwarmV2/Run/ClassRegistry.lua  (ServerScriptService.SwarmV2.Run.ClassRegistry)
-	OWNER: gameplay track (Chat 2). Registers the four playable classes at RunBoot time.
+	OWNER: gameplay track (Chat 2). Registers the twelve playable classes at RunBoot time.
 
-	ClassRegistry.Init() inserts ruckus, toastmaster, captain_croak and granny_boom into
+	ClassRegistry.Init() inserts the twelve class ids (RunConfig.Classes.Order: ruckus,
+	toastmaster, captain_croak, granny_boom, coach_crunch, doug_janitor, peter_parkour,
+	barry_plotter, rambozo, swolverine, crash_cassidy, knuckles_mcgee) into
 	CharacterData.Characters (only ids that are missing, never overwriting), so Hero Mastery,
 	hero upgrades, stats, leaderboards, AccountService and DataService all accept the ids.
 	The old 11 heroes leave CharacterData.Order (hidden everywhere the run side lists heroes);
@@ -33,7 +35,7 @@ function ClassRegistry.Init(): { string }
 	return added
 end
 
--- Is `id` one of the four playable classes?
+-- Is `id` one of the twelve playable classes?
 function ClassRegistry.IsClass(id: any): boolean
 	return type(id) == "string" and table.find(RunConfig.Classes.Order, id) ~= nil
 end

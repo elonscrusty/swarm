@@ -34,7 +34,9 @@ local CameraController = {}
 
 local player = Players.LocalPlayer
 local focus: Vector3? = nil
-local shake = 0
+local shake = 0 -- studs of jitter at the start of the running shake
+local shakeLeft = 0 -- seconds of it left (it fades to nothing over shakeLen)
+local shakeLen = 0.11
 local kick = 0 -- studs of camera punch (Kick), eased out
 local spectated: Player? = nil -- teammate followed while the local player is down
 local subjectKey: any = nil -- who the follow camera is on (a change = glide, not snap)
@@ -84,20 +86,37 @@ local function menuCFrame(): CFrame?
 	return nil
 end
 
--- Short screen shake (hurt, explosions, boss).
--- Kept small: scaled by Config.Camera.ShakeScale and the player's Screen shake setting
--- (0 = off), capped at ShakeMax studs.
-function CameraController.Shake(amount: number)
+--[[
+	Short screen shake. Ordinary feedback (hits taken, explosions, kills) is mild and over in
+	Config.Camera.ShakeSeconds (< 0.12 s) at most OrdinaryShakeMax studs; kind "boss" (a boss roar, a
+	phase change, the Boss stage, a huge kill) is the one longer shake, still capped: BossShakeMax
+	studs for BossShakeSeconds. Scaled by ShakeScale and the player's Screen shake setting (0 = off);
+	Reduced effects: none at all. A stronger shake replaces a weaker one that is still running.
+]]
+function CameraController.Shake(amount: number, kind: string?)
 	if ClientSettings.Reduced() then
 		return
 	end
 	local cam = Config.Camera :: any
 	local setting = tonumber(ClientSettings.Get("Shake")) or 1
-	if setting <= 0 then
+	if setting <= 0 or amount ~= amount then
 		return
 	end
-	local a = math.min(amount * (cam.ShakeScale or 1) * setting, (cam.ShakeMax or 0.6) * setting)
-	shake = math.max(shake, a)
+	local boss = kind == "boss"
+	local cap = math.min(boss and (cam.BossShakeMax or 0.55) or (cam.OrdinaryShakeMax or 0.4), cam.ShakeMax or 0.6)
+	local a = math.min(amount * (cam.ShakeScale or 1) * setting, cap * setting)
+	local len = boss and (cam.BossShakeSeconds or 0.3) or (cam.ShakeSeconds or 0.11)
+	local current = shakeLeft > 0 and shake * (shakeLeft / shakeLen) or 0
+	if a >= current then
+		shake = a
+		shakeLen = len
+		shakeLeft = len
+	end
+end
+
+-- For tests: { Amount (studs now), Left (seconds), Length } of the running shake.
+function CameraController.ShakeState(): { Amount: number, Left: number, Length: number }
+	return { Amount = shakeLeft > 0 and shake * (shakeLeft / shakeLen) or 0, Left = math.max(shakeLeft, 0), Length = shakeLen }
 end
 
 -- Short camera punch toward the hero (big kills, evolution, boss phase): the "hit-stop"
@@ -596,19 +615,20 @@ function CameraController.Init()
 		if kick > 0.02 then
 			-- the punch: pulled in along the view line, eased back out
 			dist = math.max(R.MinCollisionDistance, dist - kick)
-			kick *= math.exp(-dt * 16)
+			kick *= math.exp(-dt * 24) -- [stream G] a 1.5-stud punch is gone in ~0.18 s (was 16: ~0.27 s)
 		else
 			kick = 0
 		end
 
 		local jitter = Vector3.zero
-		if shake > 0.01 and not reduced then
-			-- smooth noise (not per-frame random jumps), decaying fast
+		if shakeLeft > 0 and shake > 0.01 and not reduced then
+			-- smooth noise (not per-frame random jumps) that fades out linearly over the shake's length
 			local t = now * 18
-			jitter = Vector3.new(math.noise(t, 0.3), math.noise(0.7, t) * 0.6, math.noise(t, 5.1)) * (2 * shake)
-			shake *= math.exp(-dt * 7)
+			jitter = Vector3.new(math.noise(t, 0.3), math.noise(0.7, t) * 0.6, math.noise(t, 5.1)) * (2 * shake * (shakeLeft / shakeLen))
+			shakeLeft -= dt
 		else
 			shake = 0
+			shakeLeft = 0
 		end
 		if fovKick > 0.05 then
 			fovKick *= math.exp(-dt * 8)

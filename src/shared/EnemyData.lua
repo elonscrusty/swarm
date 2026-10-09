@@ -44,6 +44,11 @@
 	  NoWave      true = never in mini-waves (a ring of them would be neither fair nor useful)
 	  Reward      { Gold, GoldPerStage, Gems }: a nest's reward to every living player
 	  IsBoss      a boss body (BossData entry); Object = made by a boss (cleared with it)
+	  Kind        the XP / gold tag: "Normal" | "Tough" | "Elite" | "Boss" (EnemySpawner sets
+	              e.Kind; elites and bosses override it)
+	  Slam        { Trigger, Radius, Warn, Every, Damage, Cause }: next to a hero it stops, a
+	              circle marks Radius for Warn s, then one hit (the Stump Brute)
+	  Ranged.Style / Ranged.Cause  the landing circle's telegraph style and the hit's cause
 
 	To add an enemy: add an entry to Enemies and give it weight in SpawnTable rows.
 ]]
@@ -386,6 +391,121 @@ EnemyData.Enemies = {
 		NoWave = true,
 		Role = "The Briar Sentinel's sprouts: small thorny walkers that crowd you in",
 	},
+	------------------------------------------------------------------------------------
+	-- [stream D] Cliffwood run roster (RunConfig.Director.Roster sets HP / speed / damage
+	-- from B and H0; the numbers here are the B = 10, H0 = 120 references and the attack
+	-- timings, which are the brief's). Never in SpawnTable: only the director spawns them.
+	------------------------------------------------------------------------------------
+	-- a hovering eyeball on leaf wings: a marked bolt lands where you stood
+	-- (shot warning Windup + Flight = 0.70 s, interval Cooldown + Windup = 2.80 s)
+	FloatingEye = {
+		Id = "FloatingEye",
+		DisplayName = "Floating Eye",
+		HP = 30,
+		Speed = 10,
+		Damage = 2,
+		Radius = 1.4,
+		Size = Vector3.new(2.6, 2.6, 2.6),
+		Shape = "Ball",
+		Mesh = { Type = "Sphere", Scale = Vector3.new(1, 1, 1) },
+		Color = Palette.ivory_200,
+		Material = "SmoothPlastic",
+		Gem = { Small = 80, Medium = 20 },
+		GemChance = 1,
+		KnockbackResist = 0.1,
+		FlyHeight = 2.5,
+		Kind = "Normal",
+		Role = "Ranged: hovers at a distance and fires a bolt at a marked spot; step off the mark",
+		Intro = "step off its mark",
+		Ranged = { MinRange = 18, MaxRange = 28, Windup = 0.45, Flight = 0.25, Cooldown = 2.35, Splash = 3.5, Damage = 8.4, Style = "venom", Cause = "Floating Eye bolt" },
+	},
+	-- a low, fast root critter that skitters straight at you
+	RootRunner = {
+		Id = "RootRunner",
+		DisplayName = "Root Runner",
+		HP = 15,
+		Speed = 20,
+		Damage = 4.8,
+		Radius = 1.2,
+		Size = Vector3.new(2.2, 1.6, 2.8),
+		Shape = "Ball",
+		Mesh = { Type = "Sphere", Scale = Vector3.new(0.9, 0.7, 1.2) },
+		Color = Palette.wood_500,
+		Material = "SmoothPlastic",
+		Gem = { Small = 95, Medium = 5 },
+		GemChance = 0.9,
+		KnockbackResist = 0,
+		Kind = "Normal",
+		Role = "Fast flanker: fragile, but it closes the gap quickly",
+		Intro = "fast and fragile",
+	},
+	-- a walking tree stump: stops, raises its trunk, slams a marked circle around itself
+	StumpBrute = {
+		Id = "StumpBrute",
+		DisplayName = "Stump Brute",
+		HP = 50,
+		Speed = 8,
+		Damage = 6,
+		Radius = 2.2,
+		Size = Vector3.new(4.2, 4.6, 4.2),
+		Shape = "Cylinder",
+		Mesh = { Type = "Sphere", Scale = Vector3.new(1, 1, 1) },
+		Color = Palette.wood_600,
+		Material = "SmoothPlastic",
+		Gem = { Small = 40, Medium = 60 },
+		GemChance = 1,
+		KnockbackResist = 0.7,
+		Kind = "Tough",
+		Role = "Tough bruiser: slams the ground around itself; step out of the ring",
+		Intro = "step out of its slam ring",
+		-- next to a hero (within Trigger): Warn s of a marked circle, then Radius hits once;
+		-- one slam every Every s (launch to launch)
+		Slam = { Trigger = 6, Radius = 6, Warn = 1.0, Every = 3.0, Damage = 12, Cause = "Stump Brute slam" },
+	},
+	-- a sap-filled gourd beetle: lobs sticky sap that splashes a marked circle
+	-- (warning Windup + Flight = 1.00 s, every Cooldown + Windup = 3.50 s)
+	SapLobber = {
+		Id = "SapLobber",
+		DisplayName = "Sap Lobber",
+		HP = 30,
+		Speed = 9,
+		Damage = 2.4,
+		Radius = 1.5,
+		Size = Vector3.new(2.8, 2.6, 3.0),
+		Shape = "Ball",
+		Mesh = { Type = "Sphere", Scale = Vector3.new(1, 0.9, 1.1) },
+		Color = Palette.amber_500,
+		Material = "SmoothPlastic",
+		Gem = { Small = 75, Medium = 25 },
+		GemChance = 1,
+		KnockbackResist = 0.2,
+		Kind = "Normal",
+		Role = "Ranged: lobs sap that splashes a marked circle; move once the circle shows",
+		Intro = "dodge the sap",
+		Ranged = { MinRange = 16, MaxRange = 26, Windup = 0.55, Flight = 0.45, Cooldown = 2.95, Splash = 4, Damage = 7.2, Style = "acid", Cause = "Sap Lobber sap" },
+	},
+	-- the Basin Breaker: the single map's final boss (BossData BasinBreaker)
+	BasinBoss = {
+		Id = "BasinBoss",
+		DisplayName = "Basin Breaker",
+		HP = 2000, -- set by the director (RunConfig.Director.Boss)
+		Speed = 9,
+		Damage = 12,
+		Radius = 6,
+		Size = Vector3.new(12, 13, 11),
+		Shape = "Ball",
+		Mesh = { Type = "Sphere", Scale = Vector3.new(1, 1.1, 0.9) },
+		Color = Palette.wood_700,
+		Material = "SmoothPlastic",
+		Gem = { Large = 100 },
+		GemChance = 1,
+		KnockbackResist = 1,
+		XPScale = 20,
+		IsBoss = true,
+		Kind = "Boss",
+		Role = "Basin Breaker: leave the root slam ring, sidestep the charge lane, keep moving through the sap circles",
+	},
+
 	-- objects a boss makes (cleared when the boss dies)
 	WarBanner = {
 		Id = "WarBanner",
@@ -464,8 +584,20 @@ EnemyData.SpawnTable = {
 	{ Target = 160, Weights = { Slime = 5, Bat = 15, Skeleton = 20, Ghost = 20, Bomber = 20, Brute = 20, Spitter = 12, Healer = 6, Burrower = 8 } },
 }
 
+-- [stream D] While a single-map director run is on, EnemySpawner.SetDirector installs its
+-- roster here (rows built from RunConfig.Director.Roster), so every system that reads the
+-- spawn mix (encounters, guarded altars, the Trial shrine) uses the Cliffwood roster.
+EnemyData.RowOverride = nil :: ((seconds: number) -> any)?
+
 -- Row for a run time in seconds (clamped to the last row).
 function EnemyData.GetSpawnRow(seconds: number)
+	local override = EnemyData.RowOverride
+	if override then
+		local row = override(seconds)
+		if row then
+			return row
+		end
+	end
 	local index = math.clamp(math.floor(seconds / 60) + 1, 1, #EnemyData.SpawnTable)
 	return EnemyData.SpawnTable[index]
 end

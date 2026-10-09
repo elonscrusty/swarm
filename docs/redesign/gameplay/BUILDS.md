@@ -152,6 +152,9 @@ WeaponSystem.Stagger(e, seconds) -> boolean
 
 ## Stream C: still to do for the 8 newer signatures and the kits
 
+> Done by stream C (2026-10-09): every item below is implemented, see `CLASSES.md` (behaviours
+> `Fire.RankDodgeball / RankSneakers / RankSeed / RankConfetti / RankClaws / RankPuck / RankGlove`).
+
 Each runs a placeholder now (`RANK[id].Behavior`); give it its own `Fire.<Name>` in WeaponSystem, set the
 spec's `Behavior`, and use the stored fields: Dodgeball `SecondBall` (r5); Returning Sneakers return leg
 (`ReturnCoeff`, `OutTargets` / `ReturnTargets`, one hit per target per leg, terrain ends the leg); Seed

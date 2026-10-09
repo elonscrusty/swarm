@@ -171,7 +171,7 @@ local function pathSegments(): { Seg }
 		table.insert(segs, { 0, 0, gx, GATE_Z + PAD / 2 + 1.5 })
 	end
 	table.insert(segs, { 0, 0, PED_X - 17, 0 }) -- east trunk to the pedestal row
-	table.insert(segs, { PED_X - 17, -(#ClassCatalog.Order * PED_SPACING) / 2, PED_X - 17, (#ClassCatalog.Order * PED_SPACING) / 2 })
+	table.insert(segs, { PED_X - 17, -(#ClassCatalog.Showcase * PED_SPACING) / 2, PED_X - 17, (#ClassCatalog.Showcase * PED_SPACING) / 2 })
 	return segs
 end
 
@@ -182,7 +182,7 @@ local function blockedForScenery(x: number, z: number, margin: number): boolean
 	if z < GATE_Z + 24 and math.abs(x) < 92 then -- gate yard
 		return true
 	end
-	if x > PED_X - 24 and math.abs(z) < (#ClassCatalog.Order * PED_SPACING) / 2 + 14 then -- pedestal yard
+	if x > PED_X - 24 and math.abs(z) < (#ClassCatalog.Showcase * PED_SPACING) / 2 + 14 then -- pedestal yard
 		return true
 	end
 	if (x + 52) ^ 2 + (z - 58) ^ 2 < (13 + margin) ^ 2 then -- the old arch
@@ -234,7 +234,7 @@ local function buildGround(parent: Instance)
 	disc(f, "PlazaInner", 0, 0, 20, 0.78, 0.2, Color3.fromRGB(128, 122, 114), ROCK, false)
 	disc(f, "Ash", 0, 0, 9.5, 0.86, 0.2, Color3.fromRGB(56, 50, 48), SLAB, false)
 	-- pedestal yard: flagstone strip under the row
-	local count = #ClassCatalog.Order
+	local count = #ClassCatalog.Showcase
 	mk(f, "PedestalYard", Vector3.new(30, 0.2, count * PED_SPACING + 8), at(PED_X - 1, 0.55, 0), Color3.fromRGB(138, 132, 120), ROCK, false)
 end
 
@@ -872,7 +872,7 @@ end
 
 local function buildPedestals(parent: Instance, pedestals: { [string]: BasePart })
 	local f = folder(parent, "Pedestals")
-	local order = ClassCatalog.Order
+	local order = ClassCatalog.Showcase
 	for i, id in ipairs(order) do
 		local info = ClassCatalog.Get(id)
 		local primary = (info and info.Primary) or Color3.fromRGB(160, 160, 160)

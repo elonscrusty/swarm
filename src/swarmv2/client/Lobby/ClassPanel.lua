@@ -80,7 +80,18 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 	sheet = Kit.sheet(ctx.Root, "ClassSheet", "YOUR CLASS", function()
 		ctx.OpenSheet(nil)
 	end)
-	local list = new("Frame", { Name = "Cards", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -46), ZIndex = 12 }, sheet.Body)
+	-- [integration] twelve classes: the card grid scrolls when it doesn't fit the screen
+	local list = new("ScrollingFrame", {
+		Name = "Cards",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 1, -46),
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 6,
+		ZIndex = 12,
+	}, sheet.Body)
 	local grid = new("UIGridLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		CellPadding = UDim2.fromOffset(8, 8),
@@ -116,7 +127,7 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 		end
 		local view = ctxNow.View
 		local selected = view ~= nil and view.Selected == id
-		local owned = info.Cost <= 0 or (view ~= nil and view.Owned[id] == true)
+		local owned = id == ClassCatalog.Default or (view ~= nil and view.Owned[id] == true)
 		local locked = view ~= nil and view.ClassLocked == true
 		local goldNow: number = view and view.Gold or 0
 		local holder, face = UIKit.Surface(list, {
@@ -174,6 +185,9 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 			title, kind, enabled = "LOCKED", "Disabled", false
 		elseif owned then
 			title, kind, action = "SELECT", "Primary", "Select"
+		elseif info.GoalOnly then
+			-- earned by play only: show the goal (DECISIONS C2)
+			title, kind, enabled = string.upper(info.Goal and info.Goal.Text or "Earn in runs"), "Disabled", false
 		elseif goldNow >= info.Cost then
 			title, kind, action = "BUY " .. Kit.gold(info.Cost), "Primary", "Buy"
 		else
@@ -210,9 +224,10 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 			local avail = math.min(c.W - 2 * Kit.M, 960)
 			local cellW = math.floor((avail - 28 - (cols - 1) * 8) / cols)
 			local cellH = c.Portrait and 250 or 240
-			local rows = math.ceil(4 / cols)
+			local rows = math.ceil(#ClassCatalog.Order / cols)
 			grid.CellSize = UDim2.fromOffset(cellW, cellH)
-			local bodyH = rows * cellH + (rows - 1) * 8 + 46
+			-- at most about two rows tall; the rest scrolls
+			local bodyH = math.min(rows * cellH + (rows - 1) * 8, math.max(cellH + 8, (c.H or 700) - 220)) + 46
 			sheet.Resize(avail, 28 + 58 + bodyH)
 			if c.Portrait then
 				chip.Size = UDim2.fromOffset(math.min(260, c.W - 2 * Kit.M), 64)

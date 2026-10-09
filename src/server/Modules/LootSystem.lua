@@ -1033,13 +1033,18 @@ function LootSystem.BuildStage(arena, stage: number, portalPos: Vector3?)
 		end
 		return at
 	end
+	-- [stream D] a director run (Cliffwood beacon run, RunConfig.Director.Rewards): no optional
+	-- locations, shrines or chest variants (their rewards are the old run items); chests only
+	local director = ctx.StageManager and ctx.StageManager.IsDirector and ctx.StageManager.IsDirector()
+	local dirRewards = director and (RunConfig :: any).Director and (RunConfig :: any).Director.Rewards or nil
+	local noExtras = dirRewards ~= nil and dirRewards.OptionalLocations == false
 	-- Draw distinct optional locations; their rewards belong to this run only.
-	local kinds = table.clone(Config.Encounters.Types)
+	local kinds = noExtras and {} or table.clone(Config.Encounters.Types)
 	if not ctx.CaravanEvent then
 		local index = table.find(kinds, "Caravan")
 		if index then table.remove(kinds, index) end
 	end
-	local count = math.min(#kinds, rng:NextInteger(Config.Encounters.Count[1], Config.Encounters.Count[2]))
+	local count = #kinds == 0 and 0 or math.min(#kinds, rng:NextInteger(Config.Encounters.Count[1], Config.Encounters.Count[2]))
 	for _ = 1, count do
 		local kind = table.remove(kinds, rng:NextInteger(1, #kinds))
 		local K = Config.Caravan
@@ -1063,6 +1068,9 @@ function LootSystem.BuildStage(arena, stage: number, portalPos: Vector3?)
 	end
 	for _ = 1, S.BargainCount do
 		table.insert(shrines, "Bargain")
+	end
+	if noExtras then
+		table.clear(shrines)
 	end
 	for _, t in ipairs(shrines) do
 		local at = spot({ Clearance = 4.5 })
@@ -1116,7 +1124,7 @@ function LootSystem.BuildStage(arena, stage: number, portalPos: Vector3?)
 	local modId = ctx.RunModifiers and ctx.RunModifiers.StageModifierFor and ctx.RunModifiers.StageModifierFor(stageNo)
 	local smallMult = modId and StageModifierData.Effects(modId).SmallChests or 1
 	chests("Small", math.floor(rng:NextInteger(C.SmallCount[1], C.SmallCount[2]) * smallMult + 0.5))
-	for _, fn in ipairs(builtHooks) do
+	for _, fn in ipairs(noExtras and {} or builtHooks) do
 		local ok, err = pcall(fn, arena, stageNo) -- feature variants (cursed chests); own rng
 		if not ok then
 			warn("[LootSystem] stage hook failed: " .. tostring(err))
