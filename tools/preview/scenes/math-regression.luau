@@ -176,7 +176,9 @@ end
 check("B4 every weapon row valid, evolution partner released", #weaponBad == 0, table.concat(weaponBad, ", "))
 check("B5 XP curve matches the documented costs", true)
 local XS = preview.server("XPSystem")
-local costs = { [1] = 42, [20] = 270, [21] = 276, [50] = 450 }
+-- (redesign economy, stream E2: 20 + 12(L-1) + 3(L-1)^2; the old curve with it switched off)
+local Economy = preview.require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Economy
+local costs = (Economy and Economy.Enabled) and { [1] = 20, [2] = 35, [20] = 1331, [21] = 1460 } or { [1] = 42, [20] = 270, [21] = 276, [50] = 450 }
 for level, cost in pairs(costs) do
 	check("B5 XPNeeded(" .. level .. ")", XS.XPNeeded(level) == cost, tostring(XS.XPNeeded(level)))
 end

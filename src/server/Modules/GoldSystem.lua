@@ -92,7 +92,8 @@ end
 
 -- Team gold for one eligible kill of this enemy kind (XPSystem.OnEnemyKilled). Returns it.
 function GoldSystem.CreditKill(kind: string): number
-	if not GoldSystem.TeamGoldOn() or not ctx.RunManager.IsRunning() then
+	local RM = ctx.RunManager
+	if not GoldSystem.TeamGoldOn() or not (RM and RM.IsRunning and RM.IsRunning()) then
 		return 0
 	end
 	local amount = tonumber(econ().Gold.ByKind[kind]) or 0
@@ -171,7 +172,8 @@ end
 
 function GoldSystem.BeginRun(rp)
 	-- [stream E2] the first record of a new run starts the team balance at 0
-	if rp.RunId ~= nil and team.RunId ~= tostring(rp.RunId) and ctx.RunManager.IsRunning() then
+	local RM = ctx.RunManager
+	if rp.RunId ~= nil and team.RunId ~= tostring(rp.RunId) and RM and RM.IsRunning and RM.IsRunning() then
 		GoldSystem.ResetTeamGold(tostring(rp.RunId))
 	end
 	local data = ctx.DataService.GetData(rp.Player)

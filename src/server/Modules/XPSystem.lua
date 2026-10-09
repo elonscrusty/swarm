@@ -49,6 +49,7 @@ local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local Fx = require(script.Parent.Fx)
 local HeightGrid = require(script.Parent.HeightGrid)
+local Players = game:GetService("Players")
 local RunConfig = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig)
 local Nav = RunConfig.Nav
 
@@ -77,6 +78,7 @@ type Gem = {
 	Index: number,
 	Cell: number?, -- grid cell key while resting (nil while flying or parked)
 	Owner: any?, -- personal shard: the only run player who may collect it (nil = old shared gem)
+	OwnerId: number?, -- ... their UserId (a reconnect replaces the run record: found again by it)
 	Born: number, -- run clock when it appeared (merge window)
 	Expires: number, -- run clock when an uncollected shard vanishes (math.huge: never)
 	Fading: boolean, -- the "Fade" attribute is set (its last FadeSeconds)
@@ -98,6 +100,31 @@ local pickups: { Pickup } = {}
 
 local function runNow(): number
 	return ctx.RunManager.GetRunTime()
+end
+
+-- Is this gem a personal shard of `rp` (by UserId: a reconnected player's new run record
+-- still owns the shards of the record it replaced)?
+local function ownedBy(gem: Gem, rp): boolean
+	if gem.Owner == rp then
+		return true
+	end
+	local id = gem.OwnerId
+	return id ~= nil and type(rp) == "table" and rp.Player ~= nil and rp.Player.UserId == id
+end
+
+-- The owner's current run record (nil while they are away): a record replaced by a
+-- reconnect is swapped for the new one.
+local function liveOwner(gem: Gem): any?
+	local o = gem.Owner
+	if o and o.Root and o.Player and o.Player.Parent then
+		return o
+	end
+	local p = gem.OwnerId and Players:GetPlayerByUserId(gem.OwnerId)
+	local cur = p and ctx.RunManager.GetRunPlayer(p)
+	if cur then
+		gem.Owner = cur
+	end
+	return cur
 end
 
 ------------------------------------------------------------------------------------------
@@ -342,7 +369,7 @@ local function findMergeTarget(pos: Vector3, value: number, owner: any?, now: nu
 			local list = grid[(cx + dx) * 100003 + (cz + dz)]
 			if list then
 				for _, gem in ipairs(list) do
-					if gem.Owner == owner and (owner == nil or now - gem.Born <= window) then
+					if (if owner then ownedBy(gem, owner) else gem.Owner == nil) and (owner == nil or now - gem.Born <= window) then
 						local ox, oz = gem.Pos.X - pos.X, gem.Pos.Z - pos.Z
 						local d = ox * ox + oz * oz
 						if d <= bestD and gem.Value + value <= maxValue then
@@ -392,7 +419,7 @@ local function spawn(position: Vector3, value: number, owner: any?)
 		local target = nil
 		if owner then
 			for _, g in ipairs(activeGems) do
-				if g.Owner == owner then
+				if ownedBy(g, owner) then
 					target = g
 					break
 				end
@@ -415,6 +442,7 @@ local function spawn(position: Vector3, value: number, owner: any?)
 	gem.Target = nil
 	gem.Speed = 0
 	gem.Owner = owner
+	gem.OwnerId = owner and owner.Player and owner.Player.UserId or nil
 	gem.Born = now
 	gem.Expires = owner and (now + econ().XP.ExpireSeconds) or math.huge
 	local ownerId = owner and owner.Player and owner.Player.UserId or nil
@@ -527,8 +555,9 @@ function XPSystem.OnEnemyKilled(e, rp, pos: Vector3): boolean
 	if ctx.ClassGoals then
 		ctx.ClassGoals.OnEnemyKilled(e, rp, kind, recipients)
 	end
-	if ctx.GoldSystem.CreditKill then
-		ctx.GoldSystem.CreditKill(kind)
+	local G = ctx.GoldSystem
+	if G and G.CreditKill then
+		G.CreditKill(kind)
 	end
 	return true
 end
@@ -538,6 +567,7 @@ local function releaseGem(i: number)
 	gem.Active = false
 	gem.Target = nil
 	gem.Owner = nil
+	gem.OwnerId = nil
 	gridRemove(gem)
 	gem.Part:SetAttribute("Active", false)
 	gem.Part:SetAttribute("Fly", nil)
@@ -552,7 +582,7 @@ end
 -- and any shared gem; teammates' shards stay theirs).
 function XPSystem.MagnetAll(rp)
 	for _, gem in ipairs(activeGems) do
-		if gem.Owner == nil or gem.Owner == rp then
+		if gem.Owner == nil or ownedBy(gem, rp) then
 			setTarget(gem, rp)
 		end
 	end
@@ -562,7 +592,7 @@ end
 function XPSystem.MagnetRadius(rp, pos: Vector3, radius: number)
 	local r2 = radius * radius
 	for _, gem in ipairs(activeGems) do
-		if gem.Owner == nil or gem.Owner == rp then
+		if gem.Owner == nil or ownedBy(gem, rp) then
 			local dx, dz = gem.Pos.X - pos.X, gem.Pos.Z - pos.Z
 			if dx * dx + dz * dz <= r2 then
 				setTarget(gem, rp)
@@ -576,7 +606,7 @@ end
 function XPSystem.ValueNear(pos: Vector3, radius: number, owner: any?): number
 	local r2, sum = radius * radius, 0
 	for _, gem in ipairs(activeGems) do
-		if owner == nil or gem.Owner == nil or gem.Owner == owner then
+		if owner == nil or gem.Owner == nil or ownedBy(gem, owner) then
 			local dx, dz = gem.Pos.X - pos.X, gem.Pos.Z - pos.Z
 			if dx * dx + dz * dz <= r2 then
 				sum += gem.Value
@@ -590,7 +620,7 @@ end
 function XPSystem.ShardsOf(rp): (number, number)
 	local n, value = 0, 0
 	for _, gem in ipairs(activeGems) do
-		if gem.Owner == rp then
+		if gem.Owner ~= nil and ownedBy(gem, rp) then
 			n += 1
 			value += gem.Value
 		end
@@ -620,10 +650,10 @@ end
 
 local function nearestCollector(gem: Gem, runPlayers): any?
 	local pos = gem.Pos
-	local owner = gem.Owner
-	if owner then
+	if gem.Owner then
+		local owner = liveOwner(gem)
 		-- only its owner, alive or downed, connected, not eliminated
-		if owner.Root and XPSystem.IsEligible(owner) and inBand(owner, pos) then
+		if owner and owner.Root and XPSystem.IsEligible(owner) and inBand(owner, pos) then
 			local m = ((owner.Root.Position - pos) * Vector3.new(1, 0, 1)).Magnitude
 			if m <= shardRadius(owner) then
 				return owner
@@ -834,7 +864,10 @@ function XPSystem.CollectAll(includeFallen: boolean?)
 	local owed: { [any]: number } = {}
 	for _, gem in ipairs(activeGems) do
 		if gem.Owner then
-			owed[gem.Owner] = (owed[gem.Owner] or 0) + gem.Value
+			local owner = liveOwner(gem)
+			if owner then
+				owed[owner] = (owed[owner] or 0) + gem.Value
+			end
 		else
 			total += gem.Value
 		end
@@ -914,7 +947,7 @@ function XPSystem.Init(c)
 	end
 	for i = 1, size do
 		local part = ModelBuilder.BuildGem(i, gemFolder)
-		gems[i] = { Part = part, Active = false, Value = 0, Pos = PARK.Position, Target = nil, Speed = 0, Index = i, Owner = nil, Born = 0, Expires = math.huge, Fading = false }
+		gems[i] = { Part = part, Active = false, Value = 0, Pos = PARK.Position, Target = nil, Speed = 0, Index = i, Owner = nil, OwnerId = nil, Born = 0, Expires = math.huge, Fading = false }
 		table.insert(freeGems, i)
 	end
 end

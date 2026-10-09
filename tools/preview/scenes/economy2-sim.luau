@@ -185,6 +185,7 @@ local nB = XP.ShardsOf(rB)
 check("B Normal kill: my shard of 4", nM == 1 and vM == E.XP.ByKind.Normal, nM .. "/" .. vM)
 check("B Normal kill: downed Ava gets her own shard of 4", nA == 1 and vA == 4, nA .. "/" .. vA)
 check("B Normal kill: Ben 135 studs away gets none", nB == 0, nB)
+check("B a replaced run record (reconnect) still owns its shards (by UserId)", (XP.ShardsOf(table.clone(rA))) == nA)
 check("B team gold +3 for a Normal kill", Gold.TeamGold() - gold0 == 3, Gold.TeamGold() - gold0)
 -- the shard parts carry their owner (other clients hide them)
 do

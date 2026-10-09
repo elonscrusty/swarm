@@ -15,10 +15,18 @@ end
 preview.startServer()
 preview.advance(1)
 local XP = preview.server("XPSystem")
-assert(XP.XPNeeded(1) == 42 and XP.XPNeeded(20) == 270, "early XP must make level-ups harder without timers")
-assert(XP.XPNeeded(21) == 276 and XP.XPNeeded(50) == 450, "late XP costs must keep growing")
-assert(XP.CoopShare() == 1, "a solo hero gets every gem's full XP")
-assert(Config.XP.CoopShare[2] < 1 and Config.XP.CoopShare[3] < Config.XP.CoopShare[2], "shared gem XP must shrink with the team size")
+local Economy = preview.require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Economy
+if Economy and Economy.Enabled then
+	-- redesign (stream E2, DECISIONS C9): 20 + 12(L-1) + 3(L-1)^2, personal shards never shared
+	assert(XP.XPNeeded(1) == 20 and XP.XPNeeded(2) == 35 and XP.XPNeeded(20) == 1331, "the redesign XP curve 20 + 12(L-1) + 3(L-1)^2")
+	assert(XP.XPNeeded(50) > XP.XPNeeded(21), "late XP costs must keep growing")
+	assert(XP.CoopShare() == 1, "personal XP is never divided by team size")
+else
+	assert(XP.XPNeeded(1) == 42 and XP.XPNeeded(20) == 270, "early XP must make level-ups harder without timers")
+	assert(XP.XPNeeded(21) == 276 and XP.XPNeeded(50) == 450, "late XP costs must keep growing")
+	assert(XP.CoopShare() == 1, "a solo hero gets every gem's full XP")
+	assert(Config.XP.CoopShare[2] < 1 and Config.XP.CoopShare[3] < Config.XP.CoopShare[2], "shared gem XP must shrink with the team size")
+end
 local RM = preview.server("RunManager")
 local LU = preview.server("LevelUpSystem")
 local player = game:GetService("Players").LocalPlayer
@@ -176,8 +184,8 @@ LU.OpenChest(rp)
 assert(holds == 0, "ordinary chest must not pause combat")
 rp.Level, rp.XP, rp.XPNeeded = 20, 0, XP.XPNeeded(20)
 local before = coins
-XP.GiveXP(rp, 270 + 276 + 2)
-assert(rp.Level == 22 and rp.XP == 2 and rp.XPNeeded == 282, "bulk XP must conserve remainder across late costs")
+XP.GiveXP(rp, XP.XPNeeded(20) + XP.XPNeeded(21) + 2) -- (270 + 276 + 2 on the old curve)
+assert(rp.Level == 22 and rp.XP == 2 and rp.XPNeeded == XP.XPNeeded(22), "bulk XP must conserve remainder across late costs")
 assert(math.abs(coins - before - 2 * 25 * 1.35) < 1e-6 and not rp.Offer and not rp.Paused,
 	"future bulk XP must become coins without any panel")
 preview.log("PASS: twelve ranks, harder XP, immediate choices, evolution, coins and ordinary chest")

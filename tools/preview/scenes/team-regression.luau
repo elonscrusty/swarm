@@ -306,6 +306,11 @@ local boss = assert(ES.SpawnBoss(base + Vector3.new(0, 0, 20), "ScorpionQueen"),
 -- RM.TeleportPlayer, not a raw CFrame: a charging boss moves fast, and following it with
 -- raw jumps trips the server's speed check, which snaps the hero back to the spawn
 local function hold(dist: number, mateSide: number)
+	-- (no open upgrade panel: a chooser can't be hit, so the boss would pick the other hero;
+	-- the redesign economy's personal shards level the heroes up often)
+	for _, who in ipairs({ rp, mate }) do
+		if who.Offer then LUS.Cancel(who) end
+	end
 	local y = rp.Root.Position.Y - 3.5
 	RM.TeleportPlayer(rp, Vector3.new(boss.Pos.X - dist, y, boss.Pos.Z))
 	RM.TeleportPlayer(mate, Vector3.new(boss.Pos.X + mateSide, y, boss.Pos.Z))
