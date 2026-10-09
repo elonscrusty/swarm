@@ -1104,9 +1104,33 @@ do
 		local e = ClassOwnership.Buy(s, id)
 		if id == "ruckus" then
 			check("buy: " .. id .. " is free and already owned", e == "OWNED" and s.Gold == info.Cost)
+		elseif info.GoalOnly then
+			-- continuation pack (DECISIONS C2): earned by play only, never sold for gold
+			local rich: any = { Gold = 1e6, OwnedCharacters = {} }
+			check("buy: " .. id .. " is goal-only (refused, no gold taken)", ClassOwnership.Buy(rich, id) == "GOAL_ONLY" and rich.Gold == 1e6 and rich.OwnedCharacters[id] == nil)
 		else
 			check("buy: " .. id .. " for exactly " .. info.Cost .. " leaves 0", e == nil and s.Gold == 0 and s.OwnedCharacters[id] == true)
 		end
+	end
+	-- goal unlocks (DECISIONS C2/C3): a met goal unlocks once, free; nothing else changes
+	do
+		local g: any = { Gold = 5, OwnedCharacters = { ruckus = true }, Stats = { ClassGoals = { Kills = 300, XP = 299, Revives = 1 } } }
+		local first = ClassOwnership.EarnGoals(g)
+		local second = ClassOwnership.EarnGoals(g)
+		local got = {}
+		for _, id in ipairs(first) do got[id] = true end
+		check("goals: Kills 300 unlocks rambozo", got.rambozo == true and g.OwnedCharacters.rambozo == true)
+		check("goals: XP 299 doesn't unlock toastmaster", got.toastmaster == nil and g.OwnedCharacters.toastmaster == nil)
+		check("goals: Knuckles boss OR revive (revive 1)", got.knuckles_mcgee == true)
+		check("goals: second pass grants nothing new, gold untouched", #second == 0 and g.Gold == 5)
+		check("goals: every class has a goal except the starter", (function()
+			for _, id in ipairs(ClassCatalog.Order) do
+				local info = ClassCatalog.Get(id)
+				if id ~= ClassCatalog.Default and (not info or not info.Goal) then return false end
+			end
+			return true
+		end)())
+		check("catalog: 12 classes, 4 showcase pedestals", #ClassCatalog.Order == 12 and #ClassCatalog.Showcase == 4)
 	end
 	check("catalog: owner prices 0 / 10k / 20k / 30k", ClassCatalog.Get("ruckus").Cost == 0 and ClassCatalog.Get("toastmaster").Cost == 10000 and ClassCatalog.Get("captain_croak").Cost == 20000 and ClassCatalog.Get("granny_boom").Cost == 30000)
 	local old: any = { OwnedCharacters = { Knight = true } }
