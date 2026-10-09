@@ -2064,6 +2064,27 @@ DRAW.Heal = function(c)
 	end
 end
 
+-- Continuation pack (class signature weapons, their evolutions, the loot passives): each has a picture in
+-- IconData (art/icons/<Id>.png). Until it loads (or if it cannot) the slot shows a related drawn icon
+-- instead of two letters.
+for id, like in pairs({
+	ScrapToss = "Sling", ToastVolley = "Boomerang", BubbleBomb = "HolyWater", YarnBomb = "VolatileSpore",
+	Dodgeball = "MagicOrb", MopSweep = "Whip", ReturningSneakers = "boot", SeedSlinger = "sprout",
+	ConfettiMinigun = "Turret", ProteinClaws = "Knives", RicochetPuck = "Sawblade", GloveCombo = "QuickGloves",
+	JunkyardCyclone = "Vortex", Toaststorm = "Lightning", BubbleTorrent = "FrostNova", KnittingNightmare = "Singularity",
+	PocketDynamo = "Might", RatchetTimer = "hourglass", TrailSneakers = "boot", PatchworkPadding = "heart",
+	CollectorsBell = "magnet", LuckyButton = "clover", SpringStitch = "arrowFast", SplinterBadge = "shield",
+}) do
+	local drawn = DRAW[like]
+	if drawn then
+		DRAW[id] = drawn
+	end
+	local colors = DEFAULT[like]
+	if colors then
+		DEFAULT[id] = colors
+	end
+end
+
 DRAW.missing = function(c)
 	box(c, 12, 12, 16, 16, c.main, 45, 2, 0.6)
 end
@@ -2176,6 +2197,10 @@ local ART_FALLBACK: { [string]: string } = {
 	-- hero class badges
 	hero_Knight = "helmet", hero_Mage = "wizardHat", hero_Rogue = "hood", hero_Priest = "mitre",
 	hero_Ranger = "featherCap", hero_Alchemist = "goggles", hero_Engineer = "minerHelm", hero_Necromancer = "skullHood",
+	-- the twelve classes of the continuation pack (CharacterData ids from ClassRoster); a drawn stand-in under each head
+	hero_ruckus = "goggles", hero_toastmaster = "gear", hero_captain_croak = "goggles", hero_granny_boom = "goggles",
+	hero_coach_crunch = "person", hero_doug_janitor = "minerHelm", hero_peter_parkour = "goggles", hero_barry_plotter = "goggles",
+	hero_rambozo = "person", hero_swolverine = "person", hero_crash_cassidy = "helmet", hero_knuckles_mcgee = "person",
 	-- arenas
 	arena_Forest = "tree", arena_Ruins = "castle", arena_Swamp = "sprout", arena_Snow = "FrostNova",
 	arena_Desert = "hourglass", arena_Lava = "FireTrail",
@@ -2374,12 +2399,22 @@ function Icons.PreloadList(): { string }
 	for _, w in ipairs(WeaponData.Order) do
 		add(w)
 	end
+	for _, w in ipairs(WeaponData.ClassOrder) do -- the class signatures (continuation pack)
+		add(w)
+	end
 	for _, pid in ipairs(PassiveData.Order) do
+		add(pid)
+	end
+	for _, pid in ipairs(PassiveData.LootOrder) do -- the eight loot passives
 		add(pid)
 	end
 	add("Gold")
 	add("Heal")
 	for _, w in ipairs(WeaponData.Order) do
+		local def = WeaponData.Weapons[w]
+		add(def and def.Evolution and def.Evolution.Id)
+	end
+	for _, w in ipairs(WeaponData.ClassOrder) do
 		local def = WeaponData.Weapons[w]
 		add(def and def.Evolution and def.Evolution.Id)
 	end

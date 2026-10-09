@@ -105,6 +105,10 @@ def add(title, note, entries, want_image=False):
 
 # --- catalogs ----------------------------------------------------------------------------
 weapons = blocks("src/shared/WeaponData.lua", "WeaponData.Weapons = {", None, 2)
+# the eight newer class signatures are one-line rows of the NEW_SIGNATURES table, merged into Weapons at load
+_listed = {i for i, _, _ in weapons}
+weapons += [(i, n, None) for i, n in re.findall(r'^\t\{ Id = "(\w+)", Name = "([^"]*)", ClassOnly', read("src/shared/WeaponData.lua"), re.M)
+            if i not in _listed]
 evos = blocks("src/shared/WeaponData.lua", "WeaponData.Weapons = {", None, 3)
 add("Weapons", "Level-up cards, HUD weapon bar, character screen (start weapon), chest rewards, results build.",
     [(i, n, "level-up card, HUD bar, results") for i, n, _ in weapons], True)
@@ -132,6 +136,14 @@ for i, n, _ in chars:
     key = cmap.get(i) or HERO_DRAWN.get(i)  # HERO_DRAWN: new heroes until their picture exists
     rows.append((key, n + " [" + i + "]", "character select, lobby, team HUD, results"))
 add("Characters (class icon)", "Class icons: hero_<Id> picture (Icons.Character), drawn hat / helmet under it. Skins reuse the class icon.", rows)
+# the twelve classes of the continuation pack (ids in RunConfig.Classes.Order, names in ClassRoster; registered into
+# CharacterData at run time by ClassRegistry, so they are not in CharacterData.lua)
+_order = re.search(r"RunConfig\.Classes = \{.*?\n\tOrder = \{(.*?)\n\t\},", read("src/swarmv2/shared/Run/RunConfig.lua"), re.S)
+_names = dict(re.findall(r'^\t(\w+) = \{\n\t\tName = "([^"]*)"', read("src/swarmv2/shared/Run/ClassRoster.lua"), re.M))
+rows = []
+for i in re.findall(r'"(\w+)"', _order.group(1)) if _order else []:
+    rows.append((cmap.get(i) or HERO_DRAWN.get(i), "%s [%s]" % (_names.get(i, i), i), "class select, lobby, party, team HUD, results (Icons.Character)"))
+add("Classes (continuation pack, class icon)", "Class heads rendered from the class meshes (blender/icons_v2.py): art/icons/heroes/hero_<classId>.png, uploaded by tools/upload_art.py into ArtData.", rows)
 add("Locked / state icons", "Icons that mark a state.", [
     ("lock", "Locked character / arena / reward", "intentionally locked: character cards, arena cards, track rewards"),
     ("check", "Selected / done / confirm", "character select, curses, bug report, achievements"),
