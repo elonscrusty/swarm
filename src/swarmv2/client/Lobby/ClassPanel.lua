@@ -80,7 +80,7 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 	sheet = Kit.sheet(ctx.Root, "ClassSheet", "YOUR CLASS", function()
 		ctx.OpenSheet(nil)
 	end)
-	local list = new("Frame", { Name = "Cards", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -30), ZIndex = 12 }, sheet.Body)
+	local list = new("Frame", { Name = "Cards", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -46), ZIndex = 12 }, sheet.Body)
 	local grid = new("UIGridLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		CellPadding = UDim2.fromOffset(8, 8),
@@ -91,7 +91,7 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 		Name = "Note",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(0, 1),
-		Size = UDim2.new(1, 0, 0, 26),
+		Size = UDim2.new(1, 0, 0, 42),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = true,
 		ZIndex = 12,
@@ -212,7 +212,7 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 			local cellH = c.Portrait and 250 or 240
 			local rows = math.ceil(4 / cols)
 			grid.CellSize = UDim2.fromOffset(cellW, cellH)
-			local bodyH = rows * cellH + (rows - 1) * 8 + 30
+			local bodyH = rows * cellH + (rows - 1) * 8 + 46
 			sheet.Resize(avail, 28 + 58 + bodyH)
 			if c.Portrait then
 				chip.Size = UDim2.fromOffset(math.min(260, c.W - 2 * Kit.M), 64)
