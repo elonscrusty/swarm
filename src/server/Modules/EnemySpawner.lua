@@ -498,6 +498,8 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.Patches = nil
 	e.BurnTimer = nil
 	e.SlowUntil = nil -- Chilling Aura (Garlic perk) slow
+	e.StaggerUntil = nil -- the combat core's stagger and its immunity window (a recycled pool
+	e.StaggerImmuneUntil = nil -- slot must not inherit them)
 	e.SlowMult = nil
 	e.TerrainSlow = nil -- mud / quicksand slow (BiomeHazards)
 	e.Harmless = false
