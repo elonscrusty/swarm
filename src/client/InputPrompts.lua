@@ -27,6 +27,10 @@
 	  interact (hold)  E or gamepad X (LootUI)
 	  back             gamepad B (pause menu); on-screen BACK buttons for touch and mouse
 	  jump             Space, gamepad A, the on-screen JUMP button (JumpController)
+	  dash             Shift / Q, gamepad B / R1, the on-screen DASH button (DashClient; the
+	                   first-run walkthrough's Dash line, WalkthroughClient)
+	  camera           right mouse drag, gamepad right stick, a swipe on the right part of a
+	                   touch screen (CameraController; the walkthrough's Move line)
 	Text comes back in sentence case; callers upper-case or UIKit.track it as their style
 	needs. No special glyphs: only plain letters and digits, which every font draws.
 ]]

@@ -1560,10 +1560,15 @@ Config.Walkthrough = {
 	GemRadius = 45, -- gems within this many studs count for the first level (top-up check)
 	ChestDistance = 12, -- studs from the hero to the free chest
 	ChestType = "Small", -- a normal free chest (LootSystem.AddFeatureChest, normal reward)
-	GoSeconds = 6, -- "Waves are coming!" stays this long, then the walkthrough ends
-	ReleaseWaveDelay = 4, -- the first wave comes at most this long after GO
+	GoSeconds = 6, -- "Waves are coming!" / the beacon line stays this long, then the walkthrough ends
+	ReleaseWaveDelay = 4, -- the first wave comes at most this long after GO (old stage loop)
+	-- a Cliffwood beacon run (StageManager's director): the director's spawns are held only
+	-- until the Fight step starts or this many seconds of run time, whichever comes first
+	OpeningHold = 10,
+	DirectorEnemyType = "Skeleton", -- the Cliffwood roster's beetle (the walkthrough's weak bugs)
+	DirectorEnemyCount = 5, -- 5 x 4 XP = the first level (RunConfig.Economy.XP: 20)
 	-- seconds of run time before a step completes on its own
-	Timeouts = { Move = 45, Fight = 45, Gems = 30, Upgrade = 45, Chest = 45 },
+	Timeouts = { Move = 45, Dash = 12, Fight = 45, Gems = 30, Upgrade = 45, Chest = 45 },
 }
 
 Config.Tutorial = {
