@@ -38,12 +38,47 @@ local PassiveData = require(game:GetService("ReplicatedStorage").Shared.PassiveD
 local StatSheet = require(game:GetService("ReplicatedStorage").Shared.StatSheet)
 local SynergyData = require(game:GetService("ReplicatedStorage").Shared.SynergyData)
 local EvolutionPreview = require(game:GetService("ReplicatedStorage").Shared.EvolutionPreview)
+local RunConfig = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig)
+local BuildRules = require(game:GetService("ReplicatedStorage").SwarmV2.Run.BuildRules)
 local Fx = require(script.Parent.Fx)
 
 local LevelUpSystem = {}
 
 local ctx
 local rng = Random.new()
+
+--[[
+	[stream B] The continuation pack's rank system (RunConfig.Builds.Enabled; BuildRules;
+	docs/redesign/gameplay/BUILDS.md). Its functions live in `R` (declared here so the older code
+	above can branch into it). While on:
+	  * 4 weapon + 4 passive slots, the class signature in weapon slot 1 at rank 1; catalog = the 15
+	    WeaponData.Catalog weapons (another class's signature only when its class is owned) and the 8
+	    PassiveData.LootOrder passives; every other weapon / passive / synergy is never offered.
+	  * an offer: the eligible evolution first (deterministic), then up to 3 distinct options: a
+	    category by weight (45 / 35 / 12 / 8, empty ones removed), an item uniform inside it, a rank
+	    grant by rarity (70 / 23 / 6 / 1 for +1..+4, tiers past the item's capacity removed). An
+	    exhausted pool offers one heal card (10 % max HP). Fewer options are shown honestly.
+	  * choices queue (rp.ChoiceQueue: { Source = "Level" | "Chest", Kind = "Any" | "PassiveOnly" })
+	    and show one at a time. A team run never pauses: the chooser keeps moving and fighting
+	    (rp.LiveChoice, no protection), RunConfig.Builds.ChoiceSeconds per choice, the first card
+	    on timeout. Solo keeps the old behaviour (the world freezes while choosing, the solo
+	    timer). A downed hero's choice is suspended (rp.SuspendedOffer) and resumes on revival.
+	  * 1 reroll per choice, Builds.FreeRerolls per run on top of the existing VIP pass / account
+	    Reroll upgrade; a reroll is debited only when it produces a different offer, and keeps the
+	    deadline. OfferId (rp.OfferSeq) validation as before.
+	API (shared contract): QueueChoice(rp, source, kind), PendingCount(rp), CancelAll(rp).
+]]
+local R: { [string]: any } = {}
+local Builds: { [string]: any } = RunConfig.Builds
+local function ranked(): boolean
+	return BuildRules.On()
+end
+local function weaponSlots(): number
+	return ranked() and Builds.WeaponSlots or Config.Slots.Weapons
+end
+local function passiveSlots(): number
+	return ranked() and Builds.PassiveSlots or Config.Slots.Passives
+end
 
 ------------------------------------------------------------------------------------------
 -- Discovery (DiscoveryService): what this player has owned or seen, across runs
@@ -130,9 +165,14 @@ function LevelUpSystem.RecomputeStats(rp)
 	local oldMax = rp.Stats and rp.Stats.MaxHP or nil
 	rp.Stats = sheetFor(rp)
 	updateSynergies(rp)
-	-- Max HP increases also heal by the same amount.
-	if oldMax and rp.Stats.MaxHP > oldMax then
-		rp.HP += rp.Stats.MaxHP - oldMax
+	if oldMax and rp.Stats.MaxHP > oldMax and rp.HP then
+		if ranked() then
+			-- [stream B] a max-HP rise keeps the current HP fraction (a downed hero stays at 0)
+			rp.HP = rp.HP / math.max(1, oldMax) * rp.Stats.MaxHP
+		else
+			-- Max HP increases also heal by the same amount.
+			rp.HP += rp.Stats.MaxHP - oldMax
+		end
 	end
 	if rp.HP then
 		rp.HP = math.min(rp.HP, rp.Stats.MaxHP)
@@ -141,6 +181,11 @@ function LevelUpSystem.RecomputeStats(rp)
 	player:SetAttribute("MaxHP", rp.Stats.MaxHP)
 	if rp.HP then
 		player:SetAttribute("HP", rp.HP)
+	end
+	if ranked() then
+		-- [stream B] Spring Stitch numbers for the movement code (stream E1 / JumpController)
+		player:SetAttribute("FallDamageMult", rp.Stats.FallDamageMult)
+		player:SetAttribute("LandLockReduce", rp.Stats.LandLockReduce)
 	end
 	ctx.RunManager.ApplyMovement(rp)
 	if ctx.ItemSystem then ctx.ItemSystem.UpdateShieldMax(rp) end -- Guardian Ward follows max HP
@@ -158,6 +203,9 @@ end
 	fill it has been discovered, else "???".
 ]]
 function LevelUpSystem.SynergyClues(rp): { { [string]: any } }
+	if SynergyData.Hidden() then
+		return {} -- [stream B] the rank system hides synergies
+	end
 	local owned = ownedOf(rp)
 	local D = ctx.DiscoveryService
 	local out = {}
@@ -198,17 +246,32 @@ end
 
 function LevelUpSystem.SendInventory(rp)
 	local weapons = {}
-	for _, id in ipairs(rp.WeaponOrder) do
+	for slot, id in ipairs(rp.WeaponOrder) do
 		local w = rp.Weapons[id]
 		local def = WeaponData.Weapons[id]
-		table.insert(weapons, {
+		local row = {
 			Id = id,
 			Name = w.Evolved and def.Evolution.Name or def.Name,
 			Level = w.Level,
-			MaxLevel = WeaponData.MaxLevel,
+			MaxLevel = WeaponData.MaxLevelOf(id),
 			Evolved = w.Evolved,
 			Color = def.Color,
-		})
+		}
+		if ranked() then
+			-- [stream B] rank, effective damage / interval now and the known evolution requirement
+			row.Rank = w.Level
+			row.MaxRank = WeaponData.MaxLevelOf(id)
+			row.Slot = slot
+			row.Protected = slot == 1 or nil
+			local s = rp.Stats and ctx.WeaponSystem.WeaponStats(rp, w)
+			if s then
+				row.Damage = math.floor(s.damage * 10 + 0.5) / 10
+				row.Interval = math.floor(s.cooldown * 100 + 0.5) / 100
+			end
+			row.Evolution = R.evolutionText(rp, id)
+			row.NextMilestone = WeaponData.NextMilestoneText(id, w.Level)
+		end
+		table.insert(weapons, row)
 	end
 	local passives = {}
 	for _, id in ipairs(rp.PassiveOrder) do
@@ -221,8 +284,10 @@ function LevelUpSystem.SendInventory(rp)
 		Synergies = LevelUpSystem.SynergyClues(rp),
 		Rerolls = rp.Rerolls,
 		Skips = rp.Skips,
-		WeaponSlots = Config.Slots.Weapons,
-		PassiveSlots = Config.Slots.Passives,
+		WeaponSlots = weaponSlots(),
+		PassiveSlots = passiveSlots(),
+		Ranked = ranked() or nil,
+		Pending = ranked() and rp.PendingLevels or nil,
 	})
 end
 
@@ -230,13 +295,19 @@ function LevelUpSystem.AddWeapon(rp, weaponId: string): boolean
 	if rp.Weapons[weaponId] or not WeaponData.Weapons[weaponId] then
 		return false
 	end
-	if not WeaponData.AllowedFor(weaponId, rp.CharacterId) then
+	if ranked() then
+		-- [stream B] another class's signature only with that class owned (weapon behaviour only)
+		R.setup(rp)
+		if not WeaponData.AllowedWith(weaponId, rp.CharacterId, R.owned(rp)) then
+			return false
+		end
+	elseif not WeaponData.AllowedFor(weaponId, rp.CharacterId) then
 		return false -- a class signature weapon belongs to its own class only
 	end
-	if #rp.WeaponOrder >= Config.Slots.Weapons then
+	if #rp.WeaponOrder >= weaponSlots() then
 		return false
 	end
-	rp.Weapons[weaponId] = { Id = weaponId, Level = 1, Evolved = false, Timer = 0.3, Live = {}, Growth = 0 }
+	rp.Weapons[weaponId] = { Id = weaponId, Level = 1, Rank = 1, Evolved = false, Timer = 0.3, Live = {}, Growth = 0 }
 	table.insert(rp.WeaponOrder, weaponId)
 	if ctx.DiscoveryService then
 		ctx.DiscoveryService.Record(rp.Player, "Weapons", weaponId)
@@ -251,6 +322,9 @@ local function afterChange(rp)
 end
 
 local function canEvolve(rp, weaponId: string): boolean
+	if ranked() then
+		return R.canEvolve(rp, weaponId)
+	end
 	local w = rp.Weapons[weaponId]
 	local def = WeaponData.Weapons[weaponId]
 	return w ~= nil and not w.Evolved and w.Level >= WeaponData.MaxLevel and def.Evolution ~= nil
@@ -686,6 +760,10 @@ local function earlyHelp(rp, drawn: { any }, pool: { any })
 end
 
 local function rollChoices(rp)
+	if ranked() then
+		local meta = rp.OfferMeta
+		return R.roll(rp, meta and meta.Kind or "Any") -- [stream B]
+	end
 	local pool = buildPool(rp)
 	local choices = showcaseChoices(rp, pool)
 	local showcase = #choices > 0
@@ -759,6 +837,10 @@ end
 	has one. Picked through the normal OfferId flow; used up by that pick (or a skip).
 ]]
 function LevelUpSystem.QueueBonusPick(rp)
+	if ranked() then
+		LevelUpSystem.QueueChoice(rp, "Level", "Any") -- [stream B] a normal choice (rarity rolls as usual)
+		return
+	end
 	rp.BonusPicks = (rp.BonusPicks or 0) + 1
 	LevelUpSystem.QueueLevels(rp, 1)
 end
@@ -777,6 +859,10 @@ end
 	hurt, else the Gold Pouch.
 ]]
 local function rerollSlot(rp, index: number)
+	if ranked() then
+		R.rollSlot(rp, index) -- [stream B]
+		return
+	end
 	local offer = rp.Offer
 	local old = offer[index]
 	local taken = {}
@@ -830,6 +916,9 @@ function LevelUpSystem.DescribeCard(rp, kind: string, id: string, level: number)
 end
 function LevelUpSystem.PoolKeys(rp): { string }
 	local out = {}
+	if ranked() then
+		return R.poolKeys(rp, "Any") -- [stream B] "Category:Id" of the rank pool
+	end
 	for _, c in ipairs(buildPool(rp)) do
 		table.insert(out, c.Type .. ":" .. c.Id)
 	end
@@ -840,6 +929,10 @@ function LevelUpSystem.BanishesLeft(rp): number
 end
 
 local function apply(rp, c)
+	if ranked() then
+		R.apply(rp, c) -- [stream B]
+		return
+	end
 	if c.Type == "WeaponNew" then
 		LevelUpSystem.AddWeapon(rp, c.Id)
 	elseif c.Type == "WeaponUp" then
@@ -884,8 +977,11 @@ end
 local function publishChoice(rp)
 	local player = rp.Player
 	if not player.Parent then return end
-	local open = rp.Offer ~= nil and rp.Paused == true
+	-- (a live team-run choice is open without pausing the chooser: [stream B] rp.LiveChoice)
+	local open = rp.Offer ~= nil and (rp.Paused == true or rp.LiveChoice == true)
 	player:SetAttribute("ChoiceOpen", open)
+	player:SetAttribute("PendingChoices", rp.PendingLevels or 0) -- [stream B] shared contract
+	player:SetAttribute("ChoiceLive", open and rp.LiveChoice == true or nil)
 	player:SetAttribute("ChoiceId", open and rp.PanelId or nil)
 	player:SetAttribute("ChoiceOfferId", open and rp.OfferSeq or nil)
 	player:SetAttribute("ChoiceProtectedUntil", open and (workspace:GetServerTimeNow() + math.max(0, rp.OfferDeadline - os.clock())) or nil)
@@ -911,7 +1007,17 @@ local function sendOffer(rp)
 	-- double tap, a late packet) is ignored instead of landing on the next round
 	rp.OfferSeq = (rp.OfferSeq or 0) + 1
 	publishChoice(rp)
+	local payload = R.offerFields(rp) -- [stream B] contract fields (nil while the rank system is off)
 	Remotes.FireClient("LevelUpOffer", rp.Player, {
+		-- [stream B] Deadline (server time), RerollsLeft (this choice), Source, Kind, Live, Empty
+		-- and EmptyText (fewer options than Builds.Choices, said honestly)
+		Deadline = payload and payload.Deadline,
+		RerollsLeft = payload and payload.RerollsLeft,
+		Source = payload and payload.Source,
+		Kind = payload and payload.Kind,
+		Live = payload and payload.Live,
+		Empty = payload and payload.Empty,
+		EmptyText = payload and payload.EmptyText,
 		OfferId = rp.OfferSeq,
 		Group = rp.ChoiceGroup == true,
 		Choices = rp.Offer,
@@ -933,15 +1039,20 @@ local function sendOffer(rp)
 end
 
 local function closePanel(rp, grace: boolean?)
-	local wasOpen = rp.Paused
+	local wasOpen = rp.Paused or rp.PanelOpen
+	local wasLive = rp.LiveChoice == true
 	rp.Offer = nil
+	rp.OfferMeta = nil
 	rp.BatchRemaining = 0
 	rp.Paused = false
+	rp.PanelOpen = false -- [stream B] rank system: a sequence of queued choices is showing
+	rp.LiveChoice = false
 	rp.ChoiceTimerPaused = false
 	if wasOpen then
 		publishChoice(rp)
 		Remotes.FireClient("LevelUpClose", rp.Player)
-		if grace then ctx.RunManager.GrantChoiceGrace(rp) end
+		-- (a live team-run choice never protected anyone: no close grace either)
+		if grace and not wasLive then ctx.RunManager.GrantChoiceGrace(rp) end
 		ctx.RunManager.ApplyMovement(rp)
 		ctx.RunManager.RefreshFrozen()
 	end
@@ -961,6 +1072,10 @@ local function convertMaxedLevels(rp): boolean
 end
 
 local function offerNext(rp)
+	if ranked() then
+		R.offerNext(rp) -- [stream B]
+		return
+	end
 	if not rp.Alive then closePanel(rp); setDeferred(rp, nil); return end
 	if rp.PendingLevels <= 0 then
 		closePanel(rp, true)
@@ -1023,7 +1138,603 @@ local function offerNext(rp)
 	sendOffer(rp)
 end
 
+------------------------------------------------------------------------------------------
+-- [stream B] RANK SYSTEM: pool, offers, queue, deadlines, rerolls (header of this module)
+------------------------------------------------------------------------------------------
+
+-- Once per run player: the run's free rerolls (on top of the account upgrade and VIP pass).
+function R.setup(rp)
+	if rp.RankSetup then
+		return
+	end
+	rp.RankSetup = true
+	local free = math.max(0, math.floor(tonumber(Builds.FreeRerolls) or 0))
+	rp.Rerolls = (tonumber(rp.Rerolls) or 0) + free
+	rp.RerollsMax = (tonumber(rp.RerollsMax) or 0) + free
+end
+
+-- The classes this player owns (save OwnedCharacters through the lobby's ClassOwnership rules),
+-- snapshotted once per run; the run's own class and the free default class always count.
+function R.owned(rp): { [string]: boolean }
+	if rp.OwnedClasses then
+		return rp.OwnedClasses
+	end
+	local set: { [string]: boolean } = {}
+	local data = ctx.DataService and ctx.DataService.GetData and ctx.DataService.GetData(rp.Player) or nil
+	if R.ownership == nil then
+		R.ownership = false
+		local folder = game:GetService("ServerScriptService"):FindFirstChild("SwarmV2")
+		local lobby = folder and folder:FindFirstChild("Lobby")
+		local mod = lobby and lobby:FindFirstChild("ClassOwnership")
+		if mod and mod:IsA("ModuleScript") then
+			local ok, m = pcall(require, mod)
+			if ok and type(m) == "table" and type(m.Owns) == "function" then
+				R.ownership = m
+			end
+		end
+	end
+	local owned = type(data) == "table" and type(data.OwnedCharacters) == "table" and data.OwnedCharacters or nil
+	for cls in pairs(WeaponData.Signatures) do
+		local yes = false
+		if R.ownership then
+			local ok, r = pcall(R.ownership.Owns, data, cls)
+			yes = ok and r == true
+		end
+		set[cls] = yes or (owned ~= nil and owned[cls] == true)
+	end
+	local default = RunConfig.Classes and RunConfig.Classes.Default
+	if default then
+		set[default] = true -- Ruckus is free for every account
+	end
+	if rp.CharacterId then
+		set[rp.CharacterId] = true
+	end
+	rp.OwnedClasses = set
+	return set
+end
+
+-- (tests / stream C) may this player own another class's signature `weaponId` now?
+function LevelUpSystem.Entitled(rp, weaponId: string): boolean
+	return WeaponData.AllowedWith(weaponId, rp.CharacterId, R.owned(rp))
+end
+
+function R.canEvolve(rp, weaponId: string): boolean
+	local w = rp.Weapons[weaponId]
+	local def = WeaponData.Weapons[weaponId]
+	return w ~= nil and def ~= nil and not w.Evolved and def.Evolution ~= nil
+		and table.find(Builds.Evolutions, weaponId) ~= nil
+		and w.Level >= Builds.EvolutionWeaponRank
+		and (tonumber(rp.Level) or 1) >= Builds.EvolutionLevel
+		and (rp.Passives[def.Evolution.Passive] or 0) >= Builds.EvolutionPassiveRank
+end
+
+-- "Evolves into Junkyard Cyclone: rank 5 + Patchwork Padding rank 3, level 8+" (nil: no recipe).
+function R.evolutionText(rp, weaponId: string): string?
+	local def = WeaponData.Weapons[weaponId]
+	local w = rp.Weapons[weaponId]
+	if not def or not def.Evolution or not table.find(Builds.Evolutions, weaponId) then
+		return nil
+	end
+	local evo = def.Evolution
+	if w and w.Evolved then
+		return evo.Name
+	end
+	local pdef = PassiveData.Passives[evo.Passive]
+	return string.format("Evolves into %s: rank %d + %s rank %d, level %d+", evo.Name, Builds.EvolutionWeaponRank,
+		pdef and pdef.Name or evo.Passive, Builds.EvolutionPassiveRank, Builds.EvolutionLevel)
+end
+
+-- The first owned weapon whose evolution is offered now (deterministic, slot order), or nil.
+function R.evolutionReady(rp): string?
+	for _, id in ipairs(rp.WeaponOrder) do
+		if R.canEvolve(rp, id) then
+			return id
+		end
+	end
+	return nil
+end
+
+--[[
+	The rank pool for `kind` ("Any" | "PassiveOnly"): { [category] = { { Id, From } } }.
+	WeaponUpgrade: owned catalog weapons below their max rank (not evolved); PassiveUpgrade: owned
+	loot passives below rank 5; NewWeapon: catalog weapons not owned, allowed for this player
+	(another class's signature only with that class owned), while a weapon slot is free; NewPassive:
+	loot passives not owned while a passive slot is free. Banished ids and `exclude` keys
+	("Category:Id") are left out.
+]]
+function R.pool(rp, kind: string, exclude: { [string]: boolean }?): { [string]: { any } }
+	local pool = { WeaponUpgrade = {}, PassiveUpgrade = {}, NewWeapon = {}, NewPassive = {} }
+	local function ok(cat: string, id: string): boolean
+		return not (exclude and exclude[cat .. ":" .. id])
+	end
+	local max = BuildRules.MaxRank()
+	if kind ~= "PassiveOnly" then
+		for _, id in ipairs(rp.WeaponOrder) do
+			local w = rp.Weapons[id]
+			if WeaponData.IsRanked(id) and not w.Evolved and w.Level < max and ok("WeaponUpgrade", id) then
+				table.insert(pool.WeaponUpgrade, { Id = id, From = w.Level })
+			end
+		end
+		if #rp.WeaponOrder < weaponSlots() then
+			local owned = R.owned(rp)
+			for _, id in ipairs(WeaponData.Catalog) do
+				if not rp.Weapons[id] and WeaponData.AllowedWith(id, rp.CharacterId, owned) and not isBanished(rp, "Weapon", id) and ok("NewWeapon", id) then
+					table.insert(pool.NewWeapon, { Id = id, From = 0 })
+				end
+			end
+		end
+	end
+	for _, id in ipairs(rp.PassiveOrder) do
+		local level = rp.Passives[id]
+		if table.find(PassiveData.LootOrder, id) and level < PassiveData.MaxLevelOf(id) and ok("PassiveUpgrade", id) then
+			table.insert(pool.PassiveUpgrade, { Id = id, From = level })
+		end
+	end
+	if #rp.PassiveOrder < passiveSlots() then
+		for _, id in ipairs(PassiveData.LootOrder) do
+			if not rp.Passives[id] and not isBanished(rp, "Passive", id) and ok("NewPassive", id) then
+				table.insert(pool.NewPassive, { Id = id, From = 0 })
+			end
+		end
+	end
+	return pool
+end
+
+function R.poolKeys(rp, kind: string): { string }
+	local out = {}
+	local evo = kind ~= "PassiveOnly" and R.evolutionReady(rp) or nil
+	if evo then
+		table.insert(out, "Evolution:" .. evo)
+	end
+	for _, cat in ipairs(Builds.CategoryOrder) do
+		for _, item in ipairs(R.pool(rp, kind)[cat]) do
+			table.insert(out, cat .. ":" .. item.Id)
+		end
+	end
+	return out
+end
+
+local RANK_TYPE = { WeaponUpgrade = "WeaponUp", NewWeapon = "WeaponNew", PassiveUpgrade = "PassiveUp", NewPassive = "PassiveNew", Evolution = "Evolve", Heal = "Heal" }
+
+--[[
+	A card for the offer payload (shared contract): Category, Rarity, RankFrom, RankTo, Slot, Lines
+	(current -> next), Synergy (the evolution partner text or nil), plus the older fields the cards
+	already read (Type, Id, Level = RankTo, Name, Color, Rank, Description, Summary, Hint, Role).
+	o = { Category, Id, From, To, Tier }.
+]]
+function R.card(rp, o: any): { [string]: any }
+	local cat = o.Category
+	local max = BuildRules.MaxRank()
+	local c: { [string]: any } = { Category = cat, Type = RANK_TYPE[cat], Id = o.Id or cat, RankFrom = o.From, RankTo = o.To, Level = o.To }
+	local stats = rp.Stats or {}
+	if cat == "Heal" then
+		local amount = math.floor((stats.MaxHP or Config.Player.BaseMaxHP) * Builds.HealShare + 0.5)
+		c.Id, c.Level, c.RankFrom, c.RankTo = "Heal", 0, nil, nil
+		c.Name = "Patch-Up"
+		c.Description = "Your build is complete: patch yourself up."
+		c.Summary = string.format("Heal %d HP now (10%% of max HP)", amount)
+		c.Lines = { { Label = "Heal", To = amount .. " HP" } }
+		c.Rank = "HEAL"
+		c.Color = Color3.fromRGB(120, 210, 120)
+		c.Rarity = "Common"
+	elseif cat == "Evolution" then
+		local def = WeaponData.Weapons[o.Id]
+		local evo = def.Evolution
+		c.Level, c.RankFrom, c.RankTo = max, max, max
+		c.Name = evo.Name
+		c.Description = evo.Description
+		c.Summary = evo.Description
+		c.Color = def.Color
+		c.Rank = "EVOLUTION"
+		c.Lines = WeaponData.RankLines(o.Id, max, max, true)
+		c.Slot = table.find(rp.WeaponOrder, o.Id)
+		c.Rarity = "Evolution"
+		c.RarityLabel = Builds.EvolutionLabel
+		c.RarityColor = Builds.EvolutionColor
+		c.EvoIcon = evo.Id
+		c.EvoName = evo.Name
+	elseif cat == "WeaponUpgrade" or cat == "NewWeapon" then
+		local def = WeaponData.Weapons[o.Id]
+		local new = cat == "NewWeapon"
+		c.Name = def.Name
+		c.Color = def.Color
+		c.Lines = WeaponData.RankLines(o.Id, o.From, o.To, false, stats.DamageBonus or 0, stats.AttackSpeed or 0)
+		c.Slot = table.find(rp.WeaponOrder, o.Id) or (#rp.WeaponOrder + 1)
+		c.Rank = new and string.format("NEW · Rank %d", o.To) or string.format("Rank %d → %d / %d", o.From, o.To, max)
+		c.Description = new and def.Description or joinLines(c.Lines)
+		local milestone = nil
+		for _, line in ipairs(c.Lines) do
+			if line.Text then
+				milestone = line.Text
+			end
+		end
+		c.Summary = new and def.Description or (milestone or WeaponData.SummaryText(c.Lines, c.Description))
+		local evoText = R.evolutionText(rp, o.Id)
+		if evoText then
+			local evo = def.Evolution
+			c.Hint = evoText
+			c.HintReady = false
+			c.HintStarted = rp.Passives[evo.Passive] ~= nil or o.To >= 3
+			c.EvoIcon = evo.Id
+			c.EvoName = evo.Name
+		end
+		discover(rp, "Weapons", o.Id)
+	else
+		local def = PassiveData.Passives[o.Id]
+		local new = cat == "NewPassive"
+		c.Name = def.Name
+		c.Color = def.Color
+		local passives = table.clone(rp.Passives)
+		passives[o.Id] = o.To
+		local lines = { { Label = "Rank", From = (not new) and tostring(o.From) or nil, To = tostring(o.To) } }
+		if rp.Stats then
+			for _, line in ipairs(StatSheet.Lines(rp.Stats, sheetFor(rp, passives))) do
+				table.insert(lines, line)
+			end
+		end
+		c.Lines = lines
+		c.Slot = table.find(rp.PassiveOrder, o.Id) or (#rp.PassiveOrder + 1)
+		c.Rank = new and string.format("NEW · Rank %d", o.To) or string.format("Rank %d → %d / %d", o.From, o.To, max)
+		c.Description = def.Description
+		c.Summary = PassiveData.TotalText(o.Id, o.To) or def.Description
+		-- the evolution partner of a weapon this player owns
+		for _, id in ipairs(rp.WeaponOrder) do
+			local wdef = WeaponData.Weapons[id]
+			if not rp.Weapons[id].Evolved and wdef.Evolution and wdef.Evolution.Passive == o.Id and table.find(Builds.Evolutions, id) then
+				c.Synergy = string.format("Evolves %s into %s at rank %d", wdef.Name, wdef.Evolution.Name, Builds.EvolutionPassiveRank)
+				c.Hint = c.Synergy
+				c.HintReady = o.To >= Builds.EvolutionPassiveRank and rp.Weapons[id].Level >= Builds.EvolutionWeaponRank and (tonumber(rp.Level) or 1) >= Builds.EvolutionLevel
+				c.EvoIcon = wdef.Evolution.Id
+				c.EvoName = wdef.Evolution.Name
+				break
+			end
+		end
+		discover(rp, "Passives", o.Id)
+	end
+	local tier = o.Tier
+	if tier then
+		c.Rarity = tier.Name
+		c.RarityLabel = tier.Label or tier.Name
+		c.RarityColor = tier.Color
+	end
+	c.RarityLabel = c.RarityLabel or c.Rarity
+	c.Role = roleOf(c)
+	return c
+end
+
+-- A fresh offer for `kind`: the eligible evolution first, then up to Builds.Choices distinct
+-- options (BuildRules.RollOffer + RollRarity); nothing left = one heal card.
+function R.roll(rp, kind: string): { any }
+	local cards = {}
+	local evo = kind ~= "PassiveOnly" and R.evolutionReady(rp) or nil
+	if evo then
+		table.insert(cards, R.card(rp, { Category = "Evolution", Id = evo }))
+	end
+	local max = BuildRules.MaxRank()
+	for _, pick in ipairs(BuildRules.RollOffer(rng, R.pool(rp, kind), Builds.Choices - #cards)) do
+		local item = pick.Item
+		local tier = BuildRules.RollRarity(rng, max - item.From)
+		if tier then
+			table.insert(cards, R.card(rp, { Category = pick.Category, Id = item.Id, From = item.From, To = item.From + tier.Ranks, Tier = tier }))
+		end
+	end
+	if #cards == 0 then
+		table.insert(cards, R.card(rp, { Category = "Heal" }))
+	end
+	return cards
+end
+
+-- Banish: only slot `index` changes (a draw that skips what the other slots show); nothing left:
+-- the slot goes (never a duplicate), or a heal card when it was the only one.
+function R.rollSlot(rp, index: number)
+	local offer = rp.Offer
+	local meta = rp.OfferMeta or {}
+	local exclude = {}
+	for i, c in ipairs(offer) do
+		if i ~= index then
+			exclude[tostring(c.Category) .. ":" .. tostring(c.Id)] = true
+		end
+	end
+	local picks = BuildRules.RollOffer(rng, R.pool(rp, meta.Kind or "Any", exclude), 1)
+	local pick = picks[1]
+	local card = nil
+	if pick then
+		local tier = BuildRules.RollRarity(rng, BuildRules.MaxRank() - pick.Item.From)
+		if tier then
+			card = R.card(rp, { Category = pick.Category, Id = pick.Item.Id, From = pick.Item.From, To = pick.Item.From + tier.Ranks, Tier = tier })
+		end
+	end
+	if card then
+		offer[index] = card
+	elseif #offer > 1 then
+		table.remove(offer, index)
+	else
+		offer[index] = R.card(rp, { Category = "Heal" })
+	end
+end
+
+local function cardKey(c): string
+	return string.format("%s:%s:%s", tostring(c.Category), tostring(c.Id), tostring(c.RankTo))
+end
+
+function R.sameSet(a: { any }, b: { any }): boolean
+	if #a ~= #b then
+		return false
+	end
+	local keys = {}
+	for _, c in ipairs(a) do
+		keys[cardKey(c)] = true
+	end
+	for _, c in ipairs(b) do
+		if not keys[cardKey(c)] then
+			return false
+		end
+	end
+	return true
+end
+
+function R.apply(rp, c)
+	local max = BuildRules.MaxRank()
+	local grant = (c.RankTo and c.RankFrom) and (c.RankTo - c.RankFrom) or 1
+	grant = math.clamp(math.floor(tonumber(grant) or 1), 1, max - 1)
+	if c.Type == "WeaponNew" then
+		if LevelUpSystem.AddWeapon(rp, c.Id) then
+			local w = rp.Weapons[c.Id]
+			w.Level = math.clamp(math.floor(tonumber(c.RankTo) or 1), 1, WeaponData.MaxLevelOf(c.Id))
+			w.Rank = w.Level
+		end
+	elseif c.Type == "WeaponUp" then
+		local w = rp.Weapons[c.Id]
+		if w and not w.Evolved then
+			-- a stale card (the rank moved meanwhile) still gives its grant, never past the cap
+			w.Level = math.min(WeaponData.MaxLevelOf(c.Id), w.Level + grant)
+			w.Rank = w.Level
+		end
+	elseif c.Type == "Evolve" then
+		if R.canEvolve(rp, c.Id) then
+			rp.Weapons[c.Id].Evolved = true
+			if ctx.Analytics then
+				ctx.Analytics.OnEvolution(rp.Player)
+			end
+			discover(rp, "Evolutions", c.Id)
+			ctx.RunManager.Notify(rp.Player, WeaponData.Weapons[c.Id].Evolution.Name .. "!", Builds.EvolutionColor)
+		end
+	elseif c.Type == "PassiveNew" then
+		if not rp.Passives[c.Id] and PassiveData.Passives[c.Id] and #rp.PassiveOrder < passiveSlots() then
+			rp.Passives[c.Id] = math.clamp(math.floor(tonumber(c.RankTo) or 1), 1, PassiveData.MaxLevelOf(c.Id))
+			table.insert(rp.PassiveOrder, c.Id)
+			discover(rp, "Passives", c.Id)
+		end
+	elseif c.Type == "PassiveUp" then
+		if rp.Passives[c.Id] then
+			rp.Passives[c.Id] = math.min(PassiveData.MaxLevelOf(c.Id), rp.Passives[c.Id] + grant)
+		end
+	elseif c.Type == "Heal" then
+		-- living heroes only (RunManager.Heal refuses a downed / dead one)
+		if rp.Alive and not rp.Downed and rp.Stats then
+			ctx.RunManager.Heal(rp, rp.Stats.MaxHP * Builds.HealShare)
+		end
+	end
+	afterChange(rp)
+end
+
+-- More than one hero in the run (eliminated / downed ones count, players who left do not):
+-- choices never pause anything then.
+function R.teamRun(): boolean
+	local n = 0
+	for _, o in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if not o.Returned then
+			n += 1
+		end
+	end
+	return n > 1
+end
+
+-- The choice queue, reconciled with rp.PendingLevels (older code may still bump that number).
+function R.queue(rp): { any }
+	local q = rp.ChoiceQueue
+	if not q then
+		q = {}
+		rp.ChoiceQueue = q
+	end
+	local want = math.max(0, math.floor(tonumber(rp.PendingLevels) or 0))
+	while #q < want do
+		table.insert(q, { Source = "Level", Kind = "Any" })
+	end
+	while #q > want do
+		table.remove(q)
+	end
+	return q
+end
+
+function R.publishPending(rp)
+	local player = rp.Player
+	if player and player.Parent then
+		player:SetAttribute("PendingUpgrades", rp.PendingLevels)
+		player:SetAttribute("PendingChoices", rp.PendingLevels)
+		player:SetAttribute("XPReward", "Upgrade")
+	end
+end
+
+function R.downed(rp): boolean
+	return not rp.Alive or rp.Downed == true
+end
+
+-- Opens the queue's head choice when it can (or closes the panel when the queue is empty).
+function R.offerNext(rp)
+	local q = R.queue(rp)
+	if rp.Offer then
+		return -- the head choice is showing
+	end
+	if #q == 0 then
+		closePanel(rp, true)
+		setDeferred(rp, nil)
+		return
+	end
+	if R.downed(rp) then
+		closePanel(rp) -- a downed hero's choices wait for the revive (deadline suspended)
+		setDeferred(rp, "Downed")
+		return
+	end
+	if not rp.PanelOpen then
+		local wait = nil
+		if not ctx.RunManager.IsRunning() then
+			wait = "Run"
+		elseif ctx.RunManager.IsMenuPaused() or ctx.RunManager.IsFrozen() then
+			wait = "Paused"
+		elseif ctx.StageManager.IsHolding() then
+			wait = "Travel"
+		elseif rp.PortalOffered then
+			wait = "Portal"
+		elseif rp.RewardUntil then
+			wait = "Reward"
+		end
+		setDeferred(rp, wait)
+		if wait then
+			return
+		end
+	end
+	local live = R.teamRun()
+	local head = q[1]
+	local seconds
+	local sus = rp.SuspendedOffer
+	if sus then
+		rp.SuspendedOffer = nil
+		rp.OfferMeta = sus.Meta
+		rp.Offer = sus.Choices
+		seconds = sus.Left
+	else
+		rp.OfferMeta = { Source = head.Source, Kind = head.Kind, Rerolled = false }
+		rp.Offer = R.roll(rp, head.Kind)
+		seconds = (live and Builds.ChoiceSeconds or Builds.SoloChoiceSeconds) + (Config.LevelUp.RevealGraceSeconds or 0)
+	end
+	rp.OfferDeadline = os.clock() + seconds
+	rp.ChoiceTimerPaused = false
+	if not rp.PanelOpen then
+		rp.PanelId = (rp.PanelId or 0) + 1
+		rp.BatchTotal = 0
+	end
+	rp.PanelOpen = true
+	rp.LiveChoice = live
+	rp.ChoiceGroup = live
+	rp.Paused = not live -- solo: rooted, protected and the world frozen, as before the pack
+	rp.BatchRemaining = #q
+	rp.BatchTotal = math.max(rp.BatchTotal or 0, #q)
+	ctx.RunManager.ApplyMovement(rp)
+	ctx.RunManager.RefreshFrozen()
+	setDeferred(rp, nil)
+	sendOffer(rp)
+end
+
+-- Extra LevelUpOffer fields (shared contract); nil while the rank system is off.
+function R.offerFields(rp): { [string]: any }?
+	if not ranked() then
+		return nil
+	end
+	local meta = rp.OfferMeta or {}
+	local n = rp.Offer and #rp.Offer or 0
+	local left = math.max(0, (rp.OfferDeadline or 0) - os.clock())
+	local empty = math.max(0, Builds.Choices - n)
+	local onlyHeal = n == 1 and rp.Offer[1].Type == "Heal"
+	return {
+		Deadline = workspace:GetServerTimeNow() + left,
+		RerollsLeft = (meta.Rerolled or (rp.Rerolls or 0) <= 0) and 0 or math.min(Builds.RerollsPerPanel, rp.Rerolls),
+		Source = meta.Source or "Level",
+		Kind = meta.Kind or "Any",
+		Live = rp.LiveChoice == true,
+		Empty = empty > 0 and empty or nil,
+		EmptyText = onlyHeal and "Your build is complete: nothing left to upgrade."
+			or (empty > 0 and string.format("Only %d upgrade%s left for your build.", n, n == 1 and "" or "s") or nil),
+	}
+end
+
+function R.choose(rp, index: number, offerId: number?)
+	local offer = rp.Offer
+	if not offer or (offerId ~= nil and offerId ~= rp.OfferSeq) or R.downed(rp) then
+		return
+	end
+	local c = offer[index]
+	if not c then
+		return
+	end
+	local q = R.queue(rp)
+	rp.Offer = nil
+	table.remove(q, 1)
+	rp.PendingLevels = #q
+	useBonus(rp)
+	-- offerNext must always run (it releases a solo freeze), even if apply fails
+	local ok, err = pcall(apply, rp, c)
+	R.offerNext(rp)
+	R.publishPending(rp)
+	if not ok then
+		warn("[LevelUpSystem] apply failed: " .. tostring(err))
+	end
+end
+
+--[[
+	LevelUpSystem.QueueChoice(rp, source, kind): one personal choice. source "Level" | "Chest";
+	kind "Any" | "PassiveOnly" (a chest: passive upgrades and new passives only). Choices show one
+	at a time in queue order. Ignored after CancelAll (the run ended).
+]]
+function LevelUpSystem.QueueChoice(rp, source: string?, kind: string?)
+	if rp.ChoicesClosed then
+		return
+	end
+	if not ranked() then
+		LevelUpSystem.QueueLevels(rp, 1)
+		return
+	end
+	R.setup(rp)
+	local q = R.queue(rp)
+	table.insert(q, { Source = source == "Chest" and "Chest" or "Level", Kind = kind == "PassiveOnly" and "PassiveOnly" or "Any" })
+	rp.PendingLevels = #q
+	if source ~= "Chest" then
+		Fx.PlayerEvent(rp.Player, "levelup")
+	end
+	if not rp.Offer then
+		R.offerNext(rp)
+	else
+		rp.BatchRemaining = #q
+		rp.BatchTotal = math.max(rp.BatchTotal or 0, #q)
+	end
+	R.publishPending(rp)
+end
+
+-- Queued choices not yet made (the one showing included).
+function LevelUpSystem.PendingCount(rp): number
+	return math.max(0, math.floor(tonumber(rp.PendingLevels) or 0))
+end
+
+-- The run ended (victory / defeat / leave): every open and queued choice is dropped and no new
+-- one opens for this run player. Choices already made stay.
+function LevelUpSystem.CancelAll(rp)
+	rp.ChoicesClosed = true
+	rp.SuspendedOffer = nil
+	rp.ChoiceQueue = {}
+	LevelUpSystem.Cancel(rp)
+end
+
+-- (tests) a rank card exactly as an offer would build it.
+function LevelUpSystem.RankCard(rp, category: string, id: string?, from: number?, to: number?)
+	return R.card(rp, { Category = category, Id = id, From = from or 0, To = to or 1 })
+end
+
+-- (tests) a fresh rank offer for `kind` without opening anything.
+function LevelUpSystem.RollOffer(rp, kind: string?)
+	return R.roll(rp, kind or "Any")
+end
+
 function LevelUpSystem.QueueLevels(rp, count: number)
+	if ranked() then
+		-- [stream B] each filled XP bar is one personal choice in the queue
+		for _ = 1, math.max(0, math.floor(count)) do
+			LevelUpSystem.QueueChoice(rp, "Level", "Any")
+		end
+		if count <= 0 and not rp.Offer then
+			R.offerNext(rp) -- (a revive: the waiting choices resume)
+		end
+		return
+	end
 	rp.PendingLevels += count
 	if count > 0 and #buildPool(rp) > 0 then Fx.PlayerEvent(rp.Player, "levelup") end
 	if not rp.Offer then
@@ -1042,6 +1753,10 @@ function LevelUpSystem.QueueLevels(rp, count: number)
 end
 
 local function choose(rp, index: number, offerId: number?)
+	if ranked() then
+		R.choose(rp, index, offerId) -- [stream B]
+		return
+	end
 	local offer = rp.Offer
 	if not offer or (offerId ~= nil and offerId ~= rp.OfferSeq) then
 		return
@@ -1066,6 +1781,15 @@ end
 
 -- Ends any open offer without applying it (death, leaving, run end).
 function LevelUpSystem.Cancel(rp, preserveLevels: boolean?)
+	if ranked() then
+		-- [stream B] going down keeps the open choice (same cards, the time left) for the revive
+		if preserveLevels and rp.Offer and #rp.Offer > 0 then
+			rp.SuspendedOffer = { Choices = rp.Offer, Meta = rp.OfferMeta, Left = math.max(1, (rp.OfferDeadline or 0) - os.clock()) }
+		elseif not preserveLevels then
+			rp.SuspendedOffer = nil
+			rp.ChoiceQueue = {}
+		end
+	end
 	closePanel(rp)
 	if not preserveLevels then rp.PendingLevels = 0; rp.BonusPicks = 0 end
 	rp.ChoiceDeferred = nil
@@ -1099,7 +1823,7 @@ local function chestLevelUp(rp, rewards)
 	local candidates = {}
 	for _, id in ipairs(rp.WeaponOrder) do
 		local w = rp.Weapons[id]
-		if not w.Evolved and w.Level < WeaponData.MaxLevel then
+		if not w.Evolved and w.Level < WeaponData.MaxLevelOf(id) then
 			table.insert(candidates, id)
 		end
 	end
@@ -1107,8 +1831,9 @@ local function chestLevelUp(rp, rewards)
 		local id = candidates[rng:NextInteger(1, #candidates)]
 		local w = rp.Weapons[id]
 		w.Level += 1
+		w.Rank = w.Level
 		local def = WeaponData.Weapons[id]
-		table.insert(rewards, { Name = def.Name, Text = "Level " .. w.Level, Color = def.Color })
+		table.insert(rewards, { Name = def.Name, Text = (ranked() and "Rank " or "Level ") .. w.Level, Color = def.Color })
 		return true
 	end
 	-- 3) a random owned passive below max
@@ -1173,17 +1898,20 @@ function LevelUpSystem.DevWeapons(rp, evolve: boolean, list: { string }?)
 		for _, id in ipairs(rp.WeaponOrder) do
 			local w = rp.Weapons[id]
 			if WeaponData.Weapons[id].Evolution then
-				w.Level = WeaponData.MaxLevel
+				w.Level = WeaponData.MaxLevelOf(id) -- (rank system: rank 5)
+				w.Rank = w.Level
 				w.Evolved = true
 			end
 		end
 	else
 		for _, id in ipairs(list or LevelUpSystem.NewWeapons) do
+			local max = WeaponData.MaxLevelOf(id)
 			if not rp.Weapons[id] and WeaponData.Weapons[id] then
-				rp.Weapons[id] = { Id = id, Level = WeaponData.MaxLevel, Evolved = false, Timer = 0.3, Live = {}, Growth = 0 }
+				rp.Weapons[id] = { Id = id, Level = max, Rank = max, Evolved = false, Timer = 0.3, Live = {}, Growth = 0 }
 				table.insert(rp.WeaponOrder, id)
 			elseif rp.Weapons[id] then
-				rp.Weapons[id].Level = WeaponData.MaxLevel
+				rp.Weapons[id].Level = max
+				rp.Weapons[id].Rank = max
 			end
 		end
 	end
@@ -1201,7 +1929,33 @@ function LevelUpSystem.Step(dt: number)
 	local menuPaused = ctx.RunManager.IsMenuPaused()
 	local holding = ctx.StageManager.IsHolding()
 	local now = os.clock()
+	local rank = ranked()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if rank then
+			-- [stream B] one choice at a time: downed = suspended (not the world), the first card
+			-- when the personal deadline passes, the queue resumes on its own
+			if rp.Offer and R.downed(rp) then
+				LevelUpSystem.Cancel(rp, true)
+			elseif rp.Offer then
+				local timerPaused = menuPaused or holding
+				if timerPaused ~= (rp.ChoiceTimerPaused == true) then
+					rp.ChoiceTimerPaused = timerPaused
+					publishChoice(rp)
+				end
+				if timerPaused then
+					rp.OfferDeadline += dt
+				elseif now >= rp.OfferDeadline then
+					if #rp.Offer == 0 then
+						closePanel(rp, true)
+					else
+						R.choose(rp, 1, rp.OfferSeq) -- the first displayed option
+					end
+				end
+			elseif not R.downed(rp) and not menuPaused and not ctx.RunManager.IsFrozen() and ((rp.PendingLevels or 0) > 0 or rp.PanelOpen) then
+				R.offerNext(rp)
+			end
+			continue
+		end
 		if rp.Offer and not rp.Alive then
 			LevelUpSystem.Cancel(rp, true) -- downed / dead: close it, keep the banked levels
 		elseif rp.Offer then
@@ -1259,6 +2013,24 @@ function LevelUpSystem.Start()
 		if not rp or not rp.Offer or rp.Rerolls <= 0 or staleId(rp, offerId) then
 			return
 		end
+		if ranked() then
+			-- [stream B] one reroll per choice; debited only when a different offer comes out,
+			-- the deadline stays; never while downed
+			local meta = rp.OfferMeta
+			if not meta or meta.Rerolled or R.downed(rp) then
+				return
+			end
+			local new = R.roll(rp, meta.Kind or "Any")
+			if R.sameSet(new, rp.Offer) then
+				return
+			end
+			rp.Rerolls -= 1
+			meta.Rerolled = true
+			rp.Offer = new
+			sendOffer(rp)
+			LevelUpSystem.SendInventory(rp)
+			return
+		end
 		rp.Rerolls -= 1
 		rp.Offer = rollChoices(rp)
 		-- keep the original deadline: rerolling must not extend the protected pause
@@ -1274,7 +2046,7 @@ function LevelUpSystem.Start()
 			return
 		end
 		local rp = ctx.RunManager.GetRunPlayer(player)
-		if not rp or not rp.Offer or not rp.Paused or type(index) ~= "number" or index ~= index or staleId(rp, offerId) then
+		if not rp or not rp.Offer or not (rp.Paused or rp.LiveChoice) or type(index) ~= "number" or index ~= index or staleId(rp, offerId) then
 			return
 		end
 		local c = rp.Offer[math.floor(index)]
@@ -1291,7 +2063,7 @@ function LevelUpSystem.Start()
 		rp.BanishesLeft -= 1
 		rerollSlot(rp, math.floor(index))
 		sendOffer(rp)
-		rp.Player:SetAttribute("XPReward", #buildPool(rp) == 0 and "Coins" or "Upgrade")
+		rp.Player:SetAttribute("XPReward", (ranked() or #buildPool(rp) > 0) and "Upgrade" or "Coins")
 	end, 3)
 
 	Remotes.Listen("LevelUpSkip", function(player, offerId)
@@ -1299,14 +2071,23 @@ function LevelUpSystem.Start()
 		if not rp or not rp.Offer or rp.Skips <= 0 or staleId(rp, offerId) then
 			return
 		end
+		if ranked() and R.downed(rp) then
+			return
+		end
 		rp.Skips -= 1
 		rp.Offer = nil
+		if ranked() then
+			table.remove(R.queue(rp), 1) -- [stream B] the head choice is skipped
+		end
 		rp.PendingLevels -= 1
 		useBonus(rp)
 		rp.BatchRemaining -= 1
 		ctx.GoldSystem.AddRunGold(rp, Config.LevelUp.SkipGold)
 		LevelUpSystem.SendInventory(rp)
 		offerNext(rp)
+		if ranked() then
+			R.publishPending(rp)
+		end
 	end, 3)
 end
 

@@ -26,9 +26,25 @@ local CharacterData = require(game:GetService("ReplicatedStorage").Shared.Charac
 local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 local Fx = require(script.Parent.Fx)
 local HeightGrid = require(script.Parent.HeightGrid)
-local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
+local RunCfg = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig)
+local Nav = RunCfg.Nav
+local BuildRules = require(game:GetService("ReplicatedStorage").SwarmV2.Run.BuildRules)
 
 local WeaponSystem = {}
+
+--[[
+	[stream B] Rank system combat core (RunConfig.Builds.Enabled; RunConfig.Combat; BuildRules;
+	docs/redesign/gameplay/BUILDS.md). Helpers live in `Rk` (one local: this module is close to
+	Luau's 200-locals limit). Public API for the class kits (stream C):
+	  WeaponSystem.Damage(rp, enemy, coefficient, weaponId, rank, opts) -> (died, dealt)
+	  WeaponSystem.HasLineOfSight(fromPos, toPos) -> boolean
+	  WeaponSystem.NearestTarget(rp, range, opts) -> enemy?
+	  WeaponSystem.CanEmit(rp, parentOpts?) -> boolean   (secondary budget + chain depth)
+	  WeaponSystem.NewCast() -> castId                   (per-target hit ledger key)
+	  WeaponSystem.ApplyScorch / ApplySlow / Stagger     (status rules)
+]]
+local Rk: { [string]: any } = {}
+local Combat: { [string]: any } = RunCfg.Combat
 
 local ctx
 local rng = Random.new()
@@ -116,6 +132,14 @@ local function allocProjectile(): Projectile?
 	p.NoProc = nil
 	p.NoProcOnBounce = nil
 	p.Hook = nil
+	-- [stream B] rank shots: bounce range / damage, bounces done, terrain stop, last-impact hook
+	p.BounceRange = nil
+	p.BounceDamage = nil
+	p.Bounced = nil
+	p.Terrain = nil
+	p.LastGround = nil
+	p.Final = nil
+	p.Impacted = nil
 	table.insert(live, p)
 	p.LiveIndex = #live
 	return p
@@ -170,6 +194,27 @@ local function weaponStats(rp, w)
 	-- Tinkerer (Engineer): turrets and totems last longer
 	if hero and hero.DeployLife and def and def.Deployable then
 		duration *= 1 + traitValue(rp, hero.DeployLife)
+	end
+	if def and def.Rank and BuildRules.On() then
+		-- [stream B] rank system: row.damage = B x coeff x rank multiplier, row.cooldown = the
+		-- rank interval; Might = 1 + the clamped damage bonus, CooldownMult = 1 / (1 + attack
+		-- speed); never faster than Combat.MinInterval. `mult` turns any other coefficient of this
+		-- weapon into damage (B x coeff x mult), `spec` is its rank spec with milestones.
+		local rank = BuildRules.ClampRank(w.Evolved and BuildRules.MaxRank() or w.Level)
+		return {
+			damage = row.damage * mult,
+			cooldown = math.max(Combat.MinInterval, row.cooldown * s.CooldownMult),
+			amount = WeaponData.CapAmount(w.Id, math.max(1, row.amount + s.Amount)),
+			area = s.AreaMult,
+			speed = row.speed,
+			pierce = row.pierce,
+			duration = duration,
+			knockback = row.knockback,
+			heal = 0,
+			rank = rank,
+			mult = BuildRules.RankMult(rank) * mult,
+			spec = WeaponData.RankSpec(w.Id, rank),
+		}
 	end
 	return {
 		damage = row.damage * mult,
@@ -244,6 +289,20 @@ end
 ]]
 local function nearestEnemies(pos: Vector3, range: number, k: number, preferBoss: boolean?): { any }
 	local result = {}
+	if BuildRules.On() then
+		-- [stream B] rank system: only enemies in sight (terrain blocks), nearest first, ties by
+		-- Uid, a bounded number of sight checks
+		local exclude = {}
+		for _ = 1, k do
+			local e = Rk.pick(pos, range, exclude, preferBoss and #result == 0)
+			if not e then
+				break
+			end
+			exclude[e.Uid] = true
+			table.insert(result, e)
+		end
+		return result
+	end
 	local boss = preferBoss and preferredBoss(pos, range) or nil
 	if k <= 1 then
 		if boss then
@@ -360,9 +419,27 @@ local killListeners: { (any, any, any) -> () } = {}
 	Every weapon hit goes through here: EnemySpawner.Damage (crits, item procs, kills), then
 	the hero's kill trait. noHarvest = a soul from Soul Harvest itself (souls never chain).
 ]]
-local function damageEnemy(rp, e, amount: number, dir: Vector3?, knockback: number, isProc: boolean?, noHarvest: boolean?): boolean
+local function damageEnemy(rp, e, amount: number, dir: Vector3?, knockback: number, isProc: boolean?, noHarvest: boolean?, critIn: boolean?): boolean
 	local pos = e.Pos
-	local died = ctx.EnemySpawner.Damage(e, amount, rp, dir, knockback, isProc)
+	local ranked = BuildRules.On()
+	if ranked then
+		-- [stream B] armor A / (100 + A) (A clamped 0..100), knockback by kind (bosses none,
+		-- elites half) and capped
+		amount *= BuildRules.ArmorMult(e.Armor or (e.Def and e.Def.Armor))
+		knockback = BuildRules.Knockback(BuildRules.KindOf(e), knockback)
+	end
+	local died = ctx.EnemySpawner.Damage(e, amount, rp, dir, knockback, isProc, critIn)
+	if ranked then
+		local k = e.Knock
+		if k and k.Magnitude > Combat.KnockbackCap then
+			e.Knock = k.Unit * Combat.KnockbackCap -- per-target horizontal knockback cap
+		end
+		-- Splinter Badge: a direct (non-proc) hit may throw two splinters (secondary, no chain)
+		local chance = rp and not isProc and rp.Stats and rp.Stats.SplinterChance or 0
+		if chance > 0 and rng:NextNumber() < chance then
+			Rk.splinter(rp, e, pos)
+		end
+	end
 	if died and rp and not noHarvest then
 		onWeaponKill(rp, pos, e)
 	end
@@ -384,7 +461,10 @@ end
 -- Slows a (non-boss) enemy: EnemyAI multiplies its speed by SlowMult until SlowUntil. A
 -- stronger slow that is still running is never weakened.
 local function slowEnemy(e, mult: number, seconds: number, now: number)
-	if e.Boss then
+	if BuildRules.On() then
+		-- [stream B] the strongest slow only, at most 40 % (bosses 10 %, not immune)
+		mult = BuildRules.SlowMult(1 - mult, e.Boss == true)
+	elseif e.Boss then
 		return
 	end
 	if e.SlowUntil and e.SlowUntil > now and (e.SlowMult or 1) < mult then
@@ -404,13 +484,15 @@ local Fire = {}
 -- SwarmV2 class signature weapons (Scrap Toss, Toast Volley, Bubble Bomb, Yarn Bomb): helpers,
 -- hit hooks and the extra projectile kinds live in `Class` (defined near Arm, below); declared
 -- here because collideEnemies and ricochet call into it.
-local Class = { Hit = {} }
+local Class = { Hit = {}, Final = {} }
 
 -- Visual tier sent with projectiles and slashes (0 = levels 1-3, 1 = 4-6, 2 = 7-8, 3 = evolved).
 -- Purely cosmetic: the client draws stronger trails/glows for higher tiers.
 local function visualTier(w): number
 	if w.Evolved then
 		return 3
+	elseif WeaponData.IsRanked(w.Id) then
+		return w.Level >= 5 and 2 or (w.Level >= 3 and 1 or 0) -- [stream B] ranks: 1-2 / 3-4 / 5
 	elseif w.Level >= 7 then
 		return 2
 	elseif w.Level >= 4 then
@@ -1634,15 +1716,33 @@ local function ricochet(p: Projectile): boolean
 		return false
 	end
 	p.Bounces -= 1
-	local nextE = grid():Nearest(p.Pos.X, p.Pos.Z, RICOCHET_RANGE, function(x)
-		return p.Hits[x.Uid] ~= nil or not x.Alive
+	-- [stream B] rank shots: a different, not-yet-hit, VISIBLE target within BounceRange (bounded
+	-- sight checks), paid from the owner's secondary budget, dealing BounceDamage
+	local range = p.BounceRange or RICOCHET_RANGE
+	local from, checks = p.Pos, 0
+	local nextE = grid():Nearest(p.Pos.X, p.Pos.Z, range, function(x)
+		if p.Hits[x.Uid] ~= nil or not x.Alive then
+			return true
+		end
+		if p.BounceRange then
+			checks += 1
+			return checks > Combat.LOSMaxChecks or not WeaponSystem.HasLineOfSight(from, x.Pos)
+		end
+		return false
 	end)
 	if not nextE then
 		return false
 	end
+	if p.BounceRange and not Rk.tryEmit(p.Owner) then
+		return false
+	end
+	p.Bounced = (p.Bounced or 0) + 1
 	local speed = math.max(20, p.Vel.Magnitude)
 	if p.BounceGain then
 		p.Damage *= 1 + p.BounceGain -- Sling: a stone hits harder with every bounce
+	end
+	if p.BounceDamage then
+		p.Damage = p.BounceDamage
 	end
 	local d = flatDir(nextE.Pos - p.Pos, p.Vel.Unit)
 	p.Vel = d * speed
@@ -1651,7 +1751,7 @@ local function ricochet(p: Projectile): boolean
 		p.NoProc = true -- a bounced hit is a derived hit: no crit, no item procs
 	end
 	p.Pierce = 1
-	p.Age = math.min(p.Age, p.Life - RICOCHET_RANGE / speed - 0.05)
+	p.Age = math.min(p.Age, p.Life - range / speed - 0.05)
 	return true
 end
 
@@ -1705,7 +1805,15 @@ local function collideEnemies(p: Projectile, now: number): boolean
 				if p.Pierce < 999 then
 					p.Pierce -= 1
 					if p.Pierce <= 0 then
-						return not ricochet(p)
+						local bounced = ricochet(p)
+						if not bounced and p.Final then
+							-- [stream B] the projectile's last impact (final burst / evolution pulse)
+							local fin = Class.Final[p.Final]
+							if fin then
+								fin(p, e, at)
+							end
+						end
+						return not bounced
 					end
 				end
 			end
@@ -2635,6 +2743,9 @@ function Arm.stepVortex(p: Projectile, dt: number, now: number): boolean
 		return true
 	end
 	local x = p.X
+	if x.Rank then
+		return Rk.stepVortex(p, dt, now) -- [stream B] rank system rift
+	end
 	p.Yaw += dt * 4
 	x.T -= dt
 	if x.T > 0 then
@@ -2861,7 +2972,9 @@ function Class.stepYarn(p: Projectile, dt: number, _now: number): boolean
 	local x = p.X
 	local u = math.clamp(p.Age / p.Life, 0, 1)
 	p.Pos = x.From:Lerp(x.To, u)
-	p.Y = Config.ArenaOrigin.Y + 1.2 + 9 * math.sin(math.pi * u)
+	-- (rank system: the arc runs between the two ground heights)
+	local base = x.Rank and (x.From.Y + (x.To.Y - x.From.Y) * u) or Config.ArenaOrigin.Y
+	p.Y = base + 1.2 + 9 * math.sin(math.pi * u)
 	p.Yaw += dt * 9
 	return false
 end
@@ -2870,6 +2983,10 @@ function Class.landYarn(p: Projectile)
 	local x = p.X
 	local owner = p.Owner
 	if not owner.Alive then
+		return
+	end
+	if x.Rank then
+		Rk.landYarn(p, x) -- [stream B] rank system blast
 		return
 	end
 	local at = x.To
@@ -3009,6 +3126,986 @@ function WeaponSystem.ClassWeaponStats(rp, weaponId: string)
 	return weaponStats(rp, w), w
 end
 
+------------------------------------------------------------------------------------------
+-- [stream B] RANK SYSTEM COMBAT CORE (RunConfig.Builds.Enabled): line of sight, targeting,
+-- the shared damage rules, statuses, the secondary budget and the catalog behaviours.
+------------------------------------------------------------------------------------------
+
+function Rk.now(): number
+	return ctx.RunManager.GetRunTime()
+end
+
+--[[
+	Line of sight over the terrain (HeightGrid): the ground between the two points must stay below
+	a sight line Combat.LOSHeight above the ground at both ends (+ LOSTolerance), sampled every
+	LOSStep studs. Cliffs, ridges and NavBlock walls (their top is the cell height) block it; water
+	and gaps do not. No grid (a flat arena): always clear.
+]]
+function WeaponSystem.HasLineOfSight(fromPos: Vector3, toPos: Vector3): boolean
+	if not HeightGrid.IsActive() then
+		return true
+	end
+	local ax, az, bx, bz = fromPos.X, fromPos.Z, toPos.X, toPos.Z
+	local dx, dz = bx - ax, bz - az
+	local n = math.floor(math.sqrt(dx * dx + dz * dz) / Combat.LOSStep)
+	if n < 2 then
+		return true
+	end
+	local h, tol = Combat.LOSHeight, Combat.LOSTolerance
+	local ay = HeightGrid.GroundY(ax, az) + h
+	local by = HeightGrid.GroundY(bx, bz) + h
+	for i = 1, n - 1 do
+		local t = i / n
+		if HeightGrid.GroundY(ax + dx * t, az + dz * t) > ay + (by - ay) * t + tol then
+			return false
+		end
+	end
+	return true
+end
+
+-- A rank shot over terrain: a cliff rise ends it (true); ramps carry it up.
+function Rk.terrainBlocked(p: Projectile): boolean
+	if not HeightGrid.IsActive() then
+		return false
+	end
+	local gy = HeightGrid.GroundY(p.Pos.X, p.Pos.Z)
+	local last = p.LastGround or p.Ground
+	if gy - last > Nav.StepMax and gy > p.Y - 0.5 then
+		return true
+	end
+	p.LastGround = gy
+	if gy + 1.2 > p.Y then
+		p.Y = gy + 1.2
+	end
+	return false
+end
+
+--[[
+	The nearest hittable enemy whose body edge is within `range` of `origin`, ties by the stable
+	enemy Uid, that is in sight (at most Combat.LOSMaxChecks sight checks: the search is bounded by
+	the range query and never global). exclude = { [uid] = true }. preferBoss: the existing boss
+	preference (Config.Boss.Targeting) when that boss is in sight.
+]]
+function Rk.pick(origin: Vector3, range: number, exclude: { [number]: boolean }?, preferBoss: boolean?): any?
+	if preferBoss then
+		local b = preferredBoss(origin, range)
+		if b and not (exclude and exclude[b.Uid]) and WeaponSystem.HasLineOfSight(origin, b.Pos) then
+			return b
+		end
+	end
+	local n = grid():QueryCircle(origin.X, origin.Z, range, queryBuf)
+	if n == 0 then
+		return nil
+	end
+	local cands, dists = {}, {}
+	for i = 1, n do
+		local e = queryBuf[i]
+		if hittable(e) and not (exclude and exclude[e.Uid]) then
+			local edge = ((e.Pos - origin) * FLAT).Magnitude - e.Radius
+			if edge <= range then
+				table.insert(cands, e)
+				table.insert(dists, edge)
+			end
+		end
+	end
+	for _ = 1, Combat.LOSMaxChecks do
+		local bi, best, bestUid = 0, math.huge, math.huge
+		for i, e in ipairs(cands) do
+			local d = dists[i]
+			if d < best or (d == best and d < math.huge and e.Uid < bestUid) then
+				bi, best, bestUid = i, d, e.Uid
+			end
+		end
+		if bi == 0 then
+			return nil
+		end
+		local e = cands[bi]
+		if WeaponSystem.HasLineOfSight(origin, e.Pos) then
+			return e
+		end
+		dists[bi] = math.huge
+	end
+	return nil
+end
+
+--[[
+	WeaponSystem.NearestTarget(rp, range, opts) -> enemy or nil: the brief's automatic targeting.
+	opts = { Key = weapon id (the per-weapon target memory), From = origin (default: the hero's
+	ground), Exclude = { [uid] = true }, PreferBoss = false to skip the boss preference }.
+	With a Key, a still-valid target (alive, in range, on this level, in sight) is kept for
+	Combat.TargetHold s after it was picked and is only reconsidered every Combat.Retarget s.
+]]
+function WeaponSystem.NearestTarget(rp, range: number, opts: any?): any?
+	local o = opts or {}
+	local origin: Vector3? = o.From
+	if not origin then
+		if not rp or not rp.Root then
+			return nil
+		end
+		origin = ground(rp.Root.Position)
+	end
+	local from = origin :: Vector3
+	local now = Rk.now()
+	local cache = nil
+	if o.Key and rp then
+		rp.TargetCache = rp.TargetCache or {}
+		cache = rp.TargetCache[o.Key]
+		if cache and (cache.Checked or 0) > now + 1 then
+			cache = nil -- a new run (the clock went back)
+		end
+	end
+	local g = grid()
+	local saved, savedBand, savedGround = g.BandY, g.Band, curGround
+	useGround(from.Y)
+	local result = nil
+	if cache then
+		local t = cache.Target
+		local keep = t ~= nil and hittable(t) and t.Uid == cache.Uid
+			and ((t.Pos - from) * FLAT).Magnitude - t.Radius <= range
+			and HeightGrid.InBand(t.Pos.Y, from.Y, Nav.HitBand)
+			and not (o.Exclude and o.Exclude[t.Uid])
+		if keep and now - cache.At >= Combat.TargetHold and now - cache.Checked >= Combat.Retarget then
+			keep = false -- time to reconsider: the nearest visible one wins (maybe the same)
+		end
+		if keep and now - cache.Checked >= Combat.Retarget then
+			keep = WeaponSystem.HasLineOfSight(from, t.Pos)
+		end
+		if keep then
+			result = t
+		end
+	end
+	if not result then
+		result = Rk.pick(from, range, o.Exclude, o.PreferBoss ~= false)
+		if o.Key and rp then
+			cache = cache or {}
+			rp.TargetCache[o.Key] = cache
+			if result ~= cache.Target or (result and result.Uid ~= cache.Uid) then
+				cache.At = now
+			end
+			cache.Target = result
+			cache.Uid = result and result.Uid or nil
+			cache.Checked = now
+		end
+	end
+	g.BandY, g.Band, curGround = saved, savedBand, savedGround
+	return result
+end
+
+-- Aim point at `target` from `origin`: its centre plus a small capped lead (travel time at
+-- `speed`, or `seconds` for a lob), never a guaranteed curved hit.
+function Rk.aimPoint(origin: Vector3, target: any, speed: number?, seconds: number?): Vector3
+	local pos = target.Pos
+	local t = seconds
+	if not t then
+		if not speed or speed <= 0 then
+			return pos
+		end
+		t = ((pos - origin) * FLAT).Magnitude / speed
+	end
+	local dir = target.Dir
+	local v = (dir and typeof(dir) == "Vector3") and (dir * FLAT) * (tonumber(target.Speed) or 0) or Vector3.zero
+	local lead = v * math.min(t :: number, Combat.LeadMaxSeconds)
+	if lead.Magnitude > Combat.LeadMaxStuds then
+		lead = lead.Unit * Combat.LeadMaxStuds
+	end
+	return pos + lead
+end
+
+-- Per-player secondary-emission budget (Combat.SecondaryPerSecond, token bucket on the run clock).
+function Rk.tryEmit(rp): boolean
+	if not rp then
+		return false
+	end
+	local cap = Combat.SecondaryPerSecond
+	local now = Rk.now()
+	local tokens = rp.EmitTokens
+	if tokens == nil then
+		tokens = cap
+	end
+	local last = rp.EmitAt or now
+	if now > last then
+		tokens = math.min(cap, tokens + (now - last) * cap)
+	end
+	rp.EmitAt = now
+	if tokens < 1 then
+		rp.EmitTokens = tokens
+		rp.EmitDropped = (rp.EmitDropped or 0) + 1
+		return false
+	end
+	rp.EmitTokens = tokens - 1
+	rp.Emitted = (rp.Emitted or 0) + 1
+	return true
+end
+
+-- May an effect emit a secondary now? No when the parent is terminal (fragments, pulses, small
+-- bubbles, splinters) or already at Combat.MaxChainDepth; else it pays one budget token.
+function WeaponSystem.CanEmit(rp, parent: any?): boolean
+	if parent and (parent.Terminal or (tonumber(parent.Depth) or 0) >= Combat.MaxChainDepth) then
+		return false
+	end
+	return Rk.tryEmit(rp)
+end
+
+-- Per-target hit ledgers by cast id (a cast hits a target once; WeaponSystem.Damage opts.CastId).
+Rk.casts = {} :: { [number]: { At: number, Hits: { [number]: boolean } } }
+Rk.castSeq = 0
+Rk.cleanAt = 0
+function WeaponSystem.NewCast(): number
+	Rk.castSeq += 1
+	Rk.casts[Rk.castSeq] = { At = Rk.now(), Hits = {} }
+	return Rk.castSeq
+end
+
+function Rk.ledger(castId: number): { [number]: boolean }
+	local c = Rk.casts[castId]
+	if not c then
+		c = { At = Rk.now(), Hits = {} }
+		Rk.casts[castId] = c
+	end
+	return c.Hits
+end
+
+-- Slows `e` by `share` (0.2 = 20 % slower) for `seconds`: strongest only, capped (bosses 10 %).
+function WeaponSystem.ApplySlow(e, share: number, seconds: number)
+	if e and e.Alive then
+		slowEnemy(e, 1 - share, seconds, Rk.now())
+	end
+end
+
+-- Staggers `e` (it stops moving) for `seconds`: bosses never, elites at most 0.15 s, then the
+-- enemy is immune for Combat.StaggerImmunity s. True when it was staggered.
+function WeaponSystem.Stagger(e, seconds: number): boolean
+	if not e or not e.Alive then
+		return false
+	end
+	local s = BuildRules.Stagger(BuildRules.KindOf(e), seconds)
+	local now = Rk.now()
+	local immune = e.StaggerImmuneUntil
+	-- (an immunity far ahead of the clock is from an earlier run: the run clock restarted)
+	if s <= 0 or (immune and now < immune and immune - now <= Combat.StaggerImmunity + 1) then
+		return false
+	end
+	e.StaggerUntil = now + s
+	e.StaggerImmuneUntil = now + s + Combat.StaggerImmunity
+	return true
+end
+
+--[[
+	Scorch on `e`: 0.12 B per second (x mult) for 3 s in 0.5 s ticks. Reapplying refreshes the
+	duration and keeps the strongest source; it never stacks. Ticks are status damage (no crit, no
+	procs). True when a new scorch started.
+]]
+function WeaponSystem.ApplyScorch(rp, e, mult: number?, weapon: any?): boolean
+	if not rp or not e or not e.Alive then
+		return false
+	end
+	local now = Rk.now()
+	local tick = Combat.ScorchTick
+	local dmg = BuildRules.ScorchTickDamage(mult)
+	local src = weapon
+	if not src then
+		src = rp.ScorchSource or {}
+		rp.ScorchSource = src
+	end
+	local b = burns[e]
+	if b and b.Uid == e.Uid and now < b.Until then
+		b.Until = now + Combat.ScorchSeconds
+		if dmg > b.Damage then
+			b.Damage, b.Owner, b.Weapon = dmg, rp, src
+		end
+		return false
+	end
+	burns[e] = { Uid = e.Uid, Until = now + Combat.ScorchSeconds, Next = now + tick, Tick = tick, Damage = dmg, Owner = rp, Weapon = src, NoProc = true, Scorch = true }
+	return true
+end
+
+--[[
+	WeaponSystem.Damage(rp, enemy, coefficient, weaponId, rank, opts) -> (died, dealt)
+	The brief's hit: B x coefficient x (1 + 0.20 (rank - 1)) x (1 + the player's damage bonus) x
+	opts.Mult, armor A / (100 + A), knockback by kind and capped, and the crit / proc rules:
+	  primary hit (default): may crit (server roll, x1.75) and proc (Splinter Badge, item procs)
+	  opts.Secondary = true: a bounce / burst / pulse / fragment: no procs, no crit unless Crit = true
+	  opts.Status = true: status damage: never crits, never procs
+	  opts.Crit = false: never crits; opts.Proc = false: no procs
+	opts also: CastId (hit each target once per cast id; Rehit = true allows more), From (origin:
+	sight check unless LOS = false, knockback direction), Dir, Knock (studs/s), Stagger (s), Slow
+	(share) + SlowSeconds, Scorch (mult: applies scorch after the hit), Amount (absolute damage
+	instead of the formula), NoHarvest. rank defaults to the player's rank of weaponId.
+]]
+function WeaponSystem.Damage(rp, e, coefficient: number, weaponId: string?, rank: number?, opts: any?): (boolean, number)
+	local o = opts or {}
+	if not e or not hittable(e) then
+		return false, 0
+	end
+	if o.CastId then
+		local hits = Rk.ledger(o.CastId)
+		if hits[e.Uid] and not o.Rehit then
+			return false, 0
+		end
+		hits[e.Uid] = true
+	end
+	if o.From and o.LOS ~= false and not WeaponSystem.HasLineOfSight(o.From, e.Pos) then
+		return false, 0
+	end
+	local s = rp and rp.Stats
+	local w = (weaponId and rp and rp.Weapons) and rp.Weapons[weaponId] or nil
+	local r = rank or (w and (w.Evolved and BuildRules.MaxRank() or w.Level)) or 1
+	local bonus = s and (s.DamageBonus or ((s.Might or 1) - 1)) or 0
+	local amount = (tonumber(o.Amount) or BuildRules.HitDamage(coefficient, r, bonus)) * (tonumber(o.Mult) or 1)
+	if not (amount > 0 and amount < math.huge) then
+		return false, 0
+	end
+	local status = o.Status == true
+	local secondary = o.Secondary == true
+	local procs = not status and not secondary and o.Proc ~= false
+	local critOk = not status and (o.Crit == true or (o.Crit == nil and not secondary))
+	local critIn: boolean? = nil
+	if procs then
+		if not critOk then
+			critIn = false
+		end -- else nil: EnemySpawner rolls it (ItemSystem.ModifyHit, server-side)
+	else
+		critIn = false
+		if critOk and s and rng:NextNumber() < (s.CritChance or 0) then
+			amount *= s.CritDamage or Combat.CritMult
+			critIn = true
+		end
+	end
+	local dir: Vector3? = o.Dir
+	if not dir and o.From then
+		local d = (e.Pos - o.From) * FLAT
+		dir = d.Magnitude > 1e-3 and d.Unit or nil
+	end
+	local prevSource = killSource
+	if w then
+		killSource = w
+	end
+	local hp0 = e.HP
+	local died = damageEnemy(rp, e, amount, dir, tonumber(o.Knock) or 0, not procs, o.NoHarvest, critIn)
+	killSource = prevSource
+	if e.Alive and not died then
+		if o.Stagger then
+			WeaponSystem.Stagger(e, o.Stagger)
+		end
+		if o.Slow then
+			WeaponSystem.ApplySlow(e, o.Slow, o.SlowSeconds or 1)
+		end
+		if o.Scorch then
+			WeaponSystem.ApplyScorch(rp, e, tonumber(o.Scorch) or 1, w)
+		end
+	end
+	return died, math.max(0, hp0 - e.HP)
+end
+
+-- Damage to every hittable enemy in sight within `radius` of `at` (each once), nearest first, at
+-- most `maxTargets`; primary = a main hit component (crit and procs), else secondary (neither).
+-- after(e) runs for each enemy hit that survived. Returns the number hit.
+function Rk.burst(rp, at: Vector3, radius: number, damage: number, skip: any?, maxTargets: number?, primary: boolean?, after: ((any) -> ())?): number
+	local n = grid():QueryCircle(at.X, at.Z, radius, queryBuf)
+	local list = {}
+	for i = 1, n do
+		local o = queryBuf[i]
+		if o ~= skip and hittable(o) then
+			table.insert(list, o)
+		end
+	end
+	if maxTargets then
+		table.sort(list, function(a, b)
+			local da, db = ((a.Pos - at) * FLAT).Magnitude - a.Radius, ((b.Pos - at) * FLAT).Magnitude - b.Radius
+			if da ~= db then
+				return da < db
+			end
+			return a.Uid < b.Uid
+		end)
+	end
+	local hit, cap = 0, maxTargets or math.huge
+	for _, o in ipairs(list) do
+		if hit >= cap then
+			break
+		end
+		if o.Alive and WeaponSystem.HasLineOfSight(at, o.Pos) then
+			hit += 1
+			local d = (o.Pos - at) * FLAT
+			local died = damageEnemy(rp, o, damage, d.Magnitude > 1e-3 and d.Unit or Vector3.zAxis, 4, not primary)
+			if after and not died and o.Alive then
+				after(o)
+			end
+		end
+	end
+	return hit
+end
+
+-- Splinter Badge: two 0.15 B splinters at different visible enemies within 8 studs of the hit
+-- (secondary and terminal: they never proc or splinter again). Rank of the weapon that hit.
+function Rk.splinter(rp, e, at: Vector3)
+	local w = killSource
+	local rank = tonumber(w and w.Level) or 1
+	local dmg = BuildRules.HitDamage(Combat.SplinterCoeff, rank, rp.Stats and rp.Stats.DamageBonus or 0)
+	local exclude = { [e.Uid] = true }
+	for _ = 1, Combat.SplinterCount do
+		local o = Rk.pick(at, Combat.SplinterRange, exclude, false)
+		if not o or not Rk.tryEmit(rp) then
+			break
+		end
+		exclude[o.Uid] = true
+		local d = (o.Pos - at) * FLAT
+		damageEnemy(rp, o, dmg, d.Magnitude > 1e-3 and d.Unit or nil, 0, true)
+		pushFx("fk", { r1(o.Pos.X), r1(o.Pos.Z), 1.2 })
+	end
+	rp.Splinters = (rp.Splinters or 0) + 1
+end
+
+-- A rank shot: a straight projectile that stops at its first enemy (Pierce) and may bounce on.
+function Rk.shot(rp, w, s, pos: Vector3, dir: Vector3, damage: number, o: any): Projectile?
+	local spec = s.spec
+	local p = allocProjectile()
+	if not p then
+		return nil
+	end
+	p.Kind = "Straight"
+	p.Visual = o.Visual
+	p.Owner = rp
+	p.Weapon = w
+	p.Pos = pos
+	p.Vel = dir * spec.Speed
+	p.Damage = damage
+	p.Pierce = o.Pierce or 1
+	p.Radius = (spec.Radius or 1) * s.area
+	p.Life = spec.Range / spec.Speed + 0.1
+	p.Knockback = s.knockback
+	p.Yaw = yawOf(dir)
+	p.Terrain = true
+	p.NoProc = o.Secondary or nil
+	if (o.Bounces or 0) > 0 then
+		p.Bounces = o.Bounces
+		p.BounceRange = spec.BounceRange or 10
+		p.BounceDamage = BuildRules.B() * (spec.BounceCoeff or spec.Coeff) * s.mult
+		p.NoProcOnBounce = true
+	end
+	return p
+end
+
+-- The weapon's class passive / kit hooks only work for that class (cross-class weapons give the
+-- weapon behaviour only).
+function Rk.own(rp, def): boolean
+	return def.ClassOnly ~= nil and def.ClassOnly == rp.CharacterId
+end
+
+--[[
+	RANK SHOT (Scrap Shot, Toast Toss; placeholder for Dodgeball, Returning Sneakers, Seed Slinger,
+	Confetti Minigun, Ricochet Puck): Amount projectiles at the nearest visible target (small capped
+	lead), each stopping at its first enemy and bouncing Bounces times to different visible targets
+	within BounceRange (secondary hits). Milestones / evolutions: ExtraShots (Scrap rank 5),
+	FinalBurst (Toast rank 5), Pulse (Junkyard Cyclone), FollowUp (Toaststorm).
+]]
+function Fire.RankShot(rp, w, s, def)
+	local spec = s.spec
+	local origin = ground(rp.Root.Position)
+	local target = WeaponSystem.NearestTarget(rp, spec.Range, { Key = w.Id, From = origin })
+	if not target then
+		w.Timer = math.min(w.Timer, 0.15) -- nothing in sight and range: look again soon
+		return
+	end
+	local evo = w.Evolved and def.Evolution or nil
+	local own = Rk.own(rp, def)
+	local visual = visualByte((evo and spec.EvoVisual) or spec.Visual or (def.Params and def.Params.Visual) or 1, w)
+	local dir = flatDir(Rk.aimPoint(origin, target, spec.Speed) - origin, rp.Facing)
+	local B = BuildRules.B()
+	local burst = spec.FinalBurst and { R = spec.FinalBurst.Radius * s.area, Damage = B * spec.FinalBurst.Coeff * s.mult } or nil
+	local pulse = (evo and evo.Pulse) and { R = evo.Pulse.Radius * s.area, Damage = B * evo.Pulse.Coeff * s.mult } or nil
+	local n = s.amount
+	for i = 1, n do
+		local d = n > 1 and rotateY(dir, (i - (n + 1) / 2) * math.rad(spec.Spread or 6)) or dir
+		local p = Rk.shot(rp, w, s, origin + d * 1.5, d, s.damage, { Visual = visual, Pierce = spec.Pierce, Bounces = spec.Bounces })
+		if not p then
+			break
+		end
+		if burst or pulse then
+			p.Final = "Rank"
+			p.X = { Burst = burst, Pulse = pulse }
+		end
+		if own and def.Id == "ToastVolley" then
+			p.Hook = "Toast" -- Overheat (Toastmaster's class passive)
+		end
+	end
+	-- Scrap Shot rank 5: one more 0.40 B scrap at another visible target (a secondary projectile)
+	if (spec.ExtraShots or 0) > 0 then
+		local other = WeaponSystem.NearestTarget(rp, spec.Range, { From = origin, Exclude = { [target.Uid] = true } }) or target
+		for _ = 1, spec.ExtraShots do
+			if not Rk.tryEmit(rp) then
+				break
+			end
+			local d = flatDir(Rk.aimPoint(origin, other, spec.Speed) - origin, dir)
+			Rk.shot(rp, w, s, origin + d * 1.5, d, B * spec.ExtraCoeff * s.mult, { Visual = visual, Secondary = true })
+		end
+	end
+	-- Toaststorm: a second 0.35 B toast follows 0.12 s later (secondary, no bounce)
+	if evo and evo.FollowUp then
+		local follow = evo.FollowUp
+		local uid = target.Uid
+		task.delay(follow.Delay, function()
+			if not rp.Alive or not rp.Root or not ctx.RunManager.IsSimulating() or not Rk.tryEmit(rp) then
+				return
+			end
+			local from = ground(rp.Root.Position)
+			useGround(from.Y)
+			local t = (target.Alive and target.Uid == uid) and target or WeaponSystem.NearestTarget(rp, spec.Range, { From = from })
+			if t then
+				local d = flatDir(Rk.aimPoint(from, t, spec.Speed) - from, rp.Facing)
+				Rk.shot(rp, w, s, from + d * 1.5, d, B * follow.Coeff * s.mult, { Visual = visual, Secondary = true })
+			end
+			useGround(nil)
+		end)
+	end
+	-- Loot Rush (Ruckus's class passive): a stored barrage adds a ring of scraps (RunConfig.Classes)
+	local kits = ctx.ClassKits
+	if own and def.Id == "ScrapToss" and kits and kits.TakeBarrage(rp) then
+		local K = kits.Config().LootRush
+		for i = 1, K.RingCount do
+			local d = rotateY(rp.Facing, (i - 1) * TAU / K.RingCount)
+			if not Class.Shot(rp, w, origin + d * 1.5, d, visual, spec.Speed, s.damage, (spec.Radius or 1) * s.area, spec.Range / spec.Speed, s.knockback, K.RingBounces) then
+				break
+			end
+		end
+		Fx.Ring(origin, 5, Color3.fromRGB(240, 200, 90))
+	end
+	Fx.Sound("Hit")
+end
+
+-- A rank shot's last impact: Toast rank 5's burst and Junkyard Cyclone's pulse (after a bounce).
+-- Both are secondary and terminal (they never emit anything).
+function Class.Final.Rank(p: Projectile, e, at: Vector3)
+	local x = p.X
+	local owner = p.Owner
+	if not x or not owner or not owner.Alive then
+		return
+	end
+	if x.Burst and Rk.tryEmit(owner) then
+		Rk.burst(owner, at, x.Burst.R, x.Burst.Damage, e)
+		pushFx("fk", { r1(at.X), r1(at.Z), r1(x.Burst.R) })
+	end
+	if x.Pulse and (p.Bounced or 0) >= 1 and Rk.tryEmit(owner) then
+		Rk.burst(owner, at, x.Pulse.R, x.Pulse.Damage, e)
+		pushFx("fk", { r1(at.X), r1(at.Z), r1(x.Pulse.R) })
+	end
+end
+
+--[[
+	RANK SWING (Sword; Mop Sweep; placeholder for Protein Claws, Glove Combo): one arc in front
+	(Reach x area studs, Arc degrees) turned gently toward the selected nearby enemy, hitting the
+	nearest MaxTargets enemies in it that are in sight; Slow = { Share, Seconds } slows them.
+]]
+function Fire.RankSwing(rp, w, s, def)
+	local spec = s.spec
+	local reach = spec.Reach * s.area
+	local half = math.rad(spec.Arc) / 2
+	local origin = ground(rp.Root.Position)
+	local target = WeaponSystem.NearestTarget(rp, reach * 1.5, { Key = w.Id, From = origin })
+	if not target then
+		w.Timer = math.min(w.Timer, 0.15)
+		return
+	end
+	local dir = flatDir(target.Pos - origin, rp.Facing)
+	w.Attacks = (w.Attacks or 0) + 1
+	local sweep = (spec.Alternate and w.Attacks % 2 == 0) and -1 or 1
+	Fx.Slash(origin, yawOf(dir), reach, sweep, visualTier(w), rp.Player.UserId)
+	task.delay(SWING_HIT_DELAY, function()
+		if not rp.Alive or not rp.Root or not ctx.RunManager.IsSimulating() then
+			return
+		end
+		killSource = w -- a delayed hit: credit this weapon (OnKill)
+		local at = ground(rp.Root.Position)
+		useGround(at.Y)
+		local n = grid():QueryCircle(at.X, at.Z, reach, queryBuf)
+		local list = {}
+		for i = 1, n do
+			local e = queryBuf[i]
+			if hittable(e) and inSwing(e, at, dir, reach, half) then
+				table.insert(list, e)
+			end
+		end
+		table.sort(list, function(a, b)
+			local da, db = ((a.Pos - at) * FLAT).Magnitude - a.Radius, ((b.Pos - at) * FLAT).Magnitude - b.Radius
+			if da ~= db then
+				return da < db
+			end
+			return a.Uid < b.Uid
+		end)
+		local hits, now = 0, Rk.now()
+		for _, e in ipairs(list) do
+			if hits >= spec.MaxTargets then
+				break
+			end
+			if e.Alive and WeaponSystem.HasLineOfSight(at, e.Pos) then
+				hits += 1
+				local died = hitEnemy(rp, e, s.damage, at, s.knockback)
+				if spec.Slow and not died and e.Alive then
+					slowEnemy(e, 1 - spec.Slow.Share, spec.Slow.Seconds, now)
+				end
+			end
+		end
+		useGround(nil)
+		killSource = nil
+	end)
+	Fx.Sound("Hit")
+end
+
+--[[
+	RANK BUBBLE (Bubble Bomb): a bubble flying at the nearest visible target: ImpactCoeff to the
+	first enemy it touches, then a BurstCoeff burst (BurstRadius) after its ground bounce or the
+	Fuse, whichever comes first (two documented hit components; each target once per burst). Rank
+	5: a second bubble at half damage (secondary). Bubble Torrent: a primary burst leaves two small
+	bubbles (0.25 B each, separate visible enemies within 8, terminal). Big Splash (the class
+	passive): the next bubble's burst is stronger / wider (RunConfig.Classes.BigSplash).
+]]
+function Fire.RankBubble(rp, w, s, def)
+	local spec = s.spec
+	local origin = ground(rp.Root.Position)
+	local target = WeaponSystem.NearestTarget(rp, spec.Range, { Key = w.Id, From = origin })
+	if not target then
+		w.Timer = math.min(w.Timer, 0.15)
+		return
+	end
+	local kits = ctx.ClassKits
+	local splash = (Rk.own(rp, def) and kits ~= nil) and kits.TakeSplash(rp) or nil
+	Rk.bubble(rp, w, def, s, origin, target, splash, 1, false)
+	local second = spec.SecondBubble
+	if second then
+		local uid = target.Uid
+		task.delay(second.Delay, function()
+			if not rp.Alive or not rp.Root or not ctx.RunManager.IsSimulating() or not Rk.tryEmit(rp) then
+				return
+			end
+			local from = ground(rp.Root.Position)
+			useGround(from.Y)
+			local t = (target.Alive and target.Uid == uid) and target or WeaponSystem.NearestTarget(rp, spec.Range, { From = from })
+			if t then
+				Rk.bubble(rp, w, def, s, from, t, nil, second.Share, true)
+			end
+			useGround(nil)
+		end)
+	end
+	Fx.Sound("Hit")
+end
+
+function Rk.bubble(rp, w, def, s, origin: Vector3, target, splash: any?, share: number, secondary: boolean)
+	local spec = s.spec
+	local evo = w.Evolved and def.Evolution or nil
+	local to = (Rk.aimPoint(origin, target, spec.Speed) - origin) * FLAT
+	local dist = math.min(to.Magnitude, spec.Range)
+	local dir = flatDir(to, rp.Facing)
+	local p = allocProjectile()
+	if not p then
+		return
+	end
+	local B = BuildRules.B()
+	local big = splash ~= nil
+	local flight = math.max(0.05, (dist - 1.5) / spec.Speed)
+	p.Kind = "RBubble"
+	p.Visual = WeaponData.VisualByte((evo and spec.EvoVisual) or spec.Visual, big and 3 or visualTier(w))
+	p.Owner = rp
+	p.Weapon = w
+	p.Pos = origin + dir * 1.5
+	p.Vel = dir * spec.Speed
+	p.Damage = B * spec.ImpactCoeff * s.mult * share
+	p.Pierce = 1
+	p.Radius = (spec.Radius or 1) * s.area * (big and 1.2 or 1)
+	p.Life = math.min(spec.Fuse, flight + (spec.BounceTime or 0.15))
+	p.Knockback = s.knockback
+	p.Yaw = yawOf(dir)
+	p.Terrain = true
+	p.NoProc = secondary or nil
+	p.X = {
+		Flight = flight,
+		R = spec.BurstRadius * s.area * ((big and splash.RadiusMult) or 1),
+		Burst = B * spec.Coeff * s.mult * share * ((big and splash.DamageMult) or 1),
+		Secondary = secondary,
+		Evo = (not secondary and evo) and evo.SmallBubbles or nil,
+		Mult = s.mult,
+	}
+end
+
+function Rk.stepBubble(p: Projectile, dt: number, now: number): boolean
+	local x = p.X
+	if p.Age < x.Flight then
+		local before = p.Pos
+		p.Pos += p.Vel * dt
+		p.Yaw += dt * 6
+		if Rk.terrainBlocked(p) then
+			p.Pos = before -- a cliff: it stops here and bursts on its fuse
+			x.Flight = p.Age
+		end
+	else
+		-- the ground bounce: one small hop on the spot before the burst
+		local u = math.clamp((p.Age - x.Flight) / 0.15, 0, 1)
+		p.Y = (p.LastGround or p.Ground) + 1.2 + 1.2 * math.sin(u * math.pi)
+	end
+	if not p.Impacted then
+		local n = grid():QueryCircle(p.Pos.X, p.Pos.Z, p.Radius, queryBuf)
+		for i = 1, n do
+			local e = queryBuf[i]
+			if hittable(e) then
+				p.Impacted = true -- the direct impact: the first enemy it touches, once
+				p.Hits[e.Uid] = now
+				local d = p.Vel * FLAT
+				damageEnemy(p.Owner, e, p.Damage, d.Magnitude > 1e-3 and d.Unit or nil, p.Knockback, p.NoProc == true)
+				break
+			end
+		end
+	end
+	return false
+end
+
+function Rk.popBubble(p: Projectile)
+	local x = p.X
+	local owner = p.Owner
+	if not x or not owner or not owner.Alive then
+		return
+	end
+	local at = p.Pos
+	Rk.burst(owner, at, x.R, x.Burst, nil, nil, not x.Secondary)
+	pushFx("fk", { r1(at.X), r1(at.Z), r1(x.R) })
+	local evo = x.Evo
+	if evo then
+		local exclude = {}
+		local dmg = BuildRules.B() * evo.Coeff * x.Mult
+		for _ = 1, evo.Count do
+			local o = Rk.pick(at, evo.Range, exclude, false)
+			if not o or not Rk.tryEmit(owner) then
+				break
+			end
+			exclude[o.Uid] = true
+			local d = (o.Pos - at) * FLAT
+			damageEnemy(owner, o, dmg, d.Magnitude > 1e-3 and d.Unit or nil, 0, true)
+			pushFx("fk", { r1(o.Pos.X), r1(o.Pos.Z), 1.5 })
+		end
+	end
+end
+
+--[[
+	RANK YARN (Yarn Bomb): a yarn ball thrown at the nearest visible target (small capped lead); it
+	bursts after Fuse s for the full hit on at most MaxTargets enemies in BlastRadius that the
+	blast can see (terrain blocks it). Tangled Up (Granny's class passive) tangles what survives.
+	Knitting Nightmare: three radial 0.15 B fragments, each hitting once (secondary, terminal).
+]]
+function Fire.RankYarn(rp, w, s, def)
+	local spec = s.spec
+	local origin = ground(rp.Root.Position)
+	local target = WeaponSystem.NearestTarget(rp, spec.Range, { Key = w.Id, From = origin })
+	if not target then
+		w.Timer = math.min(w.Timer, 0.15)
+		return
+	end
+	local evo = w.Evolved and def.Evolution or nil
+	local fuse = spec.Fuse
+	local radius = spec.BlastRadius * s.area
+	local at = ground(Rk.aimPoint(origin, target, nil, fuse))
+	for i = 1, s.amount do
+		local p = allocProjectile()
+		if not p then
+			return
+		end
+		p.Kind = "Yarn"
+		p.Visual = visualByte(spec.Visual or 60, w)
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = origin
+		p.Vel = Vector3.zero
+		p.Life = fuse + (i - 1) * 0.1
+		p.Damage = s.damage
+		p.Pierce = 999
+		p.Radius = 0
+		p.Knockback = s.knockback
+		p.Yaw = yawOf(flatDir(at - origin, rp.Facing))
+		p.X = { From = origin, To = at, R = radius, Rank = true, Max = spec.MaxTargets, Own = Rk.own(rp, def), Frag = evo and evo.Fragments or nil, Mult = s.mult }
+		pushFx("mt", { r1(at.X), r1(at.Z), r1(radius), r1(fuse), evo and 1 or 0 })
+	end
+	Fx.Sound("Hit")
+end
+
+function Rk.landYarn(p: Projectile, x: any)
+	local owner = p.Owner
+	local at = x.To
+	local now = Rk.now()
+	local kits = ctx.ClassKits
+	local tangle = (x.Own and kits) and function(e)
+		kits.OnYarnHit(owner, e, now)
+	end or nil
+	Rk.burst(owner, at, x.R, p.Damage, nil, x.Max, true, tangle)
+	Fx.Explosion(at, x.R)
+	local f = x.Frag
+	if f then
+		local base = rng:NextNumber() * TAU
+		for i = 1, f.Count do
+			if not Rk.tryEmit(owner) then
+				break
+			end
+			local q = allocProjectile()
+			if not q then
+				break
+			end
+			local a = base + (i - 1) * TAU / f.Count
+			local d = Vector3.new(math.cos(a), 0, math.sin(a))
+			q.Kind = "Straight"
+			q.Visual = p.Visual
+			q.Owner = owner
+			q.Weapon = p.Weapon
+			q.Pos = at + d
+			q.Ground = at.Y
+			q.Y = at.Y + Config.Projectiles.Height
+			q.Vel = d * f.Speed
+			q.Damage = BuildRules.B() * f.Coeff * x.Mult
+			q.Pierce = 1
+			q.Radius = 0.8
+			q.Life = f.Range / f.Speed
+			q.Knockback = 2
+			q.Yaw = yawOf(d)
+			q.NoProc = true -- a fragment: secondary, no procs, never another fragment
+			q.Terrain = true
+		end
+	end
+	Fx.Sound("Hit")
+end
+
+--[[
+	RANK ORB (Magic Orb): Amount orbs circling the hero (OrbitRadius x area, RevPerSecond turns per
+	second), each hitting an enemy at most once per interval (its own contact ledger, p.Hits).
+	The Ward Shields orbit (Arm.stepWard) without Bulwark.
+]]
+function Fire.RankOrb(rp, w, s, _def)
+	local spec = s.spec
+	local list = Arm.liveList(w)
+	for i = #list, s.amount + 1, -1 do
+		list[i].Cancelled = true
+		table.remove(list, i)
+	end
+	local base = list[1] and list[1].Angle or 0
+	for _ = #list + 1, s.amount do
+		local p = allocProjectile()
+		if not p then
+			break
+		end
+		p.Kind = "Ward"
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = ground(rp.Root.Position)
+		p.Vel = Vector3.zero
+		p.Life = math.huge
+		p.Pierce = 999
+		p.X = {}
+		w.Live[p] = true
+		table.insert(list, p)
+	end
+	local orbit = spec.OrbitRadius * s.area
+	local spin = TAU * spec.RevPerSecond
+	for i, p in ipairs(list) do
+		p.Visual = visualByte(spec.Visual or 1, w)
+		p.Angle = base + (i - 1) * TAU / #list
+		p.Damage = s.damage
+		p.Radius = (spec.Radius or 1.2) * s.area
+		p.Rehit = s.cooldown
+		p.Knockback = s.knockback
+		p.X.Orbit = orbit
+		p.X.Spin = spin
+		p.X.Reflect = false
+		p.X.ReflectRadius = 0
+		wards[p] = nil
+		Arm.orbitFx(p, orbit, 0, spin, p.Angle)
+	end
+end
+
+--[[
+	RANK VORTEX (Vortex): a rift at the densest visible spot within Range (the existing rift look),
+	VortexRadius x area, lasting Duration s: Coeff pulses every Tick s (fixed, not attack speed) on
+	at most MaxTargets enemies it can see, each once per pulse; ordinary enemies (not elites or
+	bosses) drift inward at Pull studs/s. One rift per owner: a new one closes the old.
+]]
+function Fire.RankVortex(rp, w, s, _def)
+	local spec = s.spec
+	local origin = ground(rp.Root.Position)
+	local radius = spec.VortexRadius * s.area
+	local t = Arm.densest(origin, spec.Range, 10, radius * 1.5)
+	if not t then
+		w.Timer = math.min(w.Timer, 0.4)
+		return
+	end
+	for q in pairs(w.Live) do
+		if q.Active and q.Kind == "Vortex" then
+			q.Cancelled = true
+		end
+	end
+	local at = ground(t.Pos)
+	local p = allocProjectile()
+	if not p then
+		return
+	end
+	p.Kind = "Vortex"
+	p.Visual = visualByte(spec.Visual or 55, w)
+	p.Owner = rp
+	p.Weapon = w
+	p.Pos = at
+	p.Ground = HeightGrid.GroundY(at.X, at.Z)
+	p.Y = p.Ground + 0.15
+	p.Vel = Vector3.zero
+	p.Damage = s.damage
+	p.Pierce = 999
+	p.Radius = 0
+	p.Life = s.duration
+	p.Knockback = 0
+	p.X = { R = radius, Tick = spec.Tick, T = 0.1, Pull = spec.Pull, Max = spec.MaxTargets, Rank = true, Evo = 0 }
+	w.Live[p] = true
+	pushFx("vx", { r1(at.X), r1(at.Z), r1(radius), r1(s.duration), 0 })
+end
+
+function Rk.stepVortex(p: Projectile, dt: number, _now: number): boolean
+	local owner = p.Owner
+	if not owner.Alive then
+		return true
+	end
+	local x = p.X
+	local c = p.Pos
+	p.Yaw += dt * 4
+	local n = grid():QueryCircle(c.X, c.Z, x.R, queryBuf)
+	local list = table.move(queryBuf, 1, n, 1, {})
+	-- the inward pull: ordinary enemies only (velocity floor along the inward direction)
+	for _, e in ipairs(list) do
+		if e.Alive and not e.Boss and not e.Elite and e.Knock then
+			local rel = (c - e.Pos) * FLAT
+			local d = rel.Magnitude
+			if d > 0.8 then
+				local inward = rel / d
+				local along = e.Knock:Dot(inward)
+				if along < x.Pull then
+					e.Knock += inward * (x.Pull - along)
+				end
+			end
+		end
+	end
+	x.T -= dt
+	if x.T > 0 then
+		return false
+	end
+	x.T = x.Tick
+	Rk.burst(owner, c, x.R, p.Damage, nil, x.Max, true)
+	return false
+end
+
+-- Per frame (WeaponSystem.Step): forget cast ledgers older than 10 s.
+function Rk.step(_dt: number, now: number)
+	if now < Rk.cleanAt and Rk.cleanAt - now < 5 then
+		return
+	end
+	Rk.cleanAt = now + 2
+	for id, c in pairs(Rk.casts) do
+		if now - c.At > 10 or c.At > now + 1 then
+			Rk.casts[id] = nil
+		end
+	end
+end
+
+-- (tests) the secondary budget and the projectile counts by kind.
+WeaponSystem._Rank = Rk
+
 -- Kind → step function for the armoury batch (true = remove the projectile).
 Arm.Step = {
 	Ward = Arm.stepWard,
@@ -3021,6 +4118,7 @@ Arm.Step = {
 	Vortex = Arm.stepVortex,
 	Yarn = Class.stepYarn,
 	Can = Class.stepCan,
+	RBubble = Rk.stepBubble, -- [stream B] Bubble Bomb (rank system)
 }
 
 -- A projectile of the batch reached its Life: true = it keeps going (a saw's rebound).
@@ -3042,6 +4140,8 @@ function Arm.expire(p: Projectile): boolean
 		Class.landYarn(p)
 	elseif kind == "Can" then
 		Class.popCan(p)
+	elseif kind == "RBubble" then
+		Rk.popBubble(p)
 	end
 	return false
 end
@@ -3264,6 +4364,9 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 		p.Yaw += dt * 15
 	end
 
+	if p.Terrain and Rk.terrainBlocked(p) then
+		return true -- [stream B] a cliff ends a rank shot (no attacks through terrain)
+	end
 	if outOfArena(p.Pos) and kind ~= "Orbit" and kind ~= "Boomerang" then
 		return true
 	end
@@ -3528,7 +4631,7 @@ function WeaponSystem.Step(dt: number)
 						w.Timer = s.cooldown - math.min(-w.Timer, s.cooldown)
 						-- Spare Quiver (per weapon); turrets / totems never pass their cap
 						s.amount = WeaponData.CapAmount(id, s.amount + ctx.ItemSystem.ExtraShot(rp, w))
-						local fn = Fire[def.Behavior]
+						local fn = Fire[WeaponData.BehaviorOf(id)] -- [stream B] rank behaviours while ranked
 						killSource = w
 						if fn then
 							fn(rp, w, s, def)
@@ -3555,6 +4658,8 @@ function WeaponSystem.Step(dt: number)
 		-- 3) pools, Fire Trail patches and ignites
 		stepZones(dt)
 		stepPatches(dt, now)
+		-- 4) [stream B] rank system: vortex pulls, old cast ledgers
+		Rk.step(dt, now)
 		killSource = nil
 		useGround(nil)
 	end

@@ -775,6 +775,9 @@ function EnemyAI.Step(dt: number)
 		if e.SlowUntil and e.SlowUntil > now then
 			speed *= e.SlowMult or 1 -- Chilling Aura (Garlic perk, WeaponSystem)
 		end
+		if e.StaggerUntil and e.StaggerUntil > now then
+			speed = 0 -- [stream B] a weapon stagger (WeaponSystem.Stagger); knockback still moves it
+		end
 		-- a War Banner's rally (BossData WarBanner): faster beetles, harder contact hits
 		local rallied = e.RallyUntil ~= nil and e.RallyUntil > clock
 		if rallied ~= (e.Rallied == true) then

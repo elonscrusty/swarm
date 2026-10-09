@@ -156,7 +156,8 @@ function RunManager.RefreshFrozen()
 	local ids, names = {}, {}
 	local rewardIds, rewardNames = {}, {}
 	for _, rp in ipairs(runPlayers) do
-		if rp.Offer and rp.Alive and not rp.Returned then
+		-- (a live team-run choice, rp.LiveChoice, never freezes anything: [stream B] LevelUpSystem)
+		if rp.Offer and rp.Alive and not rp.Returned and not rp.LiveChoice then
 			choosing = true
 			table.insert(ids, tostring(rp.Player.UserId))
 			table.insert(names, rp.Player.DisplayName)

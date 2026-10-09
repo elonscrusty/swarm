@@ -21,13 +21,19 @@
 	  sheet = { Might, Armor, MaxHP, Speed, CooldownMult, AreaMult, Amount, Pierce,
 	            PickupRadius, Luck, ProjSpeedMult, DurationMult, Growth, DamageTaken, Regen,
 	            CritChance, CritDamage, GoldMult, EliteDamage, Thorns, CritHeal, WardSeconds,
-	            KillRush, LevelHeal, BurnChance, LowHpMight, StillHeal }
+	            KillRush, LevelHeal, BurnChance, LowHpMight, StillHeal,
+	            FallDamageMult, LandLockReduce, SplinterChance,
+	            -- RunConfig.Builds.Enabled only ([stream B], BuildRules):
+	            Ranked = 1, DamageBonus, AttackSpeed, ArmorMult }
 
 	StatSheet.Lines(before, after) → { {Key, Label, From, To} } the stats that differ, in
 	plain words with display values (used by passive level-up cards).
 ]]
 
 local Config = require(script.Parent.Config)
+local SwarmRun = script.Parent.Parent:WaitForChild("SwarmV2"):WaitForChild("Run")
+local BuildRules = require(SwarmRun:WaitForChild("BuildRules"))
+local RunConfig = require(SwarmRun:WaitForChild("RunConfig"))
 local CharacterData = require(script.Parent.CharacterData)
 local MetaUpgradeData = require(script.Parent.MetaUpgradeData)
 local PassiveData = require(script.Parent.PassiveData)
@@ -38,7 +44,9 @@ local StatSheet = {}
 
 local BONUS_KEYS = { "might", "armor", "maxHpMult", "maxHpFlat", "speed", "cooldown", "area", "amount", "pierce", "pickup", "luck", "projSpeed", "duration", "growth", "damageTaken",
 	-- behaviour passives (PassiveData; read by ItemSystem)
-	"eliteDamage", "thorns", "critHeal", "ward", "killRush", "levelHeal", "burnChance", "lowHpMight", "stillHeal" }
+	"eliteDamage", "thorns", "critHeal", "ward", "killRush", "levelHeal", "burnChance", "lowHpMight", "stillHeal",
+	-- [stream B] loot passives: flat pickup studs, Spring Stitch, Splinter Badge
+	"pickupFlat", "fallReduce", "landLock", "splinter" }
 for _, k in ipairs(ItemData.StatKeys) do
 	if not table.find(BONUS_KEYS, k) then
 		table.insert(BONUS_KEYS, k) -- attackSpeed, regen, critChance, critDamage, goldGain
@@ -159,7 +167,31 @@ function StatSheet.Compute(input: Input): { [string]: number }
 		BurnChance = math.clamp(b.burnChance, 0, PassiveData.Tuning.MaxBurnChance),
 		LowHpMight = 1 + b.lowHpMight, -- damage multiplier while badly hurt (Lionheart)
 		StillHeal = math.max(0, b.stillHeal), -- share of max HP per second standing still
+		-- [stream B] loot passives (both systems): Collector's Bell, Spring Stitch, Splinter Badge
+		FallDamageMult = math.clamp(1 - b.fallReduce, 0, 1), -- E1's fall damage x this
+		LandLockReduce = math.max(0, b.landLock), -- seconds off the post-landing jump restriction
+		SplinterChance = math.clamp(b.splinter, 0, 1),
 	}
+	sheet.PickupRadius += math.max(0, b.pickupFlat)
+	--[[
+		[stream B] The continuation pack's rules (RunConfig.Builds.Enabled; BuildRules): the additive
+		damage bonus is clamped 0..2 (Might = 1 + bonus), attack speed 0..1 divides every interval
+		(CooldownMult = 1 / (1 + attack speed); the old Cooldown key no longer counts), crits start at
+		5 % (a class may set CritBase, e.g. 0), are capped at 50 % and deal x1.75. ArmorMult is the
+		A / (100 + A) reduction of this sheet's Armor (A clamped 0..100) for whoever applies armor.
+	]]
+	if BuildRules.On() then
+		local Combat: any = RunConfig.Combat
+		sheet.Ranked = 1
+		sheet.DamageBonus = BuildRules.DamageBonus(b.might)
+		sheet.Might = 1 + sheet.DamageBonus
+		sheet.AttackSpeed = BuildRules.AttackSpeed(b.attackSpeed)
+		sheet.CooldownMult = 1 / (1 + sheet.AttackSpeed)
+		local critBase = character and (character :: any).CritBase
+		sheet.CritChance = BuildRules.CritChance(b.critChance, type(critBase) == "number" and critBase or nil)
+		sheet.CritDamage = Combat.CritMult
+		sheet.ArmorMult = BuildRules.ArmorMult(sheet.Armor)
+	end
 	-- curses multiply the finished sheet (Fragile, Glass Cannon); the stage modifier's stat
 	-- effects ride on the same table (RunModifiers.StatMults: Speed, CooldownMult, GoldMult)
 	sheet.MaxHP = math.max(1, math.floor(sheet.MaxHP * (curse.MaxHP or 1) + 0.5))
@@ -265,6 +297,36 @@ local LINES = {
 			return math.floor(v * 100 + 0.5) .. "%"
 		end,
 	},
+	-- [stream B] loot passive stats
+	{
+		Key = "AttackSpeed",
+		Label = "Attack speed",
+		Fmt = function(v: number): string
+			return "+" .. math.floor(v * 100 + 0.5) .. "%"
+		end,
+	},
+	{
+		Key = "FallDamageMult",
+		Label = "Fall damage",
+		Fmt = function(v: number): string
+			local r = math.floor((1 - v) * 100 + 0.5)
+			return r > 0 and ("-" .. r .. "%") or "0%"
+		end,
+	},
+	{
+		Key = "LandLockReduce",
+		Label = "Jump delay after landing",
+		Fmt = function(v: number): string
+			return v > 0 and string.format("-%.2f s", v) or "0 s"
+		end,
+	},
+	{
+		Key = "SplinterChance",
+		Label = "Splinter chance",
+		Fmt = function(v: number): string
+			return math.floor(v * 100 + 0.5) .. "%"
+		end,
+	},
 	{
 		Key = "Regen",
 		Label = "HP regen",
@@ -345,7 +407,9 @@ function StatSheet.Lines(before: { [string]: number }, after: { [string]: number
 	local out = {}
 	for _, l in ipairs(LINES) do
 		local a, b = before[l.Key], after[l.Key]
-		if a and b and math.abs(a - b) > 1e-6 then
+		-- ranked sheets show attack speed instead of the derived cooldown multiplier
+		local skip = l.Key == "CooldownMult" and after.Ranked ~= nil
+		if a and b and not skip and math.abs(a - b) > 1e-6 then
 			local from, to = l.Fmt(a), l.Fmt(b)
 			if from ~= to then
 				table.insert(out, { Key = l.Key, Label = l.Label, From = from, To = to })

@@ -1,7 +1,9 @@
 --[[
 	PassiveData.lua
-	25 passive items, 3-5 levels each (PassiveData.MaxLevelOf). `Values[level]` is the TOTAL bonus at that level
-	(not the increment), so stat calculation is a single lookup.
+	26 old passive items, 3-5 levels each (PassiveData.MaxLevelOf), plus the continuation pack's 8 loot
+	passives with 5 ranks (PassiveData.LootOrder; the only ones offered while RunConfig.Builds.Enabled).
+	`Values[level]` is the TOTAL bonus at that level (not the increment), so stat calculation is a
+	single lookup.
 
 	Stat keys (summed into the player's stat sheet by LevelUpSystem.RecomputeStats):
 	  might          +damage multiplier (0.1 = +10%)
@@ -71,6 +73,20 @@ PassiveData.Order = {
 
 -- Held for a later update: ids built and tested but kept out of Order (none right now).
 PassiveData.HeldOrder = {} :: { string }
+
+-- [stream B] The continuation pack's eight loot passives (5 ranks each; Values[n] = the TOTAL at
+-- rank n). They are the only passives offered while RunConfig.Builds.Enabled (LevelUpSystem); the
+-- old passives above stay as data (and in Order for the old 12-level system).
+PassiveData.LootOrder = {
+	"PocketDynamo",
+	"RatchetTimer",
+	"TrailSneakers",
+	"PatchworkPadding",
+	"CollectorsBell",
+	"LuckyButton",
+	"SpringStitch",
+	"SplinterBadge",
+} :: { string }
 
 
 -- Behaviour numbers of the passives that hook into ItemSystem (not stat bumps).
@@ -296,6 +312,132 @@ PassiveData.Passives = {
 			{ regen = 2.0 },
 		},
 	},
+	------------------------------------------------------------------------------------------
+	-- [stream B] Loot passives (continuation brief "Eight original loot passives"). n = rank.
+	------------------------------------------------------------------------------------------
+	-- +10% n damage (additive damage bonus, clamped 0..200% with every other bonus)
+	PocketDynamo = {
+		Id = "PocketDynamo",
+		Name = "Pocket Dynamo",
+		Color = Color3.fromRGB(240, 190, 60),
+		Description = "+10% weapon damage per rank.",
+		Benefit = { might = "deal {n} more weapon damage" },
+		Values = {
+			{ might = 0.10 },
+			{ might = 0.20 },
+			{ might = 0.30 },
+			{ might = 0.40 },
+			{ might = 0.50 },
+		},
+	},
+	-- +8% n attack speed (divides every weapon interval; clamped 0..100%)
+	RatchetTimer = {
+		Id = "RatchetTimer",
+		Name = "Ratchet Timer",
+		Color = Color3.fromRGB(120, 200, 230),
+		Description = "+8% attack speed per rank.",
+		Benefit = { attackSpeed = "weapons attack {n} faster" },
+		Values = {
+			{ attackSpeed = 0.08 },
+			{ attackSpeed = 0.16 },
+			{ attackSpeed = 0.24 },
+			{ attackSpeed = 0.32 },
+			{ attackSpeed = 0.40 },
+		},
+	},
+	-- +4% n movement speed
+	TrailSneakers = {
+		Id = "TrailSneakers",
+		Name = "Trail Sneakers",
+		Color = Color3.fromRGB(110, 210, 140),
+		Description = "+4% move speed per rank.",
+		Benefit = { speed = "move {n} faster" },
+		Values = {
+			{ speed = 0.04 },
+			{ speed = 0.08 },
+			{ speed = 0.12 },
+			{ speed = 0.16 },
+			{ speed = 0.20 },
+		},
+	},
+	-- +8% n maximum HP (a rise keeps the current HP fraction: LevelUpSystem.RecomputeStats)
+	PatchworkPadding = {
+		Id = "PatchworkPadding",
+		Name = "Patchwork Padding",
+		Color = Color3.fromRGB(230, 120, 140),
+		Description = "+8% max HP per rank.",
+		Benefit = { maxHpMult = "gain {n} more max HP" },
+		Values = {
+			{ maxHpMult = 0.08 },
+			{ maxHpMult = 0.16 },
+			{ maxHpMult = 0.24 },
+			{ maxHpMult = 0.32 },
+			{ maxHpMult = 0.40 },
+		},
+	},
+	-- +1.5 n studs pickup radius (your own shards only; never a teammate's)
+	CollectorsBell = {
+		Id = "CollectorsBell",
+		Name = "Collector's Bell",
+		Color = Color3.fromRGB(250, 220, 110),
+		Description = "+1.5 studs pickup radius per rank.",
+		Benefit = { pickupFlat = "pick up your shards from {n} studs farther" },
+		Values = {
+			{ pickupFlat = 1.5 },
+			{ pickupFlat = 3.0 },
+			{ pickupFlat = 4.5 },
+			{ pickupFlat = 6.0 },
+			{ pickupFlat = 7.5 },
+		},
+	},
+	-- +3 n percentage points critical chance (base 5 %, total at most 50 %; crits deal x1.75)
+	LuckyButton = {
+		Id = "LuckyButton",
+		Name = "Lucky Button",
+		Color = Color3.fromRGB(150, 230, 90),
+		Description = "+3% crit chance per rank.",
+		Benefit = { critChance = "gain {n} crit chance" },
+		Values = {
+			{ critChance = 0.03 },
+			{ critChance = 0.06 },
+			{ critChance = 0.09 },
+			{ critChance = 0.12 },
+			{ critChance = 0.15 },
+		},
+	},
+	-- -8% n fall damage and -0.01 n s post-landing jump restriction (from 0.12 s); never a higher
+	-- jump (stream E1 reads Stats.FallDamageMult / Stats.LandLock)
+	SpringStitch = {
+		Id = "SpringStitch",
+		Name = "Spring Stitch",
+		Color = Color3.fromRGB(200, 160, 240),
+		Description = "-8% fall damage and quicker jumps after landing per rank.",
+		Benefit = { fallReduce = "take {n} less fall damage", landLock = "jump again {n} s sooner after landing" },
+		Values = {
+			{ fallReduce = 0.08, landLock = 0.01 },
+			{ fallReduce = 0.16, landLock = 0.02 },
+			{ fallReduce = 0.24, landLock = 0.03 },
+			{ fallReduce = 0.32, landLock = 0.04 },
+			{ fallReduce = 0.40, landLock = 0.05 },
+		},
+	},
+	-- direct hits have a 4% n chance to emit two 0.15 B splinters at different visible enemies
+	-- within 8 studs (secondary: no procs, no chains; WeaponSystem)
+	SplinterBadge = {
+		Id = "SplinterBadge",
+		Name = "Splinter Badge",
+		Color = Color3.fromRGB(190, 140, 90),
+		Description = "Direct hits may throw two splinters (4% per rank).",
+		BenefitNew = { splinter = "direct hits have a {n} chance to throw two splinters" },
+		Benefit = { splinter = "direct hits have {n} more chance to throw two splinters" },
+		Values = {
+			{ splinter = 0.04 },
+			{ splinter = 0.08 },
+			{ splinter = 0.12 },
+			{ splinter = 0.16 },
+			{ splinter = 0.20 },
+		},
+	},
 	-- Damage against the big ones: elites (any affix) and bosses.
 	GiantsBane = {
 		Id = "GiantsBane",
@@ -473,6 +615,15 @@ PassiveData.Roles = {
 	GildedPurse = "Growth",
 	SpeedBoots = "Utility",
 	Vacuum = "Utility",
+	-- [stream B] loot passives
+	PocketDynamo = "Damage",
+	RatchetTimer = "Damage",
+	LuckyButton = "Damage",
+	SplinterBadge = "Damage",
+	PatchworkPadding = "Defense",
+	SpringStitch = "Defense",
+	TrailSneakers = "Utility",
+	CollectorsBell = "Utility",
 	Candle = "Utility",
 	Windstep = "Utility",
 }
@@ -499,7 +650,7 @@ local PCT_KEYS = {
 	might = true, maxHpMult = true, speed = true, cooldown = true, area = true, pickup = true, luck = true,
 	projSpeed = true, duration = true, growth = true, critChance = true, eliteDamage = true, thorns = true,
 	killRush = true, goldGain = true, damageTaken = true, levelHeal = true, burnChance = true,
-	lowHpMight = true, stillHeal = true,
+	lowHpMight = true, stillHeal = true, attackSpeed = true, fallReduce = true, splinter = true,
 }
 local COUNT_KEYS = { amount = true, pierce = true }
 local WORDS = { "one", "two", "three", "four", "five" }
@@ -507,6 +658,7 @@ local KEY_ORDER = {
 	"might", "armor", "maxHpMult", "speed", "cooldown", "area", "amount", "pickup", "luck", "projSpeed",
 	"duration", "growth", "pierce", "critChance", "regen", "eliteDamage", "thorns", "critHeal", "ward",
 	"killRush", "goldGain", "damageTaken", "levelHeal", "burnChance", "lowHpMight", "stillHeal",
+	"attackSpeed", "pickupFlat", "fallReduce", "landLock", "splinter",
 }
 
 local function trimNum(v: number): string
