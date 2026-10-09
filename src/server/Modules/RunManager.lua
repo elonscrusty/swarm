@@ -1361,6 +1361,9 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 		rp.CommitInfo = {}
 		return false, nil
 	end
+	-- [stream E2] class-goal progress (DECISIONS C3): this run's confirmed counters into
+	-- data.Stats.ClassGoals, once (deltas per run record; ClassGoals.lua)
+	local goalsAdded = ctx.ClassGoals and ctx.ClassGoals.Commit(rp, data, t) or nil
 	-- the first run's one-time welcome bonus (Config.FirstRun.BonusGold; save flag)
 	if rp.FirstRun and data.FirstRunBonus ~= true then
 		data.FirstRunBonus = true
@@ -1443,7 +1446,11 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	end
 	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Mastery = masteryInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0,
 		-- beat the saved personal best score of this board (not on the first scored run)
-		NewBestScore = score > scoreBefore and scoreBefore > 0, Meta = metaInfo }
+		NewBestScore = score > scoreBefore and scoreBefore > 0, Meta = metaInfo,
+		-- [stream E2] goal progress added by this run, then the lobby's grant of classes whose
+		-- goal is now met (ClassOwnership.RefreshEarned; nil while that does not exist)
+		ClassGoals = goalsAdded,
+		NewUnlocks = ctx.ClassGoals and ctx.ClassGoals.RefreshEarned(rp.Player) or nil }
 	return newBest, unlocked
 end
 
@@ -1532,7 +1539,20 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 			Difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard",
 			DeathCause = not portal and not rp.Abandoned and not rp.Alive and rp.DeathCause or nil,
 		}
-		task.spawn(ctx.DataService.ForceSave, player)
+		-- [stream E2] the settlement save, reported honestly: player attribute "RunSaveState"
+		-- = "Pending" until DataService confirms it, then "Saved" / "Failed"; "NotSaved" when
+		-- DataStores are unavailable (memory mode writes nothing)
+		if ctx.DataService.IsMemoryOnly() then
+			player:SetAttribute("RunSaveState", "NotSaved")
+		else
+			player:SetAttribute("RunSaveState", "Pending")
+			task.spawn(function()
+				local saved = ctx.DataService.ForceSave(player)
+				if player.Parent then
+					player:SetAttribute("RunSaveState", saved and "Saved" or "Failed")
+				end
+			end)
+		end
 	end
 	if not player.Parent then
 		return
@@ -1588,6 +1608,12 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		NextGoal = firstGoal or data and not rp.DevTainted and NextGoal.Pick(data, { Hero = rp.CharacterId, RunGold = rp.GoldSettlement and (rp.GoldSettlement.Retained + (rp.GoldSettlement.Survival or 0)) or 0 }) or nil,
 		Seconds = Config.Run.ResultsSeconds,
 		InLobby = inLobby,
+		-- [stream E2] classes this run unlocked (lobby ClassOwnership.RefreshEarned; nil = none
+		-- reported), the goal progress it added, and the save state at this moment (the
+		-- player attribute RunSaveState follows: Pending -> Saved / Failed, or NotSaved)
+		NewUnlocks = info and info.NewUnlocks or nil,
+		ClassGoals = info and info.ClassGoals or nil,
+		SaveState = player:GetAttribute("RunSaveState"),
 	})
 end
 
@@ -2508,6 +2534,9 @@ function RunManager.OnPlayerRemoving(player: Player)
 			data.Stats.BestTime = math.max(data.Stats.BestTime or 0, math.floor(runTime))
 			data.Stats.BestStage = math.max(data.Stats.BestStage or 0, ctx.StageManager.GetStage())
 			data.Stats.BestLevel = math.max(data.Stats.BestLevel or 0, rp.Level)
+			if ctx.ClassGoals then
+				ctx.ClassGoals.Commit(rp, data, runTime) -- [stream E2] goal progress so far (deltas: the final settlement adds only the rest)
+			end
 		end
 		local snapshot = table.clone(rp)
 		snapshot.Root, snapshot.Character, snapshot.Humanoid = nil, nil, nil

@@ -2715,6 +2715,13 @@ local gemFx: { [BasePart]: GemFx } = {}
 local spareKits: { GemKit } = {}
 K.kitsInUse = 0
 K.gemFly = {} :: { [BasePart]: { Id: number, Pos: Vector3, Speed: number } } -- flights in progress
+-- [stream E2] personal shards about to expire: server time they vanish (attribute "Fade");
+-- they blink faster and shrink over RunConfig.Economy.XP.FadeSeconds
+K.gemFade = {} :: { [BasePart]: number }
+do
+	local rc = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig")) :: any
+	K.GEM_FADE_SECONDS = (rc.Economy and rc.Economy.XP and rc.Economy.XP.FadeSeconds) or 5
+end
 
 -- Gem kind from the server cube size (Config.XP.GemSize).
 local function gemKindOf(part: BasePart): string
@@ -2884,6 +2891,21 @@ local function trackGem(gem: Instance)
 		local active = part:GetAttribute("Active") == true
 		local base = part:GetAttribute("Base")
 		local fly = part:GetAttribute("Fly")
+		-- [stream E2] a personal XP shard (attribute Owner = UserId) exists only for its owner:
+		-- everyone else never draws it (hidden, no pop, no sound)
+		local owner = part:GetAttribute("Owner")
+		if active and type(owner) == "number" and owner ~= player.UserId then
+			gemState[part] = nil
+			K.gemFly[part] = nil
+			K.gemFade[part] = nil
+			parkGem(part)
+			if part.LocalTransparencyModifier ~= 1 then
+				part.LocalTransparencyModifier = 1
+			end
+			return
+		end
+		local fade = part:GetAttribute("Fade")
+		K.gemFade[part] = (active and type(fade) == "number") and fade or nil
 		if active and typeof(base) == "Vector3" then
 			local flight = K.gemFly[part]
 			if type(fly) == "number" then
@@ -2930,6 +2952,8 @@ local function trackGem(gem: Instance)
 	part:GetAttributeChangedSignal("Active"):Connect(refresh)
 	part:GetAttributeChangedSignal("Base"):Connect(refresh)
 	part:GetAttributeChangedSignal("Fly"):Connect(refresh)
+	part:GetAttributeChangedSignal("Owner"):Connect(refresh) -- [stream E2] personal shards
+	part:GetAttributeChangedSignal("Fade"):Connect(refresh)
 	refresh()
 end
 
@@ -2972,9 +2996,18 @@ local function renderGems(dt: number)
 		rx, rz = root.Position.X, root.Position.Z
 	end
 	local glints = 0
+	local serverNow = next(K.gemFade) ~= nil and workspace:GetServerTimeNow() or 0
 	for part, base in pairs(gemState) do
 		local g = gemFxFor(part)
 		local kind = gemKindOf(part)
+		-- [stream E2] an expiring personal shard shrinks and blinks, faster at the end
+		local fadeScale, blinkOff = 1, false
+		local fadeAt = K.gemFade[part]
+		if fadeAt then
+			local left = fadeAt - serverNow
+			fadeScale = 0.55 + 0.45 * math.clamp(left / K.GEM_FADE_SECONDS, 0, 1)
+			blinkOff = math.floor(math.max(0, left) * (left < 2 and 8 or 4)) % 2 == 1
+		end
 		if g.Kind ~= kind then
 			if g.Kind ~= "" then
 				g.Pulse = gemClock -- merged into a bigger gem: a small swell
@@ -3006,7 +3039,7 @@ local function renderGems(dt: number)
 				styleKit(kit, kind)
 			end
 			local dim = K.GEM_DIM[kind]
-			local pop = 1 + 0.35 * math.max(0, 1 - (gemClock - g.Pulse) / 0.3)
+			local pop = (1 + 0.35 * math.max(0, 1 - (gemClock - g.Pulse) / 0.3)) * fadeScale * (blinkOff and 0.7 or 1)
 			if pop == 1 and kit.Scaled then
 				kit.Scaled = false
 				styleKit(kit, kind)
@@ -3038,8 +3071,9 @@ local function renderGems(dt: number)
 		else
 			-- far away: the server cube stood on its corner, glassy in the gem colour
 			local color: Color3 = FX.Gem[kind] or FX.Arcane
-			if part.LocalTransparencyModifier ~= 0.1 then
-				part.LocalTransparencyModifier = 0.1
+			local ltm = blinkOff and 0.65 or 0.1 -- [stream E2] an expiring shard blinks
+			if part.LocalTransparencyModifier ~= ltm then
+				part.LocalTransparencyModifier = ltm
 			end
 			if part.Color ~= color then
 				part.Color = color

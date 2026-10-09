@@ -3,6 +3,9 @@
 -- gem count before / after merging and whether every point of XP reached the hero. Also
 -- checks the pool-exhausted path. Run it with --studio:
 --   render.sh xp-sim --studio --devices pc
+-- Redesign economy (RunConfig.Economy on): an unowned drop becomes the hero's personal shard
+-- (XPSystem.Award, within ShareRadius 120 studs), collected through GiveShardXP; the drops stay
+-- inside that radius and both grant paths are counted.
 local C = lib("common")
 local Players = game:GetService("Players")
 preview.forceMeshesUploaded()
@@ -26,6 +29,14 @@ XP.GiveSharedXP = function(amount)
 	given += amount
 	return orig(amount)
 end
+local origShard = XP.GiveShardXP -- the personal shard path (redesign economy)
+if origShard then
+	XP.GiveShardXP = function(who, amount)
+		given += amount
+		return origShard(who, amount)
+	end
+end
+local poolSize = #workspace:WaitForChild("SwarmGems"):GetChildren()
 local gemsFolder = workspace:WaitForChild("SwarmGems")
 local function active()
 	local n = 0
@@ -46,21 +57,21 @@ local function drop(x, z, v)
 end
 -- 300 small gems in 6 piles of 50 within 1.5 studs, 120 mixed gems spread over the arena
 for p = 1, 6 do
-	local cx, cz = origin.X + rng:NextNumber(-60, 60), origin.Z + rng:NextNumber(-60, 60)
+	local cx, cz = origin.X + rng:NextNumber(-60, 60), origin.Z + rng:NextNumber(-60, 60) -- (inside the 120-stud share radius)
 	for _ = 1, 50 do
 		drop(cx + rng:NextNumber(-1.5, 1.5), cz + rng:NextNumber(-1.5, 1.5), Config.XP.GemValues.Small)
 	end
 end
 for _ = 1, 120 do
 	local r = rng:NextInteger(1, 10)
-	drop(origin.X + rng:NextNumber(-90, 90), origin.Z + rng:NextNumber(-90, 90), r == 10 and Config.XP.GemValues.Large or (r > 6 and Config.XP.GemValues.Medium or Config.XP.GemValues.Small))
+	drop(origin.X + rng:NextNumber(-80, 80), origin.Z + rng:NextNumber(-80, 80), r == 10 and Config.XP.GemValues.Large or (r > 6 and Config.XP.GemValues.Medium or Config.XP.GemValues.Small))
 end
 preview.log(string.format("dropped %d gems worth %d XP -> %d gem parts active", spawned, total, active()))
 -- 600 more tight ones than the pool holds
 for _ = 1, 700 do
-	drop(origin.X + rng:NextNumber(-100, 100), origin.Z + rng:NextNumber(-100, 100), 1)
+	drop(origin.X + rng:NextNumber(-80, 80), origin.Z + rng:NextNumber(-80, 80), 1)
 end
-preview.log(string.format("after the pool test: %d gems dropped, %d XP in all, %d gem parts active (pool %d)", spawned, total, active(), Config.XP.GemPoolSize))
+preview.log(string.format("after the pool test: %d gems dropped, %d XP in all, %d gem parts active (pool %d)", spawned, total, active(), poolSize))
 XP.MagnetAll(rp)
 for _ = 1, 60 do
 	preview.advance(0.5)

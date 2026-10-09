@@ -12,6 +12,7 @@
 --      nothing is granted again
 --   F  leaving the run with a card up: the card goes, the history clears, items stay
 -- Lune sim, NOT Studio. Prints PASS/FAIL lines; any FAIL fails tools/run_regressions.py.
+-- (Redesign economy: chests paid from the team run gold, kept on the item reward here.)
 local Players = game:GetService("Players")
 preview.forceMeshesUploaded()
 preview.startServer()
@@ -81,6 +82,22 @@ if not rp then
 end
 rp.InvulnUntil = math.huge
 Gold.AddRunGold(rp, 100000)
+-- Redesign economy (stream E2): chests are bought with the team run gold, and once stream B's
+-- LevelUpSystem.QueueChoice exists they hold a passive choice instead of an item. This scene
+-- checks the item reward pipeline (still used by shrines, the altar, the caravan, the
+-- merchant), so it keeps chests on the item reward and pays them from the team balance.
+local RunConfig = preview.require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig)
+local hideItems = RunConfig.Economy and RunConfig.Economy.Chests and RunConfig.Economy.Chests.HideItems
+if hideItems ~= nil then
+	RunConfig.Economy.Chests.HideItems = false
+end
+if Gold.AddTeamGold then
+	Gold.AddTeamGold(100000)
+end
+-- chests charged: escrow gold spent (old) or team purchases (redesign)
+local function charged(): number
+	return (rp.GoldSpent or 0) + (Gold.ChestsBought and Gold.ChestsBought() or 0)
+end
 
 local function gui(name: string): GuiObject?
 	local pg = me:FindFirstChild("PlayerGui")
@@ -120,13 +137,13 @@ local function open(id: string, kind: string?)
 end
 
 -- A: common chest
-local spent0 = rp.GoldSpent or 0
+local spent0 = charged()
 local chestA = open("HealingHerb", "Small")
 advance(0.3)
 check(chestA.State == "Opened", "A chest opened")
 check(grants.HealingHerb == 1 and rp.Items.HealingHerb == 1, "A one server grant (" .. tostring(grants.HealingHerb) .. ")")
 check(delivered == 1, "A one ItemGained to the client (" .. delivered .. ")")
-local spentA = (rp.GoldSpent or 0) - spent0
+local spentA = charged() - spent0
 check(spentA > 0, "A gold charged once (" .. spentA .. ")")
 check(not rp.RewardUntil and not RM.IsFrozen(), "A no server pause for a common reward")
 local UIState = client("UIState")
@@ -148,7 +165,7 @@ for _ = 1, 5 do
 end
 preview.remote("LootHold"):FireServer(chestA.Id, false)
 check(grants.HealingHerb == 1 and rp.Items.HealingHerb == 1, "B repeated holds on an opened chest grant nothing")
-check((rp.GoldSpent or 0) - spent0 == spentA, "B repeated holds charge nothing")
+check(charged() - spent0 == spentA, "B repeated holds charge nothing")
 advance(4)
 if okClient then
 	check(not visible("RewardCard"), "A/B card retires by itself")
@@ -219,6 +236,9 @@ if okClient and LootUI then
 end
 check(rp.Items.HealingHerb == 1 and rp.Items.SunMedallion == 1, "F items still owned on the server")
 
+if hideItems ~= nil then
+	RunConfig.Economy.Chests.HideItems = hideItems
+end
 preview.log(string.format("grants total %d, deliveries %d", totalGrants, delivered))
 if fails == 0 then
 	preview.log("PASS reward-once: every reward granted exactly once")

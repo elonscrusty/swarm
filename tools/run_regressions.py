@@ -24,6 +24,7 @@ def main():
         "progression-regression", "mastery-regression", "combat-regression", "corner-regression", "world-regression", "journey-regression", "loot-focus-regression", "lobby-screens-regression", "hud-key-regression", "whip-regression", "data-regression", "passives-regression", "math-regression", "economy-regression", "run-manager-regression", "choice-regression", "portal-hold-regression", "fall-regression", "single-map-regression", "safety-sim", "settings-sim", "security-regression", "pass-warm-regression", "perf-regression",
         "settlement-lifecycle", "foundation-regression", "heropower-regression", "challenges-regression", "explore-regression", "events-regression", "feel-regression", "meta-regression", "team-regression", "reward-regression", "reward-once-regression", "encounters-sim", "encounter-placement",
         "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim", "chest-gold-sim", "curses-sim",
+        "economy2-sim",  # redesign loot economy (stream E2): personal XP shards, team run gold, chests, class goals
     )]
     checks += [("storage-sim", ["outage=all"]), ("runserver-sim", ["role=lobby"]),
                ("runserver-sim", ["role=run"]), ("difficulty-handoff", []),

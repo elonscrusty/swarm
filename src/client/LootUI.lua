@@ -678,10 +678,26 @@ end
 -- Holding
 ------------------------------------------------------------------------------------------
 
+-- [stream E2] a team chest (attribute TeamGold) costs the shared SwarmState ChestCost from the
+-- team balance TeamRunGold; everything else costs Price x GoldMult from the player's RunGold
+local function teamChest(model: Model): boolean
+	return model:GetAttribute("TeamGold") == true
+end
+
+local function walletOf(model: Model): number
+	if teamChest(model) then
+		return tonumber(Remotes.State():GetAttribute("TeamRunGold")) or 0
+	end
+	return tonumber(player:GetAttribute("RunGold")) or 0
+end
+
 local function priceOf(model: Model): number
 	local price = tonumber(model:GetAttribute("Price")) or 0
 	if price <= 0 then
 		return 0
+	end
+	if teamChest(model) then
+		return tonumber(Remotes.State():GetAttribute("ChestCost")) or price
 	end
 	return ItemData.PlayerPrice(price, tonumber(player:GetAttribute("GoldMult")) or 1)
 end
@@ -695,7 +711,7 @@ local function usable(model: Model): boolean
 end
 
 local function canAfford(model: Model): boolean
-	return (tonumber(player:GetAttribute("RunGold")) or 0) >= priceOf(model)
+	return walletOf(model) >= priceOf(model)
 end
 
 function LootUI.Press()
@@ -889,7 +905,7 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 	if ok and kind == "Chest" then
 		-- what it costs, in which money, before the hold (the odds are the benefit line)
 		local cost = priceOf(model)
-		detail = cost > 0 and string.format("Costs %s run gold · hold to open", UIKit.formatNumber(cost)) or "Free · hold to open"
+		detail = cost > 0 and string.format(teamChest(model) and "Costs %s team gold · hold to open" or "Costs %s run gold · hold to open", UIKit.formatNumber(cost)) or "Free · hold to open"
 	end
 	local id = tonumber(model:GetAttribute("LootId")) or 0
 	local result = chanceResult.Id ~= 0 and chanceResult.Id == id and os.clock() < chanceResult.Until
@@ -980,7 +996,7 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 		y += 44
 		local note = ""
 		if price > 0 and not canAfford(model) then
-			note = string.format("Need %s more gold", UIKit.formatNumber(price - (tonumber(player:GetAttribute("RunGold")) or 0)))
+			note = string.format(teamChest(model) and "Need %s more team gold" or "Need %s more gold", UIKit.formatNumber(price - walletOf(model)))
 		elseif progress > 0 then
 			note = string.format("Opening %d%%", math.floor(progress * 100))
 		end
