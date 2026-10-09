@@ -315,7 +315,7 @@ function RunDowned.Update(_dt: number, _state: Instance, inRun: boolean)
 	elseif #roster == 0 then
 		line = "Every teammate is down. Stay still"
 	else
-		line = string.format("A teammate can revive you: hold E within %d studs", RunConfig.UI.Interact.ReviveRange)
+		line = string.format("A teammate can revive you from within %d studs", RunConfig.UI.Interact.ReviveRange)
 	end
 	W.Set(ui.Line, line)
 	ui.Line.TextColor3 = (now < interruptedUntil and progress <= 0) and RunTheme.Warn or RunTheme.CreamMuted

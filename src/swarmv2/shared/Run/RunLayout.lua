@@ -300,6 +300,11 @@ function RunLayout.Compute(env: Env, sizes: Sizes, cfg: any): Layout
 	end
 	map = RunLayout.Clamp(map, env, 2)
 	map = pushAway(map, out.Counters, gap, env, 2)
+	for _, o in ipairs({ out.Objective, out.Boss }) do
+		if o then
+			map = pushAway(map, o, gap, env, 2)
+		end
+	end
 	if thumbs then
 		for _, t in ipairs(thumbList(thumbs)) do
 			map = pushAway(map, t, gap, env, 2)
@@ -320,6 +325,11 @@ function RunLayout.Compute(env: Env, sizes: Sizes, cfg: any): Layout
 		end
 		party = RunLayout.Clamp(party, env, 2)
 		party = pushAway(party, out.Health, gap, env, 2)
+		for _, o in ipairs({ out.Objective, out.Boss }) do
+			if o then
+				party = pushAway(party, o, gap, env, 2)
+			end
+		end
 		if thumbs then
 			for _, t in ipairs(thumbList(thumbs)) do
 				party = pushAway(party, t, gap, env, 2)

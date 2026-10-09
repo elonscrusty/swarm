@@ -402,6 +402,7 @@ function Mock.api()
 	]]
 	function api.touch(button, opts)
 		opts = opts or {}
+		local Enum = roblox.Enum -- [stream F] the bare Enum global is nil in this file under Lune
 		local uis = R.services.UserInputService
 		local ust = uis and states[uis]
 		local pos = opts.at

@@ -69,7 +69,7 @@ RunTheme.Size = {
 }
 
 -- panels: how opaque is opaque enough
-RunTheme.PanelAlpha = 0.04
+RunTheme.PanelAlpha = 0 -- opaque: the HUD pieces underneath never show through a panel
 RunTheme.Radius = { Small = 8, Panel = 12, Pill = 999 }
 
 -- Perceived brightness of a colour (0..1), for contrast checks in tests.

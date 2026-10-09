@@ -409,11 +409,31 @@ function RunCards.Layout()
 	local v = kit.VirtualSize()
 	local count = math.max(1, #cards)
 	local cw = cardWidth()
-	local panelW = count * cw + (count - 1) * 8 + 16
 	local panelH = HEAD_H + cardH + 10
 	ui.Cards.Size = UDim2.new(1, -16, 0, cardH)
 	local top = (kit.TopBottom and kit.TopBottom() or 140) + 8
-	local x = (v.X - panelW) / 2
+	-- stay between the party column and the map when the screen is wide enough to (a phone has no
+	-- room: the cards then cover them for the few seconds the offer is open)
+	local left, right = 0, v.X
+	if kit.Avoid and not UIKit.IsCompact() then
+		for _, r in ipairs(kit.Avoid()) do
+			if r.Y < top + panelH and r.Y + r.H > top then
+				if r.X + r.W / 2 < v.X / 2 then
+					left = math.max(left, r.X + r.W + 6)
+				else
+					right = math.min(right, r.X - 6)
+				end
+			end
+		end
+		local fit = math.floor((right - left - 16 - (count - 1) * 8) / count)
+		if fit >= 200 and fit < cw then
+			cw = fit
+		elseif fit < 200 then
+			left, right = 0, v.X
+		end
+	end
+	local panelW = count * cw + (count - 1) * 8 + 16
+	local x = math.clamp((v.X - panelW) / 2, left, math.max(left, right - panelW))
 	-- keep off the touch controls: above them when the panel would sit on one
 	local thumbs = kit.Thumbs and kit.Thumbs() or nil
 	if thumbs then

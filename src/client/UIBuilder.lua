@@ -5268,8 +5268,15 @@ local function buildResults()
 		-- when there is room, otherwise the bar under the line
 		local bw = math.clamp(math.floor((inner - 12) / 2), 140, 320)
 		results.ButtonRow.Size = UDim2.new(1, 0, 0, btnH)
-		results.Replay.Instance.Size = UDim2.fromOffset(bw, btnH)
-		results.Button.Instance.Size = UDim2.fromOffset(bw, btnH)
+		-- [stream F] RETURN TO LOBBY is the longer word: on a narrow modal it gets 60% of the row
+		local replayW, lobbyW = bw, bw
+		if inner < 700 then
+			local total = math.floor(inner - 12)
+			replayW = math.floor(total * 0.4)
+			lobbyW = total - replayW
+		end
+		results.Replay.Instance.Size = UDim2.fromOffset(replayW, btnH)
+		results.Button.Instance.Size = UDim2.fromOffset(lobbyW, btnH)
 		results.ButtonRow.LayoutOrder = 7
 		results.Footer.LayoutOrder = 8
 		local goalH = 0
@@ -6407,6 +6414,16 @@ function UIBuilder.Init(d: { [string]: any })
 			return r and (r.Y + r.H) or 70
 		end,
 		EquipmentTop = Hud.BarTop,
+		Avoid = function(): { any } -- the map and the party column (cards keep clear of them when wide)
+			local out = {}
+			for _, name in ipairs({ "Map", "Party" }) do
+				local r = Hud.RunRect(name)
+				if r and r.W > 0 and r.H > 0 then
+					table.insert(out, r)
+				end
+			end
+			return out
+		end,
 		Thumbs = function(): { [string]: any }
 			return { Stick = Hud.RunRect("Stick"), Jump = Hud.RunRect("Jump"), Dash = Hud.RunRect("Dash") }
 		end,

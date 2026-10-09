@@ -123,6 +123,18 @@ def main():
     # redesign integration: basecamp avatar + camera, ClassService select / buy, gate -> local match on
     # Cliffwood with the class rig, results -> back at the bonfire, rewards once, a 2-player party
     checks += [("swarm-v2-flow", [])]
+    # continuation, stream F (run UI): the run HUD, objective strip + boss bar, minimap reveal, upgrade cards,
+    # interact prompt, downed / spectate, results (scenes run-hud-regression, run-hud). The regression scene
+    # prints PASS / FAIL lines and its last frame (results over the HUD) goes through check_layout too.
+    checks += [("layout", ["run-hud-regression", d]) for d in ("iphone", "phone-portrait", "pc")]
+    checks += [("layout", ["run-hud", "iphone", "enemies=10", "stage=" + st]) for st in ("Survive", "BeaconAvailable", "Rally", "Charge", "Boss")]
+    checks += [("layout", ["run-hud", "iphone", "enemies=10", "stage=Survive", "clock=930", "team=4"])]  # OVERTIME timer + four-player party
+    checks += [("layout", ["run-hud", "phone-portrait", "enemies=10", "stage=" + st]) for st in ("Charge", "Boss")]
+    checks += [("layout", ["run-hud", "pc", "enemies=10", "stage=Boss"])]
+    checks += [("layout", ["run-hud", d, "enemies=10", "view=" + v]) for d in ("iphone", "phone-portrait") for v in ("cards", "downed", "spectate", "results")]
+    checks += [("layout", ["run-hud", "iphone", "enemies=10", "view=" + v]) for v in ("interact", "inventory", "bigmap", "menu")]
+    checks += [("layout", ["run-hud", "pc", "enemies=10", "view=" + v]) for v in ("cards", "downed")]
+    checks += [("layout", ["run-hud", d, "enemies=10", "missing=on"]) for d in ("iphone", "pc")]  # every contract attribute absent: empty / hidden states
 
     def run(check):
         scene, settings = check
@@ -156,9 +168,9 @@ def main():
             # Long client scenes: 220-290 s each when run alone (menu was 267 s before the
             # features batch too, so this is Lune time, not game cost); with three workers in
             # parallel they pass 360 s, so they get 600 s.
-            limit = 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim", "run-entry-regression", "class-kits-sim", "cliffwood-run-sim", "swarm-v2-flow") else (
+            limit = 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim", "run-entry-regression", "class-kits-sim", "cliffwood-run-sim", "swarm-v2-flow") or (scene == "layout" and settings[0] == "run-hud-regression") else (
                 600 if scene in ("menu", "ui", "run-intro", "events-fx", "loot-focus-regression", "perf-regression", "results-flow", "textfit-regression", "comeback-regression", "analytics-client")
-                or (scene == "layout" and settings[0] == "smart-tutorial-regression") else 360)
+                or (scene == "layout" and settings[0] in ("smart-tutorial-regression", "run-hud")) else 360)
             result = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=limit)
             output = result.stdout + result.stderr
             if scene == "layout" and result.returncode == 0:
