@@ -22,6 +22,10 @@ local CameraController = require(script.Parent.CameraController)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Icons = require(script.Parent.Icons)
 local UIKit = require(script.Parent.UIKit)
+-- [stream F] the continuation brief's touch starting points (RunConfig.UI.Layout, RunLayout.Thumbs)
+local RunConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
+local RunLayout = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunLayout"))
+local RunUI = RunConfig.UI.Layout
 
 local MobileControls = {}
 
@@ -55,6 +59,13 @@ local jumpFace: Frame? = nil
 local jumpBaseFrame: Frame? = nil
 local jumpUsable: boolean? = nil
 local relayout: (() -> ())? = nil -- re-applies scale and side (set by buildGui)
+-- [stream F] the resting stick (brief: centred near 16% / 84%, ~112 pt): a faint ring shown during a run;
+-- a touch that starts near it snaps the stick to it, any other touch in the move zone floats as before
+local restRing: Frame? = nil
+local restCenter: Vector2? = nil -- gui-space centre of the resting stick (nil: no brief layout)
+local restRadius = 56
+local stickScale: UIScale? = nil -- the base's UIScale (its real on-screen size)
+local compactMul = 1
 
 type RoundButton = {
 	Button: TextButton,
@@ -96,6 +107,13 @@ function MobileControls.SetJumpButton(show: boolean, usable: boolean)
 	local visible = show and enabled and UserInputService.TouchEnabled
 	if b.Visible ~= visible then
 		b.Visible = visible
+	end
+	-- [stream F] the resting stick ring shows while no thumb holds the stick
+	if restRing then
+		local ringOn = visible and restCenter ~= nil and stickInput == nil
+		if restRing.Visible ~= ringOn then
+			restRing.Visible = ringOn
+		end
 	end
 	if jumpUsable ~= usable then
 		jumpUsable = usable
@@ -159,6 +177,10 @@ function MobileControls.SetScale(scale: UIScale)
 end
 
 local function radiusPixels(): number
+	if restCenter then
+		-- the brief's stick: ~112 pt across (physical), 20% smaller with the Compact touch layout
+		return restRadius * compactMul
+	end
 	local s = uiScale and uiScale.Scale or 1
 	return Config.Controls.StickRadius * s * (ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1)
 end
@@ -185,6 +207,9 @@ local function updateStick(position: Vector2)
 	-- InputObject positions and this ScreenGui (IgnoreGuiInset = false) share coordinates
 	base.Position = UDim2.fromOffset(stickOrigin.X, stickOrigin.Y)
 	local scale = (uiScale and uiScale.Scale or 1) * (ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1)
+	if stickScale then
+		scale = stickScale.Scale
+	end
 	knob.Position = UDim2.new(0.5, delta.X / scale, 0.5, delta.Y / scale)
 end
 
@@ -234,6 +259,25 @@ local function buildGui()
 	is.Parent = inner
 	local scale = Instance.new("UIScale")
 	scale.Parent = base
+	stickScale = scale
+
+	-- the resting ring: where the stick sits when no thumb is on it (touch devices, during a run)
+	local rest = Instance.new("Frame")
+	rest.Name = "StickRest"
+	rest.AnchorPoint = Vector2.new(0.5, 0.5)
+	rest.Size = UDim2.fromOffset(RunUI.StickPx, RunUI.StickPx)
+	rest.BackgroundTransparency = 1
+	rest.Visible = false
+	rest.Parent = gui
+	local rc = Instance.new("UICorner")
+	rc.CornerRadius = UDim.new(1, 0)
+	rc.Parent = rest
+	local rs = Instance.new("UIStroke")
+	rs.Color = C.Panel
+	rs.Transparency = 0.55
+	rs.Thickness = 2
+	rs.Parent = rest
+	restRing = rest
 
 	knob = Instance.new("Frame")
 	knob.Name = "Knob"
@@ -412,20 +456,63 @@ local function buildGui()
 	local scaleConn: RBXScriptConnection? = nil
 	local function layout()
 		local base = uiScale and uiScale.Scale or 1
-		local compact = ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1
+		compactMul = ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1
+		local compact = compactMul
 		scale.Scale = base * compact
 		jumpScale.Scale = base * compact
 		dashScale.Scale = base * compact
 		local left = ClientSettings.Get("TouchLayout") == "LeftHanded"
 		local side = left and 0 or 1
 		local sign = left and 1 or -1
-		jump.AnchorPoint = Vector2.new(side, 1)
-		jump.Position = UDim2.new(side, sign * M.ButtonMargin, 1, -M.ButtonMargin)
-		-- DASH: above-left of JUMP (above-right when left handed), clear of it and of the ULT slot
-		local dashSize = M.DashButtonSize
-		dash.AnchorPoint = Vector2.new(side, 1)
-		dash.Position = UDim2.new(side, sign * (M.ButtonMargin + M.ButtonSize + 10), 1, -(M.ButtonMargin + M.ButtonSize * 0.55))
-		dash.Size = UDim2.fromOffset(dashSize, dashSize)
+		local screen = gui.AbsoluteSize
+		if RunUI.Enabled and screen.X >= 100 and screen.Y >= 100 then
+			-- the brief's starting points, in device points: stick 16% / 84% (112 pt), JUMP 86% / 74% and
+			-- DASH 82% / 87% (64 pt), clamped to the safe area and kept apart (RunLayout.Thumbs)
+			local env = {
+				W = screen.X,
+				H = screen.Y,
+				Insets = { Top = 0, Left = 0, Right = 0 },
+				Phone = UIKit.IsCompact() or math.min(screen.X, screen.Y) < 560,
+				Portrait = screen.Y > screen.X,
+				Touch = true,
+				Scale = 1,
+				Mirror = left,
+			}
+			local t = RunLayout.Thumbs(env, RunUI)
+			local function put(btn: TextButton, r, sc: UIScale, points: number)
+				btn.AnchorPoint = Vector2.new(0.5, 0.5)
+				btn.Position = UDim2.fromOffset(math.floor(r.X + r.W / 2 + 0.5), math.floor(r.Y + r.H / 2 + 0.5))
+				-- the button's UIScale scales its size: ask for `points` on screen
+				local design = points / math.max(0.01, sc.Scale)
+				btn.Size = UDim2.fromOffset(design, design)
+			end
+			put(jump, t.Jump, jumpScale, RunUI.JumpPx * compactMul)
+			put(dash, t.Dash, dashScale, RunUI.DashPx * compactMul)
+			restRadius = RunUI.StickPx / 2
+			local center = Vector2.new(t.Stick.X + t.Stick.W / 2, t.Stick.Y + t.Stick.H / 2)
+			restCenter = center
+			if restRing then
+				restRing.Size = UDim2.fromOffset(RunUI.StickPx * compactMul, RunUI.StickPx * compactMul)
+				restRing.Position = UDim2.fromOffset(math.floor(center.X + 0.5), math.floor(center.Y + 0.5))
+			end
+			-- the stick graphic is as big as the resting ring (the base's design size is StickRadius * 2)
+			scale.Scale = (RunUI.StickPx / 2) / Config.Controls.StickRadius * compact
+		else
+			restCenter = nil
+			jump.AnchorPoint = Vector2.new(side, 1)
+			jump.Position = UDim2.new(side, sign * M.ButtonMargin, 1, -M.ButtonMargin)
+			-- DASH: above-left of JUMP (above-right when left handed), clear of it and of the ULT slot
+			local dashSize = M.DashButtonSize
+			dash.AnchorPoint = Vector2.new(side, 1)
+			dash.Position = UDim2.new(side, sign * (M.ButtonMargin + M.ButtonSize + 10), 1, -(M.ButtonMargin + M.ButtonSize * 0.55))
+			dash.Size = UDim2.fromOffset(dashSize, dashSize)
+		end
+		if not gui:GetAttribute("SizeWatched") then
+			gui:SetAttribute("SizeWatched", true)
+			gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+				layout()
+			end)
+		end
 		if uiScale ~= watchedScale then
 			if scaleConn then
 				scaleConn:Disconnect()
@@ -511,6 +598,9 @@ function MobileControls.Init()
 			end
 			stickInput = input
 			stickOrigin = Vector2.new(input.Position.X, input.Position.Y)
+			if restCenter and (stickOrigin - restCenter).Magnitude <= restRadius * compactMul * RunUI.StickSnap then
+				stickOrigin = restCenter -- near the resting stick: it starts there, not where the thumb landed
+			end
 			base.Visible = true
 			updateStick(stickOrigin)
 		elseif input.UserInputType == Enum.UserInputType.Keyboard then

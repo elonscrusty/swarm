@@ -38,6 +38,14 @@
 	"Minimap" setting (Config.Settings.Defaults.Minimap, pause menu > Comfort). Nothing
 	here is Active, so a thumb landing on it still drives the floating thumbstick.
 	UIBuilder builds it (MiniMap.Build) and calls MiniMap.Update every frame in a run.
+
+	[stream F, continuation brief] On the authored Cliffwood map (arena ground tagged NavGround) the
+	map is a north-up drawing of the ground the team has revealed (MapReveal: a heightless top-down
+	grid, everything within 80 studs of any teammate, shared by position, reset between runs): the
+	player's heading arrow, teammate markers, DISCOVERED chests only (a chest whose ground is still
+	unknown is not drawn) and the objective marker (BeaconPos while the beacon is live, else the
+	portal). A MAP button beside the panel (and the M key) opens the big map (BigMap) while the run
+	stays live. Older arenas keep the obstacle silhouette and the loot-in-range markers.
 ]]
 
 local Players = game:GetService("Players")
@@ -49,11 +57,17 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local UIKit = require(script.Parent.UIKit)
 local Hud = require(script.Parent.Hud)
-local TeamUI = require(script.Parent.TeamUI)
-local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Accessibility = require(script.Parent.Accessibility)
 local AffixIcons = require(script.Parent.AffixIcons) -- EnemyBodies: the cached enemy pool list
+-- [stream F]
+local RunConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
+local RunClientFolder = script.Parent.Parent:WaitForChild("SwarmV2Client"):WaitForChild("Run")
+local K = require(RunClientFolder:WaitForChild("RunTheme"))
+local RunWidgets = require(RunClientFolder:WaitForChild("RunWidgets"))
+local MapReveal = require(RunClientFolder:WaitForChild("MapReveal"))
+local BigMap = require(RunClientFolder:WaitForChild("BigMap"))
+local RunUI = RunConfig.UI
 
 local MiniMap = {}
 
@@ -74,6 +88,8 @@ local MAX_MATES = 5
 local MOVE_HZ, ENEMY_HZ = 10, 8
 local PARKED_Y = -100 -- pooled enemy bodies are parked under this height (EnemyRenderer)
 local ARENA_SIZE: number = Config.Arenas.Size or 400
+local arenaSize: number = ARENA_SIZE -- studs across the drawn map (the mapped ground on Cliffwood)
+local BTN_GAP = 6
 local PING_SECONDS = 2.4
 
 local HAZARD_COLOR: { [string]: Color3 } = {
@@ -115,6 +131,12 @@ local mateTarget: { Vector2? } = {} -- eased teammate markers (map px inside Wor
 local mateAt: { Vector2? } = {}
 local lastReveal = 0
 local lastCaravan: string? = nil
+local revealAt = 0
+local revealModel = nil -- the arena model MapReveal was loaded for
+local canvas = nil -- MapReveal canvas over the world frame
+local discoveredLoot: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local findAt = 0
+local foundModel = nil
 
 ------------------------------------------------------------------------------------------
 -- Build
@@ -156,7 +178,7 @@ local function makePin(parent: Instance, name: string, size: number, color: Colo
 	local pointer = new("Frame", { Name = "Pointer", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = z, Visible = false }, f)
 	pin.Pointer = pointer
 	pin.Arrow = new("Frame", { Name = "Arrow", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 3), Size = UDim2.fromOffset(7, 7), Rotation = 45, BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = z }, pointer)
-	UIKit.stroke(pin.Arrow, C.Text, 1, 0.2)
+	UIKit.stroke(pin.Arrow, K.Navy, 1, 0.2)
 	if ringed then
 		local r, rs = ring(f, "Ring", size + 4, color, z)
 		r.Position = UDim2.fromScale(0.5, 0.5)
@@ -187,7 +209,7 @@ local function buildMarkers(world: Frame)
 	-- a faint quarter grid on the arena floor: shows movement even in an empty field
 	for i = 1, 3 do
 		for _, vertical in ipairs({ true, false }) do
-			new("Frame", { Name = "Grid", AnchorPoint = Vector2.new(0.5, 0.5), Position = vertical and UDim2.fromScale(i / 4, 0.5) or UDim2.fromScale(0.5, i / 4), Size = vertical and UDim2.new(0, 1, 1, 0) or UDim2.new(1, 0, 0, 1), BackgroundColor3 = C.BlueLight, BackgroundTransparency = i == 2 and 0.7 or 0.82, BorderSizePixel = 0, ZIndex = 2 }, world)
+			new("Frame", { Name = "Grid", AnchorPoint = Vector2.new(0.5, 0.5), Position = vertical and UDim2.fromScale(i / 4, 0.5) or UDim2.fromScale(0.5, i / 4), Size = vertical and UDim2.new(0, 1, 1, 0) or UDim2.new(1, 0, 0, 1), BackgroundColor3 = K.NavyEdge, BackgroundTransparency = i == 2 and 0.5 or 0.7, BorderSizePixel = 0, ZIndex = 2 }, world)
 		end
 	end
 	ui.Hazards = new("Frame", { Name = "Hazards", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2 }, world)
@@ -229,13 +251,13 @@ end
 local function buildPlayer(view: Frame)
 	local pivot = new("Frame", { Name = "Player", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1, ZIndex = 20 }, view)
 	ui.Player = pivot
-	local nose = new("Frame", { Name = "Heading", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -3), Size = UDim2.fromOffset(7, 7), Rotation = 45, BackgroundColor3 = C.PrimaryTop, BorderSizePixel = 0, ZIndex = 20 }, pivot)
-	UIKit.stroke(nose, C.Text, 1.5, 0)
-	local body = new("Frame", { Name = "Body", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 1), Size = UDim2.fromOffset(9, 9), BackgroundColor3 = C.Primary, BorderSizePixel = 0, ZIndex = 21 }, pivot)
+	local nose = new("Frame", { Name = "Heading", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -3), Size = UDim2.fromOffset(7, 7), Rotation = 45, BackgroundColor3 = K.Gold, BorderSizePixel = 0, ZIndex = 20 }, pivot)
+	UIKit.stroke(nose, K.Navy, 1.5, 0)
+	local body = new("Frame", { Name = "Body", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 1), Size = UDim2.fromOffset(9, 9), BackgroundColor3 = K.Gold, BorderSizePixel = 0, ZIndex = 21 }, pivot)
 	UIKit.corner(body, 999)
-	UIKit.stroke(body, C.Text, 1.5, 0)
+	UIKit.stroke(body, K.Navy, 1.5, 0)
 	-- covers the nose's inner stroke so the outline reads as one teardrop
-	local fill = new("Frame", { Name = "Fill", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), Size = UDim2.fromOffset(5, 5), BackgroundColor3 = C.Primary, BorderSizePixel = 0, ZIndex = 22 }, pivot)
+	local fill = new("Frame", { Name = "Fill", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), Size = UDim2.fromOffset(5, 5), BackgroundColor3 = K.Gold, BorderSizePixel = 0, ZIndex = 22 }, pivot)
 	UIKit.corner(fill, 999)
 end
 
@@ -245,10 +267,10 @@ local function buildLegend(face: Frame)
 	local keys = {
 		-- the stage's way on is called the PORTAL everywhere (objective panel, edge marker,
 		-- banners); its key is the marker's own diamond-in-a-ring
-		{ Name = "Portal", Color = C.Blue, Diamond = true, Size = 6, Ring = true },
+		{ Name = "Portal", Color = K.Gold, Diamond = true, Size = 6, Ring = true },
 		{ Name = "Boss", Color = Accessibility.Color(P.crimson_500, "Danger"), Diamond = true, Size = 6 },
-		{ Name = "Loot", Color = C.CoinDeep, Size = 5 },
-		{ Name = "Ally", Color = C.BlueLight, Round = true, Size = 5 },
+		{ Name = "Loot", Color = K.Gold, Size = 5 },
+		{ Name = "Ally", Color = K.Cyan, Round = true, Size = 5 },
 	}
 	-- each cell as wide as its word needs (equal quarters ran "Portal" into the Boss key)
 	local weight, total = {}, 0
@@ -267,32 +289,31 @@ local function buildLegend(face: Frame)
 			UIKit.corner(ring, 999)
 			UIKit.stroke(ring, entry.Color, 1, 0.1)
 		end
-		UIKit.text(cell, "Small", entry.Name, { Position = UDim2.fromOffset(entry.Ring and 13 or 11, 0), Size = UDim2.new(1, -(entry.Ring and 13 or 11), 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.TextMuted, ZIndex = 4 }, 10)
+		UIKit.text(cell, "Small", entry.Name, { Position = UDim2.fromOffset(entry.Ring and 13 or 11, 0), Size = UDim2.new(1, -(entry.Ring and 13 or 11), 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = K.CreamMuted, ZIndex = 4 }, 10)
 	end
 end
 
 function MiniMap.Build(root: Frame, k: { [string]: any })
 	kit = k
-	local holder, face = UIKit.Surface(root, { Name = "MiniMap", Radius = Theme.Radius.M, Edge = C.PanelEdge, EdgeThickness = 2, Transparency = 0.04, Shadow = false, Size = UDim2.fromOffset(SIZE_PC, SIZE_PC + HEADER_PC + FOOTER_PC), ZIndex = Theme.Z.Hud, Visible = false })
+	local holder, face = RunWidgets.Panel(root, { Name = "MiniMap", Radius = K.Radius.Panel, Size = UDim2.fromOffset(SIZE_PC, SIZE_PC + HEADER_PC + FOOTER_PC), ZIndex = Theme.Z.Hud, Visible = false })
 	holder.Active = false
 	face.Active = false
-	UIKit.Raise(holder, 4, 2.5) -- the slim arcade base of the other HUD frames
 	ui.Holder, ui.Face = holder, face
 	Hud.AvoidInPortrait(holder) -- portrait: the centre banners drop below the map
 	-- the clipped viewport (the dark "outside" of the arena), inset so the corners stay clean
-	local view = new("Frame", { Name = "View", BackgroundColor3 = C.Text, BackgroundTransparency = 0.05, BorderSizePixel = 0, ClipsDescendants = true, Position = UDim2.fromOffset(MAP_INSET, HEADER_PC), Size = UDim2.fromOffset(viewPx, viewPx), ZIndex = 2 }, face)
+	local view = new("Frame", { Name = "View", BackgroundColor3 = K.NavyDeep, BackgroundTransparency = 0, BorderSizePixel = 0, ClipsDescendants = true, Position = UDim2.fromOffset(MAP_INSET, HEADER_PC), Size = UDim2.fromOffset(viewPx, viewPx), ZIndex = 2 }, face)
 	UIKit.corner(view, 5)
-	UIKit.stroke(view, C.BlueDeep, 1.5, 0)
+	UIKit.stroke(view, K.NavyEdge, 1.5, 0)
 	ui.View = view
 	-- the world: the whole arena at map scale; its stroke is the fence
-	local world = new("Frame", { Name = "World", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = C.BlueDeep:Lerp(C.Text, 0.55), BackgroundTransparency = 0.1, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 1), ZIndex = 2 }, view)
-	ui.WorldStroke = UIKit.stroke(world, C.BlueLight, 2, 0.35)
+	local world = new("Frame", { Name = "World", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = K.NavyRaised, BackgroundTransparency = 0, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 1), ZIndex = 2 }, view)
+	ui.WorldStroke = UIKit.stroke(world, K.Cyan, 2, 0.55)
 	ui.World = world
 	buildMarkers(world)
 	buildPins(view)
 	buildPlayer(view)
-	ui.Title = UIKit.text(face, "Label", "MAP", { Position = UDim2.fromOffset(MAP_INSET + 1, 2), Size = UDim2.new(1, -30, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.TextMuted, ZIndex = 3 }, 10)
-	ui.North = UIKit.text(face, "Label", "N", { Name = "North", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -MAP_INSET, 0, 2), Size = UDim2.fromOffset(14, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, ZIndex = 3 }, 13)
+	ui.Title = UIKit.text(face, "Label", "MAP", { Position = UDim2.fromOffset(MAP_INSET + 1, 2), Size = UDim2.new(1, -30, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = K.CreamMuted, ZIndex = 3 }, 10)
+	ui.North = UIKit.text(face, "Label", "N", { Name = "North", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -MAP_INSET, 0, 2), Size = UDim2.fromOffset(14, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = K.Cyan, ZIndex = 3 }, 13)
 	buildLegend(face)
 	ClientSettings.OnChanged(function(key, value)
 		if key == "Minimap" then
@@ -313,7 +334,32 @@ function MiniMap.Build(root: Frame, k: { [string]: any })
 			ui.PortalPin.Color = nil -- recoloured on the next frame
 		end
 	end)
+	-- the MAP button beside the panel (touch + mouse); the M key is BigMap's
+	local btn = RunWidgets.Button(root, {
+		Name = "MapButton",
+		Text = "MAP",
+		Kind = "Secondary",
+		TextSize = 16,
+		Size = UDim2.fromOffset(RunUI.Layout.TouchMin, RunUI.Layout.TouchMin),
+		ZIndex = Theme.Z.Hud,
+		OnClick = function()
+			BigMap.Toggle()
+		end,
+	})
+	btn.Instance.Visible = false
+	ui.MapButton = btn
+	ui.Canvas = MapReveal.NewCanvas(world, scale)
+	canvas = ui.Canvas
+	BigMap.Build(root, kit)
+	BigMap.BossProvider = function()
+		return bossBody
+	end
 	kit.OnRelayout(MiniMap.Layout)
+	Hud.OnLayout(function()
+		if ui.Holder then
+			MiniMap.Place()
+		end
+	end)
 	MiniMap.Layout()
 end
 
@@ -321,77 +367,34 @@ end
 -- Layout / visibility
 ------------------------------------------------------------------------------------------
 
--- Where the map sits (from the HUD's elements; cheap, so the throttled update can
--- follow the team list as rows come and go).
+-- Where the map sits: the shared run layout (Hud.RunRect "Map": upper right on desktop, 82% / 17%
+-- of the safe area on a phone). The panel is followed by the MAP button on its left; both report
+-- their size to the layout so the party stack, the touch controls and the equipment keep clear.
 local function place()
+	local touch = UserInputService.TouchEnabled
+	local btnW = touch and RunUI.Layout.TouchMin or 40
+	local panelW, panelH = ui.Holder.Size.X.Offset, ui.Holder.Size.Y.Offset
+	Hud.SetPieceSize("Map", panelW + BTN_GAP + btnW, panelH)
+	local r = Hud.RunRect("Map")
 	local v: Vector2 = kit.VirtualSize()
-	local W = v.X
-	local portrait: boolean = kit.IsPortrait()
-	local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
-	local els = Hud.Elements()
-	local x, y
-	if portrait then
-		-- left edge under the top cluster / ability bar and the items strip (the team list
-		-- keeps the right edge)
-		x = M
-		y = math.max((els.BarBottom or 0), Hud.TopBottom()) + 8
-		local loot = LootUI.Elements()
-		local strip = loot.Strip :: Frame?
-		if strip and strip.Visible and strip.Size.Y.Offset > 0 and #strip:GetChildren() > 1 then
-			y = math.max(y, strip.Position.Y.Offset + strip.Size.Y.Offset + 8)
-		end
-		-- and under the curse / bargain / synergy chips that follow the strip
-		for _, key in ipairs({ "Curses", "Bargain", "Synergy" }) do
-			local chip = loot[key] :: Frame?
-			if chip and chip.Visible then
-				y = math.max(y, chip.Position.Y.Offset + chip.Size.Y.Offset + 8)
-			end
-		end
-	else
-		x = W - M - mapPx
-		local counters = els.Counters :: Frame?
-		y = (counters and (counters.Position.Y.Offset + 44) or 70) + 12
-		-- under the team rows when there are any
-		local team = TeamUI.Elements()
-		local list = team.List :: Frame?
-		if list and list.Visible then
-			local n, h = 0, 0
-			for _, r in pairs(team.Rows or {}) do
-				n += 1
-				h = math.max(h, r.Holder.Size.Y.Offset)
-			end
-			if n > 0 then
-				y = math.max(y, list.Position.Y.Offset + n * (h + 6) + 6)
-			end
-		end
-		-- phones: pushed down by the team rows, the map must not run under the JUMP button
-		-- (bottom right, MobileControls); it moves left of the button's column, and if it
-		-- then lands on the ability panel it hides until there is room again
-		cramped = false
-		if UserInputService.TouchEnabled and UIKit.IsCompact() then
-			local H = v.Y
-			local scale = math.max(0.01, kit.Scale())
-			local jumpW = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26) / scale + 12
-			local jumpTop = H - jumpW
-			local mapH = ui.Holder.Size.Y.Offset
-			if y + mapH > jumpTop - 8 then
-				x = W - M - jumpW - mapPx
-				local bar = els.Bar :: Frame?
-				if bar and els.BarTop and y + mapH > els.BarTop - 4 then
-					local barRight = bar.Position.X.Offset + (1 - bar.AnchorPoint.X) * bar.Size.X.Offset
-					if x < barRight then
-						cramped = true
-					end
-				end
-			end
-		end
+	local x, y = v.X - panelW - 16, 90
+	if r then
+		x, y = r.X + r.W - panelW, r.Y
 	end
 	local at = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	if ui.Holder.Position ~= at then
 		ui.Holder.Position = at
 	end
+	local b = ui.MapButton.Instance
+	b.Size = UDim2.fromOffset(btnW, btnW)
+	local bat = UDim2.fromOffset(math.floor(x - BTN_GAP - btnW + 0.5), math.floor(y + 0.5))
+	if b.Position ~= bat then
+		b.Position = bat
+	end
+	cramped = false
 	MiniMap.Refresh()
 end
+MiniMap.Place = place
 
 function MiniMap.Layout()
 	if not ui.Holder then
@@ -417,7 +420,10 @@ function MiniMap.Layout()
 		ui.North.Position = UDim2.new(1, -MAP_INSET, 0, compact and 0 or 2)
 		ui.Title.Size = UDim2.new(1, -30, 0, header - 2)
 		ui.North.Size = UDim2.fromOffset(14, header - 2)
-		ui.World.Size = UDim2.fromOffset(math.floor(ARENA_SIZE * scale + 0.5), math.floor(ARENA_SIZE * scale + 0.5))
+		ui.World.Size = UDim2.fromOffset(math.floor(arenaSize * scale + 0.5), math.floor(arenaSize * scale + 0.5))
+		if canvas then
+			canvas.SetScale(scale)
+		end
 		-- the silhouette is drawn at map scale: rebuild it for the new scale
 		arenaModel = nil
 		for i = 1, MAX_MATES do
@@ -429,7 +435,11 @@ end
 
 function MiniMap.Refresh()
 	if ui.Holder then
-		ui.Holder.Visible = shown and enabled and not covered and not cramped
+		local on = shown and enabled and not covered and not cramped
+		ui.Holder.Visible = on
+		if ui.MapButton then
+			ui.MapButton.Instance.Visible = on and MapReveal.Loaded()
+		end
 	end
 end
 
@@ -453,7 +463,7 @@ end
 
 -- Map pixel offset (inside the World frame) of a world x / z.
 local function toMap(wx: number, wz: number): (number, number)
-	local half = ARENA_SIZE * scale / 2
+	local half = arenaSize * scale / 2
 	return half + (wx - arenaCentre.X) * scale, half + (wz - arenaCentre.Z) * scale
 end
 
@@ -530,6 +540,15 @@ local function localRoot(): BasePart?
 end
 
 local function portalColor(state: Configuration): Color3
+	local runStage = state:GetAttribute("RunStage")
+	if type(runStage) == "string" then
+		if runStage == "Boss" or runStage == "Defeat" then
+			return Accessibility.Color(P.crimson_400, "Danger")
+		elseif runStage == "Charge" or runStage == "BeaconAvailable" then
+			return Accessibility.Color(P.gold_300, "Loot")
+		end
+		return P.ivory_100
+	end
 	local phase = state:GetAttribute("StagePhase") or "None"
 	if phase == "Boss" or phase == "Surge" then
 		return Accessibility.Color(P.crimson_400, "Danger")
@@ -625,13 +644,20 @@ local function updateFast(state: Configuration, root: BasePart, dt: number, now:
 
 	-- portal
 	local portal: Pin = ui.PortalPin
-	local ppos = state:GetAttribute("PortalPos")
+	-- the objective marker: the beacon while the new run flow is on (RunStage), else the portal
+	local runStage = state:GetAttribute("RunStage")
+	local ppos
+	if type(runStage) == "string" then
+		ppos = state:GetAttribute("BeaconPos")
+	else
+		ppos = state:GetAttribute("PortalPos")
+	end
 	local portalOn = typeof(ppos) == "Vector3"
 	setVisible(portal.Frame, portalOn)
 	if portalOn then
 		placePin(portal, ppos.X, ppos.Z, pos.X, pos.Z)
 		setPinColor(portal, portalColor(state))
-		local reveal = state:GetAttribute("PortalReveal") or 0
+		local reveal = if type(runStage) == "string" then (runStage == "BeaconAvailable" and 1 or 0) else (state:GetAttribute("PortalReveal") or 0)
 		if reveal ~= lastReveal then
 			lastReveal = reveal
 			if reveal > 0 then
@@ -694,7 +720,7 @@ local function updateSlow()
 				local mx, my = toMap(r.Position.X, r.Position.Z)
 				mateTarget[n] = Vector2.new(mx, my)
 				local m = ui.Mates[n]
-				m.BackgroundTransparency = p:GetAttribute("Alive") == false and 0.55 or 0
+				m.BackgroundTransparency = (p:GetAttribute("Alive") == false or p:GetAttribute("Downed") == true or p:GetAttribute("Eliminated") == true) and 0.55 or 0
 				setVisible(m, true)
 			end
 		end
@@ -712,7 +738,15 @@ local function updateSlow()
 		for _, m in ipairs(loot:GetChildren()) do
 			local lpos = m:GetAttribute("Pos")
 			local st = m:GetAttribute("State")
-			if typeof(lpos) == "Vector3" and st ~= "Opened" and st ~= "Spent" and st ~= "Claimed" then
+			local known = true
+			if typeof(lpos) == "Vector3" and MapReveal.Loaded() then
+				-- the revealed map never shows loot the team has not walked near
+				known = discoveredLoot[m] == true or MapReveal.Discovered(lpos.X, lpos.Z)
+				if known then
+					discoveredLoot[m] = true
+				end
+			end
+			if typeof(lpos) == "Vector3" and known and st ~= "Opened" and st ~= "Spent" and st ~= "Claimed" then
 				local kind = m:GetAttribute("LootKind") or "Chest"
 				if kind == "Altar" then
 					altarOn = true
@@ -784,7 +818,7 @@ local function updateEnemies(root: BasePart)
 	end
 	-- every k-th enemy in range, so the dots follow the swarm's density
 	local stride = count / MAX_ENEMY_DOTS
-	local shownDots = math.min(count, MAX_ENEMY_DOTS)
+	local shownDots = MapReveal.Loaded() and 0 or math.min(count, MAX_ENEMY_DOTS)
 	for i = 1, shownDots do
 		local body = candidates[math.floor((i - 1) * math.max(1, stride)) + 1]
 		local d = ui.Enemies[i]
@@ -800,7 +834,10 @@ local function updateEnemies(root: BasePart)
 end
 
 local function resetRun()
+	MapReveal.Reset()
+	table.clear(discoveredLoot)
 	arenaModel = nil
+	revealModel = nil
 	lastReveal = 0
 	lastCaravan = nil
 	bossBody = nil
@@ -816,6 +853,59 @@ local function resetRun()
 	end
 end
 
+-- The arena's ground and the team's reveal. Runs every frame in a run whether or not the map is
+-- showing (a panel covering the HUD does not stop the team exploring). Returns true while the
+-- revealed map is the one being drawn.
+local function trackReveal(now: number)
+	if now >= findAt or (foundModel and not foundModel.Parent) then
+		findAt = now + 0.5
+		foundModel = findArena()
+	end
+	local model = foundModel
+	if model ~= revealModel then
+		revealModel = model
+		if model and MapReveal.Load(model) then
+			local cx, cz, size = MapReveal.Bounds()
+			arenaCentre = Vector3.new(cx, 0, cz)
+			arenaSize = size
+			ui.World.BackgroundColor3 = K.NavyDeep
+			ui.World.Size = UDim2.fromOffset(math.floor(arenaSize * scale + 0.5), math.floor(arenaSize * scale + 0.5))
+			canvas.Clear()
+			canvas.SetScale(scale)
+			clearChildren(ui.Obstacles)
+			clearChildren(ui.Hazards)
+			arenaModel = model -- no obstacle silhouette on the revealed map
+		else
+			arenaSize = ARENA_SIZE
+			ui.World.BackgroundColor3 = K.NavyRaised
+			ui.World.Size = UDim2.fromOffset(math.floor(arenaSize * scale + 0.5), math.floor(arenaSize * scale + 0.5))
+			canvas.Clear()
+			arenaModel = nil -- rebuilt below as the older silhouette
+		end
+	end
+	if not MapReveal.Loaded() then
+		return false
+	end
+	MapReveal.Raster()
+	if now >= revealAt then
+		revealAt = now + 1 / RunUI.Map.RevealHz
+		local radius = RunUI.Map.RevealRadius
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p:GetAttribute("InRun") == true and p:GetAttribute("Eliminated") ~= true then
+				local char = p.Character
+				local r = char and char.PrimaryPart
+				if r then
+					MapReveal.RevealAround(r.Position.X, r.Position.Z, radius)
+				end
+			end
+		end
+		BigMap.Step()
+		canvas.Update(40)
+		MapReveal.EndPass()
+	end
+	return true
+end
+
 function MiniMap.Update(dt: number, state: Configuration, inRun: boolean)
 	if not ui.Holder then
 		return
@@ -825,11 +915,18 @@ function MiniMap.Update(dt: number, state: Configuration, inRun: boolean)
 		MiniMap.Refresh()
 		if not inRun then
 			resetRun()
+			BigMap.Close()
+		else
+			-- a new run starts with an unexplored map (opening or closing a map never resets it)
+			MapReveal.ResetKnown()
+			table.clear(discoveredLoot)
 		end
 	end
-	-- off by the setting or under a modal: nothing to do. Hidden only because the team rows
-	-- pushed it onto the ability panel (cramped): keep placing it, so it comes back as soon
-	-- as there is room again (a teammate left, the rows went)
+	if shown then
+		trackReveal(os.clock())
+		BigMap.Update(dt, state)
+	end
+	-- off by the setting or under a modal: nothing to draw. (The reveal above still ran.)
 	if not (shown and enabled and not covered) then
 		return
 	end
@@ -842,7 +939,7 @@ function MiniMap.Update(dt: number, state: Configuration, inRun: boolean)
 			return
 		end
 		local model = findArena()
-		if model ~= arenaModel then
+		if model ~= arenaModel and not MapReveal.Loaded() then
 			arenaModel = model
 			if model then
 				buildSilhouette(model)

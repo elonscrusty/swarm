@@ -257,6 +257,6 @@ RunConfig.Combat = {} -- [stream B] damage formula, crit, armor, status caps, ta
 RunConfig.Director = {} -- [stream D] run clock, beacon, boss, enemy pressure
 RunConfig.Survival = {} -- [stream E1] downed, revive, protection, falls, movement feel
 RunConfig.Economy = {} -- [stream E2] XP shards, team run gold, chests, class goals
-RunConfig.UI = {} -- [stream F] run HUD layout and screens
+RunConfig.UI = require(script.Parent.RunUIConfig) -- [stream F] run HUD layout and screens (own file: RunUIConfig.lua)
 
 return RunConfig

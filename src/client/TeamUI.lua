@@ -46,6 +46,10 @@ local Hud = require(script.Parent.Hud)
 local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
 local GroundHeight = require(script.Parent.GroundHeight) -- ground under effects on maps with height
+-- [stream F] the continuation brief's run tokens + widgets (compact party indicators down the left)
+local RunClientFolder = script.Parent.Parent:WaitForChild("SwarmV2Client"):WaitForChild("Run")
+local K = require(RunClientFolder:WaitForChild("RunTheme"))
+local RunWidgets = require(RunClientFolder:WaitForChild("RunWidgets"))
 
 local TeamUI = {}
 
@@ -104,6 +108,18 @@ end
 
 -- "alive" | "choosing" | "down" | "reviving" | "deciding" | "out"
 local function stateOf(p: Player, state: Configuration): string
+	-- [stream F] the new survival rules: Downed (bleeding out, can be revived), Eliminated (spectating)
+	if p:GetAttribute("Eliminated") == true then
+		return "out"
+	elseif p:GetAttribute("Downed") == true then
+		return (tonumber(p:GetAttribute("ReviveProgress")) or 0) > 0 and "reviving" or "down"
+	elseif p:GetAttribute("Downed") == false and p:GetAttribute("Alive") ~= false then
+		local ids = state:GetAttribute("ChoosingIds") or ""
+		if string.find(ids, "," .. tostring(p.UserId) .. ",", 1, true) then
+			return "choosing"
+		end
+		return "alive"
+	end
 	if p:GetAttribute("Alive") ~= false then
 		local ids = state:GetAttribute("ChoosingIds") or ""
 		if string.find(ids, "," .. tostring(p.UserId) .. ",", 1, true) then
@@ -139,16 +155,16 @@ end
 ------------------------------------------------------------------------------------------
 
 local function rowSize(): (number, number)
-	local portrait: boolean = kit.IsPortrait()
-	return portrait and 210 or 236, UIKit.IsCompact() and 52 or 46
+	local compact = UIKit.IsCompact()
+	return compact and 196 or 214, compact and 60 or 52
 end
 
 local function buildRow(p: Player, order: number): Row
 	local w, h = rowSize()
-	local holder, face = UIKit.Surface(ui.List, { Name = "Mate_" .. p.Name, Radius = Theme.Radius.M, Transparency = 0.04, EdgeThickness = 2, Shadow = false, Size = UDim2.fromOffset(w, h), LayoutOrder = order })
+	local holder, face = RunWidgets.Panel(ui.List, { Name = "Mate_" .. p.Name, Radius = K.Radius.Panel, Size = UDim2.fromOffset(w, h), LayoutOrder = order })
 	holder.Active = false
 	UIKit.padding(face, 5, 10, 5, 8)
-	local iconHolder = new("Frame", { Name = "Hero", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(32, 32) }, face)
+	local iconHolder = new("Frame", { Name = "Hero", BackgroundColor3 = K.NavyDeep, BackgroundTransparency = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(32, 32) }, face)
 	UIKit.corner(iconHolder, 999)
 	UIKit.stroke(iconHolder, Theme.Fx.TeamRing, 1.5, 0.2)
 	local nameLabel = UIKit.Role(face, "Label", p.DisplayName, {
@@ -156,13 +172,17 @@ local function buildRow(p: Player, order: number): Row
 		Position = UDim2.fromOffset(40, 0),
 		Size = UDim2.new(1, -40, 0, TS(Theme.Type.Label.Size) + 2),
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = K.Cream,
 	})
+	-- the state word sits on its own line under the name ("DOWN · 12 m", "REVIVING 40%"), so a long
+	-- name and a long state never run into each other
 	local stateLabel = UIKit.Role(face, "Caption", "", {
 		Name = "State",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, 0, 0, 0),
-		Size = UDim2.new(0.6, 0, 0, TS(Theme.Type.Label.Size) + 2),
-		TextXAlignment = Enum.TextXAlignment.Right,
+		Position = UDim2.fromOffset(40, TS(Theme.Type.Label.Size) + 3),
+		Size = UDim2.new(1, -40, 0, TS(Theme.Type.Caption.Size) + 2),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = K.CreamMuted,
 	})
 	local meter = UIKit.Meter(face, {
 		Gradient = Theme.Gradient.Health,
@@ -170,6 +190,8 @@ local function buildRow(p: Player, order: number): Row
 		Position = UDim2.new(0, 40, 1, -1),
 		Size = UDim2.new(1, -40, 0, 7),
 	})
+	meter.Frame.BackgroundColor3 = K.NavyDeep
+	meter.Frame.BackgroundTransparency = 0
 	return { Player = p, Holder = holder, Name = nameLabel, State = stateLabel, Meter = meter, IconHolder = iconHolder, Icon = "", StateKey = "" }
 end
 
@@ -245,8 +267,8 @@ local function updateRow(r: Row, state: Configuration)
 		if grad then
 			grad.Color = (s == "reviving" or s == "down") and REVIVE or ((s == "out" or s == "deciding") and GREY or HEALTH)
 		end
-		r.State.TextColor3 = (s == "down") and C.TextDanger or ((s == "reviving") and C.BlueDeep or C.TextMuted)
-		r.Name.TextColor3 = (s == "out" or s == "deciding") and C.TextMuted or C.Text
+		r.State.TextColor3 = (s == "down") and K.Danger or ((s == "reviving") and K.Gold or K.CreamMuted)
+		r.Name.TextColor3 = (s == "out" or s == "deciding") and K.CreamMuted or K.Cream
 		if old ~= "" and (s == "down" or (old ~= "alive" and old ~= "choosing" and s == "alive")) then
 			UIAnim.Punch(r.Holder, 0.12)
 			if not ClientSettings.Reduced() then
@@ -538,31 +560,44 @@ function TeamUI.Layout()
 	if not ui.List then
 		return
 	end
+	local w, h = rowSize()
+	local n = 0
+	for _ in pairs(rows) do
+		n += 1
+	end
+	-- the shared run layout (Hud.RunRect): the compact party stack down the left, under the health
+	-- plate (phones: 4% / 25% of the safe area); it tells the layout how tall the stack is
+	local gap = 6
+	Hud.SetPieceSize("Party", n > 0 and w or 0, n > 0 and (n * (h + gap) - gap) or 0)
+	local r = Hud.RunRect("Party")
 	local v: Vector2 = kit.VirtualSize()
-	local W = v.X
 	local portrait: boolean = kit.IsPortrait()
 	local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
-	local w, h = rowSize()
-	local els = Hud.Elements()
-	local y
-	if portrait then
-		-- under the ability bar, the status line's spot and the items strip
-		y = (els.BarBottom or 400) + 80
+	local x, y = M, 120
+	if r then
+		x, y = r.X, r.Y
+	end
+	-- the older item strip, chips and popups (LootUI) sit in the same left column: the party stack
+	-- starts under them
+	if not portrait then
 		local loot = LootUI.Elements()
 		local strip = loot.Strip :: Frame?
 		if strip and strip.Visible and strip.Size.Y.Offset > 0 and #strip:GetChildren() > 1 then
-			y = math.max(y, strip.Position.Y.Offset + strip.Size.Y.Offset + 44)
+			y = math.max(y, strip.Position.Y.Offset + strip.Size.Y.Offset + 8)
 		end
-	else
-		-- under the kill / gold counters (top right)
-		local counters = els.Counters :: Frame?
-		local top = counters and (counters.Position.Y.Offset + 44) or 70
-		y = top + 12
+		for _, key in ipairs({ "Curses", "Bargain", "Synergy" }) do
+			local chip = loot[key] :: Frame?
+			if chip and chip.Visible then
+				y = math.max(y, chip.Position.Y.Offset + chip.Size.Y.Offset + 8)
+			end
+		end
+		y = math.min(y, math.max(0, v.Y - (n * (h + gap)) - 8))
 	end
-	ui.List.Position = UDim2.fromOffset(math.floor(W - M - w), math.floor(y))
-	ui.List.Size = UDim2.fromOffset(w, 3 * (h + 6))
-	for _, r in pairs(rows) do
-		r.Holder.Size = UDim2.fromOffset(w, h)
+	ui.List.AnchorPoint = Vector2.new(0, 0)
+	ui.List.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
+	ui.List.Size = UDim2.fromOffset(w, 3 * (h + gap))
+	for _, row in pairs(rows) do
+		row.Holder.Size = UDim2.fromOffset(w, h)
 	end
 end
 
@@ -624,10 +659,13 @@ end
 function TeamUI.Build(root: Frame, k: { [string]: any })
 	kit = k
 	local list = new("Frame", { Name = "Team", BackgroundTransparency = 1, Active = false, Visible = false, ZIndex = Theme.Z.Hud }, root)
-	UIKit.list(list, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Right })
+	UIKit.list(list, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Left })
 	ui.List = list
 	ui.Markers = new("Frame", { Name = "ReviveMarkers", BackgroundTransparency = 1, Active = false, Size = UDim2.fromScale(1, 1), ZIndex = Theme.Z.Hud }, root)
 	kit.OnRelayout(TeamUI.Layout)
+	Hud.OnLayout(function()
+		TeamUI.Layout()
+	end)
 	Players.PlayerRemoving:Connect(function(p)
 		-- a teammate who leaves disappears at once (not on the next roster check)
 		if rows[p] then
