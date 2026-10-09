@@ -502,7 +502,60 @@ RunConfig.Survival = {
 		DashSlopeRise = 0, -- upward studs/s a ground dash may gain (no ramp launches)
 	},
 }
-RunConfig.Economy = {} -- [stream E2] XP shards, team run gold, chests, class goals
+-- [stream E2] XP shards, team run gold, chests, class goals (DECISIONS C3, C7, C9). Read by
+-- XPSystem, GoldSystem, LootSystem, ItemSystem and SwarmV2/Run/ClassGoals.
+RunConfig.Economy = {
+	-- false: the old economy (shared gems, the Config.XP curve, chests paid from the personal
+	-- escrow with an item inside). Tests of the old rules switch it off.
+	Enabled = true,
+	XP = {
+		-- XP needed from level L to L+1 = Base + Linear (L-1) + Quad (L-1)^2  (20, 35, 56, 83, 116, ...)
+		Base = 20,
+		Linear = 12,
+		Quad = 3,
+		-- entitlement per eligible kill, by enemy kind (Boss is granted directly, no shard)
+		ByKind = { Normal = 4, Tough = 8, Elite = 20, Boss = 100 } :: { [string]: number },
+		-- until stream D sets e.Kind: an enemy type with at least this base HP counts as Tough
+		ToughHP = 40,
+		ShareRadius = 120, -- studs from the kill: every eligible player inside gets the full amount
+		PickupRadius = 8, -- default shard pickup radius, scaled by the player's pickup bonus
+		ExpireSeconds = 30, -- run clock: an uncollected shard vanishes after this
+		FadeSeconds = 5, -- ... blinking and shrinking for the last seconds (client VFX)
+		-- crowd aggregation: a new shard joins a resting one of the SAME owner within
+		-- MergeRadius studs that was born less than MergeWindow s ago (values add up, the
+		-- entitlement total is unchanged; its expiry moves to the newer one)
+		MergeRadius = 3,
+		MergeWindow = 4,
+		MergeMax = 400,
+		PoolSize = 800, -- pooled shard parts (one per owner per shard; 4 players share it)
+		-- crystal size by shard value (Small below Medium)
+		Kinds = { Medium = 8, Large = 40 },
+	},
+	Gold = {
+		-- team run gold credited once per eligible kill, by enemy kind (temporary, never saved)
+		ByKind = { Normal = 3, Tough = 6, Elite = 20, Boss = 0 } :: { [string]: number },
+		-- chest k+1 costs round(ChestBase x ChestGrowth^k), at most ChestCap (k = chests bought this run)
+		ChestBase = 40,
+		ChestGrowth = 1.35,
+		ChestCap = 400,
+	},
+	Chests = {
+		-- with stream B's LevelUpSystem.QueueChoice: chests never hold an old item; every
+		-- recipient gets one "Chest" / "PassiveOnly" choice (up to 3 options) instead
+		HideItems = true,
+	},
+	ClassGoals = {
+		SampleHz = 4, -- distance / weapons sampling rate (positions are never saved per frame)
+		SpeedSlack = 1.25, -- x the player's permitted speed
+		SpeedFloor = 36, -- studs/s always allowed (the generic horizontal cap is 34)
+		StepAllowance = 1, -- studs of slack per sample
+		CloseRange = 10, -- studs: a close kill is a melee / Sword / dash kill this near the hero
+		-- weapon ids that count as close-range (WeaponData Melee = true / Close = true also do;
+		-- a dash effect's damage source may carry Dash = true)
+		CloseWeapons = { Whip = true } :: { [string]: boolean },
+		ReviveDedupe = 1, -- s: one revive completion reported twice counts once
+	},
+}
 RunConfig.UI = {} -- [stream F] run HUD layout and screens
 
 return RunConfig

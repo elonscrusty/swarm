@@ -37,6 +37,18 @@
 
 	Gold: GoldSystem.SpendRunGold (only gold earned this run). Prices: ItemData.StagePrice x
 	ItemData.PlayerPrice (the player's gold multiplier, attribute GoldMult).
+
+	Team chests (redesign, DECISIONS C7; stream E2; RunConfig.Economy.Enabled): every paid
+	chest is bought with the TEAM run gold instead (model attribute TeamGold = true, Price =
+	the shared GoldSystem.ChestCost, SwarmState TeamRunGold / ChestCost). Only the deliberate
+	completed hold buys it (proximity never does): GoldSystem.BuyChest debits once, the
+	chest leaves Ready, then the recipients are snapshotted: initialized, connected,
+	non-eliminated participants including downed heroes (XPSystem.IsEligible). Each gets one
+	"Chest" / "PassiveOnly" choice from stream B's LevelUpSystem.QueueChoice (up to 3
+	distinct passive options, claimed once; it survives a temporary disconnect on the run
+	record; late arrivals were not in the snapshot). Until QueueChoice exists the opener gets
+	the existing item reward instead. Free chests (Buried Cache, gifts) cost nothing and
+	reward their opener the same way. The personal escrow above still pays shrines.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -87,6 +99,7 @@ type Obj = {
 	Rune: number?,
 	Puzzle: any?,
 	Scale: any?, -- the Bargain Shrine's balance (tips when sealed)
+	TeamChest: boolean?, -- [stream E2] bought with the team run gold (GoldSystem.BuyChest)
 	-- feature hooks (docs/features/CHALLENGES.md): set by feature modules, nil otherwise
 	Weights: { [string]: number }?, -- item rarity weights instead of the type's
 	Title: string?, -- reward popup source instead of TITLES[Type]
@@ -140,11 +153,38 @@ local function goldMult(player: Player): number
 	return ctx.GoldSystem.PriceMult(player)
 end
 
+-- [stream E2] bought with the team gold: a team chest a feature has not made free (Price 0,
+-- e.g. the champion's chest)
+local function isTeamChest(obj: Obj): boolean
+	return obj.TeamChest == true and obj.Price > 0
+end
+
 local function priceFor(rp, obj: Obj): number
 	if obj.Price <= 0 then
 		return 0
 	end
+	if isTeamChest(obj) then
+		return ctx.GoldSystem.ChestCost() -- [stream E2] one shared price, no multiplier
+	end
 	return ItemData.PlayerPrice(obj.Price, goldMult(rp.Player))
+end
+
+-- [stream E2] the redesign economy (guarded: unit scenes boot this module with a partial ctx)
+local function teamGoldOn(): boolean
+	local G = ctx.GoldSystem
+	return G ~= nil and G.TeamGoldOn ~= nil and G.TeamGoldOn() == true
+end
+local function chestItemsHidden(): boolean
+	local I = ctx.ItemSystem
+	return I ~= nil and I.ChestItemsHidden ~= nil and I.ChestItemsHidden() == true
+end
+
+-- What pays for obj: the team balance for a team chest, else the player's run escrow.
+local function walletFor(rp, obj: Obj): number
+	if isTeamChest(obj) then
+		return ctx.GoldSystem.TeamGold()
+	end
+	return ctx.GoldSystem.RunWallet(rp)
 end
 
 ------------------------------------------------------------------------------------------
@@ -514,16 +554,55 @@ local function buildChest(typeName: string, pos: Vector3, yawJitter: number, fre
 	if typeName == "Golden" then
 		addGlow(obj, pos + Vector3.new(0, 3.4, 0), P.gold_300, true, false)
 	end
+	local passive = chestItemsHidden()
 	setAttrs(obj, {
 		Price = obj.Price,
 		Hold = Config.Chests.HoldSeconds[typeName] or 1,
-		Benefit = chestBenefit(typeName),
+		Benefit = passive and "A passive choice" or chestBenefit(typeName),
 		Tradeoff = "",
 		Detail = "Pay run gold · hold to open",
 		State = "Ready",
 	})
+	if not free and teamGoldOn() then
+		-- [stream E2] bought with the team's run gold at the shared, rising chest price
+		obj.TeamChest = true
+		obj.Price = ctx.GoldSystem.ChestCost()
+		setAttrs(obj, {
+			Price = obj.Price,
+			TeamGold = true,
+			Benefit = passive and "A passive choice for every hero" or chestBenefit(typeName),
+			Detail = "Team gold · hold to open",
+		})
+	end
 	obj.Model.Parent = folder
 	return obj
+end
+
+-- [stream E2] After a purchase every team chest shows the new shared price.
+local function refreshTeamPrices()
+	local cost = ctx.GoldSystem.ChestCost()
+	for _, obj in ipairs(list) do
+		if isTeamChest(obj) and obj.Price ~= cost then
+			obj.Price = cost
+			obj.Model:SetAttribute("Price", cost)
+		end
+	end
+end
+
+--[[
+	[stream E2] The players a team chest rewards, taken at the moment it is bought:
+	initialized, connected, non-eliminated participants, downed heroes included
+	(XPSystem.IsEligible). Expected-but-unarrived, eliminated and disconnected players are
+	not in it; nobody who arrives later is added.
+]]
+function LootSystem.ChestRecipients(): { any }
+	local out = {}
+	for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if ctx.XPSystem.IsEligible(other) then
+			table.insert(out, other)
+		end
+	end
+	return out
 end
 
 local SHRINE_LOOK = {
@@ -855,7 +934,7 @@ end
 local function buildTreasure(arena, pos: Vector3)
 	local obj = buildChest("Small", pos, 0, true)
 	obj.Type, obj.Price = "Treasure", 0
-	setAttrs(obj, { LootType = "Treasure", Title = TITLES.Treasure, Price = 0, Benefit = "Free uncommon or legendary item", Detail = "Discovered cache · hold to claim" })
+	setAttrs(obj, { LootType = "Treasure", Title = TITLES.Treasure, Price = 0, Benefit = chestItemsHidden() and "A free passive choice" or "Free uncommon or legendary item", Detail = "Discovered cache · hold to claim" })
 	addGlow(obj, pos + Vector3.new(0, 2.7, 0), P.gold_300, true, false)
 	MapBuilder.ClearDecor(arena, pos, 3)
 	return obj
@@ -1184,7 +1263,7 @@ local function check(rp, obj: Obj): (boolean, string?)
 		return false, "far"
 	end
 	local price = priceFor(rp, obj)
-	if price > 0 and ctx.GoldSystem.RunWallet(rp) < price then
+	if price > 0 and walletFor(rp, obj) < price then
 		return false, "gold"
 	end
 	return true, nil
@@ -1197,29 +1276,79 @@ local REASON_TEXT = {
 	locked = "Defeat its guard first.",
 }
 
-local function openChest(rp, obj: Obj)
-	local price = priceFor(rp, obj)
-	if not ctx.GoldSystem.SpendRunGold(rp, price) then
-		feedback(rp, obj, "Cancel", "gold")
-		ctx.RunManager.Notify(rp.Player, REASON_TEXT.gold, Color3.fromRGB(255, 120, 120))
+-- [stream E2] One chest reward: a "Chest" / "PassiveOnly" choice from stream B (up to 3
+-- distinct passive options, claimed once); a chest reward also charges Ruckus's Loot Rush.
+local function queueChestChoice(r, title: string)
+	local ok, err = pcall(ctx.LevelUpSystem.QueueChoice, r, "Chest", "PassiveOnly")
+	if not ok then
+		warn("[LootSystem] chest choice failed: " .. tostring(err))
 		return
 	end
-	if ctx.MetaService then
-		ctx.MetaService.OnGoldPaid(rp, price) -- Haggler's Coin Sigil: part of the price back
+	if ctx.ClassKits and ctx.ClassKits.OnLootPickup then
+		pcall(ctx.ClassKits.OnLootPickup, r, title)
+	end
+end
+
+local function openChest(rp, obj: Obj)
+	if obj.State ~= "Ready" then
+		feedback(rp, obj, "Cancel", "used") -- (a hold that finished after the chest was bought)
+		return
+	end
+	local price
+	local team = isTeamChest(obj)
+	if team then
+		-- [stream E2] the deliberate completed hold buys it with the TEAM gold: one atomic debit
+		local paid, cost = ctx.GoldSystem.BuyChest()
+		price = cost
+		if not paid then
+			feedback(rp, obj, "Cancel", "gold")
+			ctx.RunManager.Notify(rp.Player, REASON_TEXT.gold, Color3.fromRGB(255, 120, 120))
+			return
+		end
+	else
+		price = priceFor(rp, obj)
+		if not ctx.GoldSystem.SpendRunGold(rp, price) then
+			feedback(rp, obj, "Cancel", "gold")
+			ctx.RunManager.Notify(rp.Player, REASON_TEXT.gold, Color3.fromRGB(255, 120, 120))
+			return
+		end
+		if ctx.MetaService then
+			ctx.MetaService.OnGoldPaid(rp, price) -- Haggler's Coin Sigil: part of the price back
+		end
 	end
 	-- Exactly once (ISSUE TS-02): the chest leaves "Ready" before anything else, so no
 	-- second hold (this player's or a teammate's) can complete it, and the item is granted
 	-- right after the gold is taken, before any cosmetic step that could fail. What the
 	-- client shows afterwards (card, reveal, skip, close, death) never touches the grant.
 	setState(obj, "Opened")
-	local weights = obj.Weights or Config.Chests.Weights[obj.Type] or (obj.Type == "Treasure" and Config.Chests.Weights.Large) or Config.Chests.Weights.Small
-	local id = ctx.ItemSystem.Roll(weights, rp.Stats.Luck)
-	local granted, dramatic = ctx.ItemSystem.Grant(rp, id, obj.Title or TITLES[obj.Type], true)
-	if granted then
-		-- the Golden Chest always gets the contained reveal (it pays a Legendary anyway)
-		ctx.RunManager.HoldReward(rp, dramatic == true or obj.Type == "Golden")
+	if team then
+		refreshTeamPrices()
+	end
+	if ctx.ClassGoals then
+		ctx.ClassGoals.OnChestOpened(rp) -- [stream E2] the opener's "Chests" goal
+	end
+	local title = obj.Title or TITLES[obj.Type]
+	if chestItemsHidden() then
+		-- [stream E2] no old item: a passive choice for every recipient of the snapshot (a
+		-- team chest) or for the opener (a free chest)
+		local recipients = team and LootSystem.ChestRecipients() or { rp }
+		for _, r in ipairs(recipients) do
+			queueChestChoice(r, title)
+		end
+		if team and #recipients > 1 then
+			ctx.RunManager.Broadcast(rp.Player.DisplayName .. " opened a chest: a passive choice for everyone!", Color3.fromRGB(255, 220, 120), nil, { Id = "chest.team" })
+		end
 	else
-		warn(string.format("[LootSystem] %s paid %d for a %s but no item could be granted", rp.Player.Name, price, obj.Type))
+		-- the existing reward (until stream B's QueueChoice lands): one item for the opener
+		local weights = obj.Weights or Config.Chests.Weights[obj.Type] or (obj.Type == "Treasure" and Config.Chests.Weights.Large) or Config.Chests.Weights.Small
+		local id = ctx.ItemSystem.Roll(weights, rp.Stats.Luck)
+		local granted, dramatic = ctx.ItemSystem.Grant(rp, id, title, true)
+		if granted then
+			-- the Golden Chest always gets the contained reveal (it pays a Legendary anyway)
+			ctx.RunManager.HoldReward(rp, dramatic == true or obj.Type == "Golden")
+		else
+			warn(string.format("[LootSystem] %s paid %d for a %s but no item could be granted", rp.Player.Name, price, obj.Type))
+		end
 	end
 	local okFx, err = pcall(function()
 		openLid(obj.Chest, obj.CF, "Chest_" .. (obj.Type == "Treasure" and "Small" or obj.Type))

@@ -695,7 +695,8 @@ local function nearestGem(maxD: number): Vector3?
 	end
 	local best, bd = nil, maxD * maxD
 	for _, g in ipairs(folder:GetChildren()) do
-		if g:IsA("BasePart") and g:GetAttribute("Active") == true then
+		local owner = g:GetAttribute("Owner") -- [stream E2] a teammate's personal shard is not mine
+		if g:IsA("BasePart") and g:GetAttribute("Active") == true and (type(owner) ~= "number" or owner == game:GetService("Players").LocalPlayer.UserId) then
 			local b = g:GetAttribute("Base")
 			if typeof(b) == "Vector3" then
 				local dx, dz = b.X - hp.X, b.Z - hp.Z

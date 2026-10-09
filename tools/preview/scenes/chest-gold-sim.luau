@@ -4,6 +4,9 @@
 -- run). The client prices chests with the GoldMult attribute the server published, so the
 -- server must charge that same price: a player holding exactly the shown price opens the
 -- chest, never sees "Not enough gold.", and one gold short is still refused.
+-- Redesign economy (RunConfig.Economy on, stream E2): chests are bought with the TEAM run gold
+-- at the shared SwarmState ChestCost (no pass multiplier), so 1) and 2) check that price; the
+-- player-priced escrow path (GoldMult) is still used by the Shrine of Chance, checked in 2b.
 local C = lib("common")
 local Players = game:GetService("Players")
 preview.forceMeshesUploaded()
@@ -61,8 +64,13 @@ local function standAt(obj)
 	end
 end
 
--- what the client shows (LootUI.priceOf / canAfford)
+-- what the client shows (LootUI.priceOf / canAfford): a team chest (TeamGold) shows the shared
+-- ChestCost, everything else Price x GoldMult
+local state = preview.shared("Remotes").State()
 local function shownPrice(obj): number
+	if obj.Model:GetAttribute("TeamGold") == true then
+		return tonumber(state:GetAttribute("ChestCost")) or 0
+	end
 	return ItemData.PlayerPrice(tonumber(obj.Model:GetAttribute("Price")) or 0, tonumber(me:GetAttribute("GoldMult")) or 1)
 end
 
@@ -73,17 +81,34 @@ local function setRunGold(n: number)
 	me:SetAttribute("RunGold", n)
 end
 
+-- the wallet an object is paid from: the team balance for a team chest, else the run escrow
+local function setWallet(obj, n: number)
+	if obj.TeamChest then
+		Gold.SetTeamGold(n)
+		advance(0.15) -- (the attribute flush)
+	else
+		setRunGold(n)
+	end
+end
+local function walletOf(obj): number
+	return obj.TeamChest and Gold.TeamGold() or Gold.RunWallet(rp)
+end
+
 local function tryOpen(obj): (boolean, string?)
 	table.clear(feedback)
 	standAt(obj)
 	advance(0.1)
+	local tries = obj.Tries or 0
 	preview.remote("LootHold"):FireServer(obj.Id, true)
-	advance((Config.Chests.HoldSeconds[obj.Type] or 0.4) + 0.2)
+	advance((tonumber(obj.Model:GetAttribute("Hold")) or Config.Chests.HoldSeconds[obj.Type] or 0.4) + 0.2)
 	preview.remote("LootHold"):FireServer(obj.Id, false)
 	advance(0.2)
 	local reason
 	for _, f in ipairs(feedback) do
 		if f.State == "Cancel" then reason = f.Reason end
+	end
+	if obj.Kind == "Shrine" then
+		return (obj.Tries or 0) > tries, reason -- a used Shrine of Chance counts a try
 	end
 	return obj.State == "Opened", reason
 end
@@ -93,21 +118,29 @@ local function check(ok, label)
 	preview.log((ok and "PASS " or "FAIL ") .. label)
 	if not ok then failures += 1 end
 end
+local function clearPanels()
+	for _ = 1, 20 do
+		if not me:GetAttribute("Paused") then break end
+		preview.remote("LevelUpChoose"):FireServer(1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId"))
+		advance(0.3)
+	end
+	RM.EndReward(rp)
+end
 
 -- 1) the pass lookup answers mid-run: the server's live multiplier is now x2
 passOn = true
 local chest = assert(readyChest(), "a priced chest on stage 1")
+local teamChests = chest.TeamChest == true
 local shown = shownPrice(chest)
-setRunGold(shown) -- the HUD shows exactly the price on the chest
-check(Gold.RunWallet(rp) >= shown, string.format("HUD gold %d covers the shown price %d", rp.Gold, shown))
-local opened, reason = tryOpen(chest)
-check(opened and reason == nil, string.format("chest opens with the shown price (opened=%s reason=%s gold left=%d)", tostring(opened), tostring(reason), rp.Gold))
-advance(6)
-for _ = 1, 20 do
-	if not me:GetAttribute("Paused") then break end
-	preview.remote("LevelUpChoose"):FireServer(1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId"))
-	advance(0.3)
+if teamChests then
+	check(shown == Gold.ChestCost() and chest.Model:GetAttribute("Price") == shown, string.format("team chest shows the shared price %d (no pass multiplier)", shown))
 end
+setWallet(chest, shown) -- the HUD shows exactly the price on the chest
+check(walletOf(chest) >= shown, string.format("HUD gold %d covers the shown price %d", walletOf(chest), shown))
+local opened, reason = tryOpen(chest)
+check(opened and reason == nil, string.format("chest opens with the shown price (opened=%s reason=%s gold left=%d)", tostring(opened), tostring(reason), walletOf(chest)))
+advance(6)
+clearPanels()
 
 -- 2) the next gold earned publishes the new multiplier; prices and display move together
 Gold.AddRunGold(rp, 1)
@@ -115,16 +148,44 @@ check(me:GetAttribute("GoldMult") == Monetization.GoldMultiplier(me), "GoldMult 
 local chest2 = readyChest()
 if chest2 then
 	local shown2 = shownPrice(chest2)
-	check(shown2 == ItemData.PlayerPrice(chest2.Price, Monetization.GoldMultiplier(me)), "shown price now uses the new multiplier")
-	setRunGold(shown2 - 1)
+	if chest2.TeamChest then
+		check(shown2 == Gold.ChestCost() and shown2 > shown, string.format("team chest price rose after a purchase (%d -> %d), still no multiplier", shown, shown2))
+	else
+		check(shown2 == ItemData.PlayerPrice(chest2.Price, Monetization.GoldMultiplier(me)), "shown price now uses the new multiplier")
+	end
+	setWallet(chest2, shown2 - 1)
 	local opened2, reason2 = tryOpen(chest2)
 	check(not opened2 and reason2 == "gold", "one gold short is still refused (" .. tostring(reason2) .. ")")
-	setRunGold(shown2)
+	setWallet(chest2, shown2)
 	advance(1)
 	local opened3, reason3 = tryOpen(chest2)
 	check(opened3 and reason3 == nil, "exact shown price opens it (" .. tostring(reason3) .. ")")
+	clearPanels()
 else
 	preview.log("SKIP second chest (none left on the stage)")
+end
+
+-- 2b) the player-priced escrow path (Price x GoldMult) still holds for a Shrine of Chance
+local shrine
+for _, obj in pairs(Loot.Objects()) do
+	if obj.Kind == "Shrine" and obj.Type == "Chance" and obj.State == "Ready" then
+		shrine = obj
+		break
+	end
+end
+if shrine then
+	local shown3 = shownPrice(shrine)
+	check(shown3 == ItemData.PlayerPrice(shrine.Price, Monetization.GoldMultiplier(me)), "shrine price uses the pass multiplier")
+	setRunGold(shown3 - 1)
+	local used1, why1 = tryOpen(shrine)
+	check(not used1 and why1 == "gold", "shrine: one gold short is refused (" .. tostring(why1) .. ")")
+	setRunGold(shown3)
+	advance(1)
+	local used2, why2 = tryOpen(shrine)
+	check(used2 and why2 == nil, "shrine: the exact shown price is enough (" .. tostring(why2) .. ")")
+	clearPanels()
+else
+	preview.log("SKIP shrine (none on the stage)")
 end
 
 -- 3) a pass lookup / purchase refreshes the attributes: the shown price moves at once
