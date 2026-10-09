@@ -85,6 +85,11 @@ end
 
 -- True while the spectate bar may show.
 function Spectate.Active(): boolean
+	-- [stream F] the new survival rules (Downed / Eliminated attributes) have their own screen
+	-- (RunDowned); this older bar only serves runs that do not set them
+	if player:GetAttribute("Downed") ~= nil or player:GetAttribute("Eliminated") ~= nil then
+		return false
+	end
 	return on() and inTeamRun() and player:GetAttribute("Alive") == false and not UIState.Covered()
 end
 

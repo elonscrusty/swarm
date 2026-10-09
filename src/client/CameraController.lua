@@ -121,7 +121,20 @@ local function rootOf(p: Player): BasePart?
 end
 
 local function canSpectate(p: Player?): boolean
-	return p ~= nil and p.Parent ~= nil and p:GetAttribute("InRun") == true and p:GetAttribute("Alive") == true and rootOf(p) ~= nil
+	-- [stream F] a living teammate: not downed, not eliminated (the new survival attributes)
+	return p ~= nil
+		and p.Parent ~= nil
+		and p:GetAttribute("InRun") == true
+		and p:GetAttribute("Alive") ~= false
+		and p:GetAttribute("Downed") ~= true
+		and p:GetAttribute("Eliminated") ~= true
+		and rootOf(p) ~= nil
+end
+
+-- [stream F] The local player is out of the action: down in the older flow (Alive false) or, in the
+-- new survival rules, eliminated / spectating. The follow camera and the spectate cycle use this.
+local function iAmOut(): boolean
+	return player:GetAttribute("Alive") == false or player:GetAttribute("Eliminated") == true or player:GetAttribute("Spectating") == true
 end
 
 -- Living teammates the camera may follow, in a stable order (UserId).
@@ -140,7 +153,7 @@ end
 
 -- The teammate followed while the local player is down in a run (nil otherwise).
 function CameraController.Spectated(): Player?
-	if player:GetAttribute("InRun") == true and player:GetAttribute("Alive") == false and canSpectate(spectated) then
+	if player:GetAttribute("InRun") == true and iAmOut() and canSpectate(spectated) then
 		return spectated
 	end
 	return nil
@@ -150,7 +163,7 @@ end
 -- (step -1) living teammate. Only while the local player is down in a run; the camera
 -- glides over (SpectatePanSeconds). Returns who is followed now.
 function CameraController.SpectateCycle(step: number): Player?
-	if player:GetAttribute("InRun") ~= true or player:GetAttribute("Alive") ~= false then
+	if player:GetAttribute("InRun") ~= true or not iAmOut() then
 		return nil
 	end
 	local list = spectateList()
@@ -374,7 +387,7 @@ end
 -- same living teammate for as long as that teammate stays up.
 local function subjectPosition(): (Vector3?, any)
 	local inRun = player:GetAttribute("InRun") == true
-	if inRun and player:GetAttribute("Alive") == false then
+	if inRun and iAmOut() then
 		if not canSpectate(spectated) then
 			spectated = nil
 			for _, other in ipairs(Players:GetPlayers()) do

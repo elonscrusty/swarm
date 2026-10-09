@@ -596,6 +596,9 @@ local offerHint: string? = nil -- first-run explanation under the title (Tutoria
 local Choice: { [string]: any } = {
 	Prompts = require(script.Parent.InputPrompts), -- device-aware "how to choose" (COPY)
 	FrozenLeft = nil :: number?, -- seconds shown while the server clock is stopped (ChoiceTimerPaused)
+	-- [stream F] the continuation brief's live compact cards (RunCards): used for payloads that carry
+	-- the new fields (Category / Rarity / RankFrom / RankTo / Slot / Lines / Synergy / Deadline ...)
+	Screens = require(script.Parent.Parent:WaitForChild("SwarmV2Client"):WaitForChild("Run"):WaitForChild("RunScreens")),
 }
 
 -- Upgrade choice sounds (Config.Sounds, docs/overhaul/AUDIO_MIX.md).
@@ -2527,6 +2530,19 @@ local function offerImages(offer): { string }
 end
 
 local function showOffer(offer)
+	-- [stream F] new-contract payloads use the live compact cards: no dim, no freeze, movement and
+	-- camera input untouched (RunCards); the previous full-screen panel serves older payloads
+	if Choice.Screens.Cards.Wants(offer) then
+		if levelUp.Overlay.Visible then
+			offerOpen = false
+			offerArm.Token += 1
+			hide(levelUp.Overlay, "LevelUp")
+		end
+		Choice.Screens.Cards.Show(offer)
+		return
+	elseif Choice.Screens.Cards.IsOpen() then
+		Choice.Screens.Cards.Close()
+	end
 	local samePanel = offer.PanelId ~= nil and lastOffer ~= nil and offer.PanelId == lastOffer.PanelId and levelUp.Overlay.Visible
 	offerArm.Token += 1
 	local token = offerArm.Token
@@ -2611,6 +2627,7 @@ local function showOffer(offer)
 end
 
 local function closeOffer()
+	Choice.Screens.Cards.Close()
 	offerOpen = false
 	offerHint = nil
 	require(script.Parent.LevelUpBanish).Close()
@@ -4014,9 +4031,28 @@ function runMenu.saveWarning(): string?
 	return nil
 end
 
+-- [stream F] Danger context for the live run menu: enemies close by and the hero's health, so the
+-- player sees what the unpaused world is doing before they read anything else.
+function runMenu.dangerLine(): string
+	local root = player.Character and player.Character.PrimaryPart
+	local hp, maxHp = tonumber(player:GetAttribute("HP")) or 0, math.max(1, tonumber(player:GetAttribute("MaxHP")) or 1)
+	local near = 0
+	local folder = workspace:FindFirstChild("SwarmEnemies")
+	if root and folder then
+		for _, m in ipairs(folder:GetChildren()) do
+			local body = m:FindFirstChild("Body")
+			if body and body:IsA("BasePart") and body.Position.Y > -100 and (body.Position - root.Position).Magnitude <= 45 then
+				near += 1
+			end
+		end
+	end
+	local words = near == 0 and "No enemies close" or string.format("%d enem%s within 45 studs", near, near == 1 and "y" or "ies")
+	return string.format("%s  ·  health %d%%", words, math.floor(hp / maxHp * 100 + 0.5))
+end
+
 -- The line under the title: what the run is doing while this menu is open.
 function runMenu.runMenuNote(): string
-	local note = runMenu.menuFreezesRun() and "The run is paused while this menu is open." or "Game not paused, you can be hit."
+	local note = runMenu.menuFreezesRun() and "The run is paused while this menu is open." or ("Game not paused, you can be hit. " .. runMenu.dangerLine())
 	local warn = runMenu.saveWarning()
 	return warn and (note .. " " .. warn) or note
 end
@@ -4400,7 +4436,7 @@ function runMenu.setConfirm(on: boolean)
 		UIKit.FocusIfGamepad(runMenu.Return.Instance)
 	else
 		runMenu.Title.Text = "RUN MENU"
-		runMenu.PillText.Text = UIKit.track(runMenu.teamWord() .. " · " .. (frozen and "Game paused" or "Run continues"))
+		runMenu.PillText.Text = UIKit.track(frozen and (runMenu.teamWord() .. " · Game paused") or "The run continues")
 		runMenu.PillStroke.Color = frozen and C.PanelEdge or C.Danger
 		runMenu.PillText.TextColor3 = frozen and C.BlueDeep or C.TextDanger
 		runMenu.Note.Text = runMenu.runMenuNote()
@@ -4918,11 +4954,11 @@ local function buildResults()
 	results.AccountFrame = results.AccountCard.Frame
 
 	-- 4. rewards (new best, arena unlocked, achievements, first-run bonus, cosmetics)
-	results.Best = UIKit.Badge(body, "NEW BEST TIME!", "Gold", { LayoutOrder = 4, Visible = false })
-	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 5, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, Visible = false })
+	results.Best = UIKit.Badge(body, "NEW BEST TIME!", "Gold", { LayoutOrder = 5, Visible = false })
+	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 6, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, Visible = false })
 	results.Achievements = text(body, "Small", "", {
 		Name = "Achievements",
-		LayoutOrder = 6,
+		LayoutOrder = 7,
 		Size = UDim2.new(1, 0, 0, 0),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextYAlignment = Enum.TextYAlignment.Top,
@@ -4936,7 +4972,7 @@ local function buildResults()
 	-- difficulty, curses, daily, bonus breakdown, recent damage, the build and the items
 	local toggle = new("TextButton", {
 		Name = "RunDetails",
-		LayoutOrder = 7,
+		LayoutOrder = 9,
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundColor3 = C.PanelRaised,
@@ -4953,7 +4989,7 @@ local function buildResults()
 	results.DetailsState = text(toggle, "Caption", "SHOW", { Name = "State", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(64, TS(12) + 6), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.BlueDeep }, 12)
 	results.Details = text(body, "Small", "", {
 		Name = "DetailsText",
-		LayoutOrder = 8,
+		LayoutOrder = 10,
 		Size = UDim2.new(1, 0, 0, 0),
 		TextWrapped = true,
 		RichText = true,
@@ -4962,8 +4998,8 @@ local function buildResults()
 		TextColor3 = C.TextMuted,
 		Visible = false,
 	})
-	results.BuildHolder = new("Frame", { Name = "Build", BackgroundTransparency = 1, LayoutOrder = 9, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
-	results.ItemsHolder = new("Frame", { Name = "ItemsHolder", BackgroundTransparency = 1, LayoutOrder = 10, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
+	results.BuildHolder = new("Frame", { Name = "Build", BackgroundTransparency = 1, LayoutOrder = 11, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
+	results.ItemsHolder = new("Frame", { Name = "ItemsHolder", BackgroundTransparency = 1, LayoutOrder = 12, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
 	results.DetailsOpen = false
 	toggle.Activated:Connect(function()
 		results.DetailsOpen = not results.DetailsOpen
@@ -5025,7 +5061,7 @@ local function buildResults()
 	})
 	results.Button = UIKit.Button(row, {
 		Kind = "Secondary",
-		Title = "MAIN MENU",
+		Title = "RETURN TO LOBBY",
 		Icon = "castle",
 		IconSize = 22,
 		Align = "Center",
@@ -5098,6 +5134,10 @@ local function buildResults()
 		end)
 	end)
 
+	-- [stream F] outcome line, run stats, new unlocks (in the body) and the save line (above the buttons)
+	results.Extras = require(script.Parent.Parent:WaitForChild("SwarmV2Client"):WaitForChild("Run"):WaitForChild("ResultsExtras"))
+	results.Extras.Build(body, content)
+
 	local function lineCount(str: string, size: number, width: number): number
 		local n = 0
 		for line in string.gmatch(str .. "\n", "([^\n]*)\n") do
@@ -5112,6 +5152,8 @@ local function buildResults()
 		local w = tallModalWidth(760)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
+		-- [stream F] outcome line, run stats, new unlocks and the pinned save line (ResultsExtras)
+		local saveH = results.Extras.Layout(inner)
 		-- phones in landscape: a smaller title, slim tiles without icons, lower buttons
 		-- (slim: tighter gaps, header, tiles, ledger and progress cards so the ledger and the
 		-- three progress bars fit above the fold on a phone in landscape)
@@ -5228,8 +5270,8 @@ local function buildResults()
 		results.ButtonRow.Size = UDim2.new(1, 0, 0, btnH)
 		results.Replay.Instance.Size = UDim2.fromOffset(bw, btnH)
 		results.Button.Instance.Size = UDim2.fromOffset(bw, btnH)
-		results.ButtonRow.LayoutOrder = 6
-		results.Footer.LayoutOrder = 7
+		results.ButtonRow.LayoutOrder = 7
+		results.Footer.LayoutOrder = 8
 		local goalH = 0
 		if results.Goal.Visible then
 			local meterShown = results.GoalMeter.Frame.Visible
@@ -5266,7 +5308,7 @@ local function buildResults()
 		results.FooterList.Padding = UDim.new(0, stacked and 4 or 14)
 		local footH = stacked and (TS(12) + 6 + 4 + bugH) or bugH
 		results.Footer.Size = UDim2.new(1, 0, 0, footH)
-		local fixed = headH + (slim and -gap or 10) + btnH + footH + 4 * gap + 2 * padY + 8 + (goalH > 0 and goalH + gap or 0)
+		local fixed = headH + (slim and -gap or 10) + btnH + footH + 4 * gap + 2 * padY + 8 + (goalH > 0 and goalH + gap or 0) + (saveH > 0 and saveH + gap or 0)
 		-- the scroll area may shrink a little for the pinned NEXT GOAL (the tiles still show)
 		local minRoom = math.min(goalH > 0 and 96 or 140, tileH)
 		local room = math.max(minRoom, v.Y - (slim and 12 or 24) - fixed)
@@ -5653,6 +5695,19 @@ local function onRunResult(data)
 	Tutorial.Clear()
 	pendingReplay = nil
 	results.Data = data
+	-- [stream F] the server-confirmed outcome (Victory / Defeat / Left) sets the verdict flags the
+	-- title reads; Duration stands in for Time. Nothing here is calculated on the client.
+	if type(data.Outcome) == "string" then
+		if data.Won == nil then
+			data.Won = data.Outcome == "Victory"
+		end
+		if data.Abandoned == nil and data.Outcome == "Left" then
+			data.Abandoned = true
+		end
+	end
+	if data.Time == nil and type(data.Duration) == "number" then
+		data.Time = data.Duration
+	end
 	-- InLobby: the player left through a portal and is back at the menu already; the
 	-- panel then sits over the lobby until closed (or its timer runs out)
 	results.InLobby = data.InLobby == true
@@ -5801,6 +5856,7 @@ local function onRunResult(data)
 	results.Achievements.Visible = #lines > 0
 	results.Achievements.Text = table.concat(lines, "\n")
 	results.Achievements.Size = UDim2.new(1, 0, 0, #lines * (TS(Theme.TextSize.Small) + 6))
+	results.Extras.Fill(data)
 	-- the build, then the run's items (they are gone now; this is the last look at them)
 	results.Layout()
 	fillBuild(data.Build)
@@ -6128,6 +6184,7 @@ local function updateFrame(dt: number)
 	LootUI.Update(dt, inRun)
 	TeamUI.Update(dt, state, inRun)
 	MiniMap.Update(dt, state, inRun)
+	Choice.Screens.Update(dt, state, inRun)
 	local modalOpen = UIState.Owner() ~= nil
 	RunIntro.Update(dt, state, inRun)
 	-- UIState lanes: informational headlines wait for the stage-start card
@@ -6339,6 +6396,24 @@ function UIBuilder.Init(d: { [string]: any })
 			return uiScale.Scale
 		end,
 	})
+	-- [stream F] the continuation brief's run screens: live upgrade cards, the interact prompt, the
+	-- downed / revived / spectate screen (they read the shared-contract attributes)
+	Choice.Screens.Build(root, {
+		OnRelayout = onRelayout,
+		VirtualSize = virtualSize,
+		TopBottom = Hud.TopBottom,
+		TimerBottom = function(): number
+			local r = Hud.RunRect("Timer")
+			return r and (r.Y + r.H) or 70
+		end,
+		EquipmentTop = Hud.BarTop,
+		Thumbs = function(): { [string]: any }
+			return { Stick = Hud.RunRect("Stick"), Jump = Hud.RunRect("Jump"), Dash = Hud.RunRect("Dash") }
+		end,
+		OpenMenu = function()
+			UIBuilder.OpenPause()
+		end,
+	})
 	RunIntro.Build(root, { OnRelayout = onRelayout, VirtualSize = virtualSize, IsPortrait = function(): boolean
 		return portrait
 	end })
@@ -6446,6 +6521,22 @@ function UIBuilder.Init(d: { [string]: any })
 		end
 	end)
 	applyVolumes()
+
+	-- [stream F] Escape in a run opens the compact run menu ("The run continues": a live team run is
+	-- never paused) and closes it again; a big map or an open inventory takes the key first. Roblox's own
+	-- menu still opens on Escape (the platform owns that key); this adds the run menu beside it.
+	UserInputService.InputBegan:Connect(function(input)
+		if input.KeyCode ~= Enum.KeyCode.Escape or player:GetAttribute("InRun") ~= true or UserInputService:GetFocusedTextBox() then
+			return
+		end
+		if Hud.BuildOpen() then
+			Hud.SetBuildOpen(false)
+		elseif UIState.Owner() == "Pause" then
+			UIBuilder.ClosePause()
+		elseif UIState.CanOpen("Pause") and not require(script.Parent.Parent:WaitForChild("SwarmV2Client"):WaitForChild("Run"):WaitForChild("BigMap")).RecentlyClosed() then
+			UIBuilder.OpenPause()
+		end
+	end)
 
 	RunService.RenderStepped:Connect(updateFrame)
 	Remotes.Get("RequestProfile"):FireServer()

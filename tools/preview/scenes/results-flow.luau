@@ -131,7 +131,7 @@ elseif case == "stay" then
 	preview.advance(15, 4)
 	check("results still open long after the old timer", visible(), timerText())
 	check("footer: no countdown", string.find(timerText(), "STAYS OPEN") ~= nil, timerText())
-	local menu = button("MAIN MENU")
+	local menu = button("RETURN TO LOBBY")
 	if menu then
 		preview.click(menu)
 	end

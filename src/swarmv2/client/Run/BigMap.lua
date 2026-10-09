@@ -216,11 +216,19 @@ function BigMap.Open()
 	end
 end
 
+local closedAt = -math.huge
+
+-- Closed in the last moment? (Escape closes the map first and must not also open the run menu.)
+function BigMap.RecentlyClosed(): boolean
+	return os.clock() - closedAt < 0.25
+end
+
 function BigMap.Close()
 	if not open then
 		return
 	end
 	open = false
+	closedAt = os.clock()
 	if ui.Overlay then
 		ui.Overlay.Visible = false
 	end

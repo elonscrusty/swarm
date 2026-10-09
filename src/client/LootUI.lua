@@ -695,13 +695,39 @@ local function usable(model: Model): boolean
 end
 
 local function canAfford(model: Model): boolean
-	return (tonumber(player:GetAttribute("RunGold")) or 0) >= priceOf(model)
+	-- [stream F] the team's run gold (SwarmState TeamRunGold) when the server sets it
+	return Hud.Gold() >= priceOf(model)
+end
+
+-- [stream F] the run interact prompt (RunInteract) presents chests and forwards the press:
+--   LootUI.Target()       the loot model in reach (nil when none)
+--   LootUI.PriceOf(m)     what it costs this player
+--   LootUI.HoldProgress() 0..1 of the hold in progress
+--   LootUI.Suppress       set by RunInteract: true while a revive / beacon hold owns the key (no chest hold)
+--   LootUI.HideChestPrompt set by RunInteract: true when its own prompt draws chests (this one stays hidden)
+LootUI.Suppress = nil :: (() -> boolean)?
+LootUI.HideChestPrompt = nil :: (() -> boolean)?
+function LootUI.Target(): Model?
+	return target
+end
+function LootUI.PriceOf(model: Model): number
+	return priceOf(model)
+end
+function LootUI.HoldProgress(): number
+	if hold.Id == 0 then
+		return 0
+	end
+	return math.clamp((os.clock() - hold.Start) / math.max(0.1, hold.Seconds), 0, 1)
 end
 
 function LootUI.Press()
 	local t = target
 	-- a panel or reward feedback owns the screen: no hold, no purchase (UIState contract §4)
 	if not t or hold.Id ~= 0 or not usable(t) or not UIState.WorldInputAllowed() then
+		return
+	end
+	-- a possible revive (or the beacon) owns the interact key: an incidental chest is not bought
+	if LootUI.Suppress and LootUI.Suppress() then
 		return
 	end
 	if not canAfford(t) then
@@ -1336,6 +1362,10 @@ function LootUI.Update(_dt: number, inRun: boolean)
 		LootUI.Release()
 	end
 	local shown = target ~= nil and target.Parent ~= nil and allowed
+	-- [stream F] RunInteract draws the chest prompt in the new run flow (the shrine / altar prompt stays here)
+	if shown and LootUI.HideChestPrompt and (target :: Model):GetAttribute("LootKind") == "Chest" and LootUI.HideChestPrompt() then
+		shown = false
+	end
 	ui.Prompt.Visible = shown
 	if shown and usable(target :: Model) then
 		local t = target :: Model
