@@ -108,10 +108,27 @@ MatchAdmission.ReturnToLobby(list) --> { { userId, ok, errorCode?, message? } }
 - `RunServers` (old) ignores arrivals with `TeleportData.SwarmV2`.
 - Player attribute `Travel = "ToRun"` is set during a transfer (the old TravelOverlay cover shows it).
 
-## 6. Tests
+## 6. Tests (offline only, 2026-10-09; nothing in Studio, nothing live)
 
-See section 7 (filled in at the end of the batch).
+| Check | Result |
+|---|---|
+| `bash tools/check.sh --quick` (type check, compile) | PASS, zero diagnostics |
+| `admission-regression` (MatchAdmission + TicketStore: roles, valid ticket, frozen + repeated context, every reject code, store outage, expiry, replay, wrong match / server / place, ReturnToLobby in match and local role, retries) | PASS 168/168 |
+| `lobby-queue-regression` (queues, whole-party admission, capacity, party-only gate, READY, countdown cancel on leave / unready / disconnect / class / party change, commit revalidation, Transfer live + local paths, partial teleport retries to the same reservation, exhausted failures, pads vs UI same transitions, pad spam, ClassOwnership buy / select / legacy id) | PASS 194/194 |
+| `party-v2-regression` (real server: invite / accept / expiry / full party races / kick / leave / leader policy / Promote / disconnect / OnChanged; save normalisation) | PASS 82/82 after fixing two bugs it found |
+| `basecamp` scene (world render, 1139 parts) | renders, 0 errors; looked at by eye |
+| `basecamp-ui` scene on iphone / phone-portrait / pc (12 views) | renders; `check_layout.py` clean except a deliberately long test name (ellipsis) |
+| Full `tools/run_regressions.py` | **NOT finished** (stopped by the owner at 241 of the checks): 220 PASS, 21 FAIL, all of them layout checks of the OLD lobby screens (menu, daily, party, results, explore, store, levelup). Not yet known whether they also fail on `main` or come from this branch (likely cause if ours: the basecamp boots in the preview's "local" role and hides the old Home screen, or the 6-worker run). Check with `python3 tools/run_regressions.py --only <name>` on both `main` and this branch before merging. |
 
-## 7. Results
+BLOCKED (need a published game / Studio): live reserved-server teleport, MemoryStore, real avatars
+(`LoadCharacterWithHumanoidDescription`), walking, ProximityPrompts, SurfaceGui gate signs (the preview
+does not draw them), phone feel. `build/Swarm.rbxlx` was NOT rebuilt on this branch (binary file, would
+conflict with the gameplay track's merge): rebuild once after the merge.
 
-(pending)
+## 7. Open items
+
+- PATCHES_lobby.md L1-L4 are required for the basecamp to be playable (old lobby hero, movement block,
+  menu camera, first-run auto start).
+- Pedestal figures are temporary part previews; swap in the real class models when they exist.
+- Old hero skins in the Store are still listed (the Store was not changed); decide whether to hide them.
+- Parties don't re-form after a return (PATCHES L6, needs a shared ticket field).
