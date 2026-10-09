@@ -554,6 +554,7 @@ for ci, cls in ipairs(classes) do
 end
 
 local logged = errorCount()
-check("no Step error / handler errors logged", logged == 0, logged)
+-- (worded so tools/run_regressions.py's error scan does not match this line itself)
+check("no step or remote-handler failures logged", logged == 0, logged)
 preview.setRaycast(nil)
 preview.log(if fails == 0 then "PASS cliffwood-run-sim" else string.format("FAIL: cliffwood-run-sim (%d checks)", fails))
