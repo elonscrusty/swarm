@@ -1731,6 +1731,10 @@ function LevelUpSystem.QueueChoice(rp, source: string?, kind: string?, bonus: bo
 		LevelUpSystem.QueueLevels(rp, 1)
 		return
 	end
+	-- [stream C] a chest reward charges Ruckus's Junk Collector (ClassKits; XP shards never do)
+	if source == "Chest" and ctx.ClassKits then
+		ctx.ClassKits.OnLootPickup(rp, "Chest")
+	end
 	R.setup(rp)
 	local q = R.queue(rp)
 	-- (bonus: a Shrine of Trial pick, QueueBonusPick: its offer holds a card above Common)

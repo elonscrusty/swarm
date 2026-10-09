@@ -4454,6 +4454,21 @@ function Class.plant(rp, w, pos: Vector3): Projectile?
 	return p
 end
 
+-- Live plants of the hero's signature Seed Slinger and its cap (HUD): count, cap.
+function WeaponSystem.KitPlants(rp): (number, number)
+	local w, id = Class.signature(rp)
+	if not w or not id or WeaponData.BehaviorOf(id) ~= "RankSeed" then
+		return 0, 0
+	end
+	local spec = WeaponData.RankSpec(id, w.Evolved and BuildRules.MaxRank() or w.Level)
+	return #Class.plants(w), spec and spec.PlantCap or 3
+end
+
+-- A cosmetic weapon effect for the clients (the WeaponFx keys listed at pushFx), e.g. Doug's wet trail.
+function WeaponSystem.KitFx(key: string, value: { any })
+	pushFx(key, value)
+end
+
 -- Barry's dash: one extra seed at `pos` from his Seed Slinger (shares the plant cap).
 function WeaponSystem.KitPlant(rp, pos: Vector3): boolean
 	local w, id = Class.signature(rp)

@@ -3,8 +3,9 @@
 	SwarmV2/Run/ClassAnimator.lua  (StarterPlayerScripts.SwarmV2Client.Run.ClassAnimator)
 	OWNER: gameplay track (Chat 2).
 
-	Procedural animation for the four class characters (ruckus, toastmaster, captain_croak,
-	granny_boom). The models are rigid MeshParts joined with Motor6Ds (ModelBuilder
+	Procedural animation for the twelve class characters (ruckus, toastmaster, captain_croak,
+	granny_boom, coach_crunch, doug_janitor, peter_parkour, barry_plotter, rambozo, swolverine,
+	crash_cassidy, knuckles_mcgee; the last eight tuned from stream A's rig notes). The models are rigid MeshParts joined with Motor6Ds (ModelBuilder
 	buildMeshCharacter), so this module only writes Motor6D.Transform; C0 / C1 are never touched.
 
 	Who: every player whose player attribute "CharacterId" is a class id (local player and
@@ -31,7 +32,11 @@ local FAR = 120
 local NEAR = 40
 local FAR_STEP = 1 / 30
 
-local CLASS_IDS: { [string]: boolean } = { ruckus = true, toastmaster = true, captain_croak = true, granny_boom = true }
+local CLASS_IDS: { [string]: boolean } = {
+	ruckus = true, toastmaster = true, captain_croak = true, granny_boom = true,
+	coach_crunch = true, doug_janitor = true, peter_parkour = true, barry_plotter = true,
+	rambozo = true, swolverine = true, crash_cassidy = true, knuckles_mcgee = true,
+}
 
 -- Per class tuning. Angles in radians, offsets in studs.
 type Tune = {
@@ -45,6 +50,7 @@ type Tune = {
 	IdleBob: number,
 	Hop: boolean, -- stiff hop: both legs together, bounce on every step
 	Snap: boolean, -- sharp steps (Toastmaster)
+	RightArm: number?, -- share of the arm swing on the right arm (gear held there); nil = 1
 }
 
 local TUNE: { [string]: Tune } = {
@@ -52,6 +58,23 @@ local TUNE: { [string]: Tune } = {
 	toastmaster = { Cycle = 0.5, LegSwing = 0.35, ArmSwing = 0.15, Bob = 0.28, Lean = 0.04, Sway = 0.03, HeadTilt = 0.03, IdleBob = 0.02, Hop = true, Snap = true },
 	captain_croak = { Cycle = 0.5, LegSwing = 0.7, ArmSwing = 0.6, Bob = 0.1, Lean = 0.1, Sway = 0.08, HeadTilt = 0.06, IdleBob = 0.05, Hop = false, Snap = false },
 	granny_boom = { Cycle = 0.4, LegSwing = 0.4, ArmSwing = 0, Bob = 0.07, Lean = 0.05, Sway = 0.07, HeadTilt = 0.05, IdleBob = 0.03, Hop = false, Snap = false },
+	-- [stream C] the eight newer classes (stream A's notes: gear anchors and swing hints)
+	-- Coach: ball on the right arm, a plain brisk walk
+	coach_crunch = { Cycle = 0.55, LegSwing = 0.7, ArmSwing = 0.6, Bob = 0.12, Lean = 0.12, Sway = 0.1, HeadTilt = 0.08, IdleBob = 0.04, Hop = false, Snap = false, RightArm = 0.6 },
+	-- Doug: mop on the right arm, soap on the left: a small, tired swing
+	doug_janitor = { Cycle = 0.45, LegSwing = 0.5, ArmSwing = 0.25, Bob = 0.08, Lean = 0.06, Sway = 0.06, HeadTilt = 0.04, IdleBob = 0.02, Hop = false, Snap = false },
+	-- Peter: spring shoes and long legs: a hop style with a bigger bob
+	peter_parkour = { Cycle = 0.55, LegSwing = 0.6, ArmSwing = 0.55, Bob = 0.34, Lean = 0.14, Sway = 0.06, HeadTilt = 0.06, IdleBob = 0.05, Hop = true, Snap = false },
+	-- Barry: staff and pots on the right arm: a reduced swing
+	barry_plotter = { Cycle = 0.45, LegSwing = 0.55, ArmSwing = 0.3, Bob = 0.09, Lean = 0.07, Sway = 0.08, HeadTilt = 0.06, IdleBob = 0.03, Hop = false, Snap = false, RightArm = 0.4 },
+	-- Rambozo: the gun is welded to the torso, arms posed on it: no arm swing
+	rambozo = { Cycle = 0.5, LegSwing = 0.6, ArmSwing = 0, Bob = 0.1, Lean = 0.08, Sway = 0.1, HeadTilt = 0.05, IdleBob = 0.04, Hop = false, Snap = false },
+	-- Swolverine: claws on the arms: a small, heavy swing with a strong sway
+	swolverine = { Cycle = 0.45, LegSwing = 0.55, ArmSwing = 0.3, Bob = 0.1, Lean = 0.1, Sway = 0.14, HeadTilt = 0.05, IdleBob = 0.05, Hop = false, Snap = false },
+	-- Crash: stick on the right arm (blade near the ground): long skating strides, right arm still
+	crash_cassidy = { Cycle = 0.35, LegSwing = 0.45, ArmSwing = 0.5, Bob = 0.06, Lean = 0.2, Sway = 0.18, HeadTilt = 0.05, IdleBob = 0.03, Hop = false, Snap = false, RightArm = 0.1 },
+	-- Knuckles: big gloves: ArmSwing ~0.3 and a boxer's bounce
+	knuckles_mcgee = { Cycle = 0.6, LegSwing = 0.6, ArmSwing = 0.3, Bob = 0.12, Lean = 0.1, Sway = 0.08, HeadTilt = 0.06, IdleBob = 0.07, Hop = false, Snap = false },
 }
 
 type Joints = {
@@ -342,7 +365,8 @@ local function pose(st: State, dt: number, damp: number)
 		end
 		local sx = breathe * 0.05 * idle
 		j.LS.Transform = CFrame.Angles((-lSwing * armA + up + sx - st.Crouch * 0.4) * damp, 0, 0)
-		j.RS.Transform = CFrame.Angles((-rSwing * armA + up - sx - st.Crouch * 0.4) * damp, 0, 0)
+		local rArm = t.RightArm or 1
+		j.RS.Transform = CFrame.Angles((-rSwing * armA * rArm + up * rArm - sx - st.Crouch * 0.4) * damp, 0, 0)
 	else
 		local r = (st.Kick * 0.12 + math.sin(ph) * 0.02 * walkAmt) * damp
 		j.LS.Transform = CFrame.Angles(r, 0, 0)

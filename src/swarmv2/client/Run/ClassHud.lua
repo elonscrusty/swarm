@@ -3,12 +3,15 @@
 	SwarmV2/Run/ClassHud.lua  (StarterPlayerScripts.SwarmV2Client.Run.ClassHud)
 	OWNER: gameplay track (Chat 2).
 
-	Small chip beside the ability / ULT panel showing the class passive:
-	  ruckus Loot Rush, toastmaster Overheat, captain_croak Big Splash, granny_boom Tangled Up.
+	Small chip beside the ability / ULT panel showing the class passive and its charge counter
+	(the twelve passives: Junk Collector, Overheat, Big Splash, Tangled Up, Warm-Up, Clean Route,
+	Stride, Garden Company, Punchline, Gains, Momentum, Heavy Hands).
 
-	Reads (LocalPlayer attributes): CharacterId (or SwarmClass), ClassCharge, InRun.
-	ClassCharge may be a number 0..1 (fills the bar, shows a percentage) or a count / text
-	(a number above 1 is shown as a count with a full bar, a string is shown as is).
+	Reads (LocalPlayer attributes): CharacterId (or SwarmClass), ClassCharge, ClassChargeText,
+	ClassReady, InRun. ClassChargeText (server, e.g. "3/5", "Ready", "+8%") is shown when set;
+	otherwise ClassCharge may be a number 0..1 (fills the bar, shows a percentage) or a count / text
+	(a number above 1 is shown as a count with a full bar, a string is shown as is). The bar fills
+	with ClassCharge and turns the "selected" colour when ClassReady is true.
 	Hidden unless the player is in a run with a class character.
 
 	Own ScreenGui (above the HUD, DisplayOrder 11, device safe insets). It is placed to the
@@ -33,11 +36,20 @@ local C = Theme.Color
 local A = Theme.Arcade
 
 local PASSIVES: { [string]: string } = {
-	ruckus = "LOOT RUSH",
+	ruckus = "JUNK COLLECTOR",
 	toastmaster = "OVERHEAT",
 	captain_croak = "BIG SPLASH",
 	granny_boom = "TANGLED UP",
+	coach_crunch = "WARM-UP",
+	doug_janitor = "CLEAN ROUTE",
+	peter_parkour = "STRIDE",
+	barry_plotter = "GARDEN COMPANY",
+	rambozo = "PUNCHLINE",
+	swolverine = "GAINS",
+	crash_cassidy = "MOMENTUM",
+	knuckles_mcgee = "HEAVY HANDS",
 }
+ClassHud.Passives = PASSIVES
 
 local W, H = 150, 40
 
@@ -201,9 +213,15 @@ local function refresh()
 		frac = if n and n >= 0 and n <= 1 then n elseif n then 1 else 0
 		text = charge
 	end
+	-- [stream C] the server's counter text ("3/5", "Ready") and ready flag win when present
+	local label: any = player:GetAttribute("ClassChargeText")
+	if type(label) == "string" and label ~= "" then
+		text = label
+	end
+	local ready: any = player:GetAttribute("ClassReady")
 	local fl = fill :: Frame
 	fl.Size = UDim2.fromScale(frac, 1)
-	fl.BackgroundColor3 = if frac >= 1 then A.Selected else A.PrimaryBottom
+	fl.BackgroundColor3 = if frac >= 1 or ready == true then A.Selected else A.PrimaryBottom
 	;(valueLabel :: TextLabel).Text = text
 end
 
@@ -215,7 +233,7 @@ function ClassHud.Init()
 	end
 	started = true
 	build()
-	for _, a in { "ClassCharge", "CharacterId", "SwarmClass", "InRun" } do
+	for _, a in { "ClassCharge", "ClassChargeText", "ClassReady", "CharacterId", "SwarmClass", "InRun" } do
 		player:GetAttributeChangedSignal(a):Connect(refresh)
 	end
 	local acc = 0
