@@ -16,6 +16,8 @@ local KEYS = { "damage", "cooldown", "amount", "area", "speed", "pierce", "durat
 -- direction a stat should move with levels: +1 non-decreasing, -1 non-increasing
 local DIR = { damage = 1, cooldown = -1, amount = 1, area = 1, speed = 1, pierce = 1, duration = 1, knockback = 1 }
 local BEHAVIORS = { Whip = 1, Orb = 1, Knives = 1, Aura = 1, HolyWater = 1, Lightning = 1, Axe = 1, Boomerang = 1, Longbow = 1, Spear = 1, Crossbow = 1, Nova = 1, FireTrail = 1, Totem = 1, Hook = 1, Turret = 1, Soul = 1, Shields = 1, Quake = 1, Meteor = 1, Sling = 1, Cloud = 1, Saw = 1, Vines = 1, Horn = 1, Wisps = 1, Vortex = 1, ScrapToss = 1, ToastVolley = 1, BubbleBomb = 1, YarnBomb = 1 }
+-- [stream B] rank-system behaviours (WeaponData Rank specs; WeaponSystem Fire.Rank*)
+local RANK_BEHAVIORS = { RankShot = 1, RankSwing = 1, RankBubble = 1, RankYarn = 1, RankOrb = 1, RankVortex = 1 }
 local PERKS_USED = { Riposte = 1, Split = 1, Ricochet = 1, Chill = 1, Volley = 1, Impale = 1, Shatter = 1, Wildfire = 1, Rooting = 1, Barbed = 1, Flak = 1, Wandering = 1, Bulwark = 1, Aftershock = 1, Molten = 1, Stagger = 1, Choking = 1, Rebound = 1, Thornbloom = 1, Echo = 1, Glow = 1, Implosion = 1 }
 
 local seenOrder = {}
@@ -47,6 +49,27 @@ for _, id in ipairs(allWeapons) do
 	end
 	if def.Id ~= id then
 		bad(id .. " Id field mismatch " .. tostring(def.Id))
+	end
+	if def.RankOnly then
+		-- [stream B] the 8 newer class signatures exist only in the rank system (RunConfig.Builds):
+		-- their rank spec and milestones are checked, not 12 hand-made rows or an evolution
+		local spec = def.Rank
+		if not spec or not RANK_BEHAVIORS[spec.Behavior] or not (spec.Coeff > 0) or not (spec.Interval > 0) then
+			bad(id .. " rank spec missing or invalid")
+		end
+		for _, m in ipairs({ 3, 5 }) do
+			if not (spec and spec.Milestones and spec.Milestones[m] and spec.Milestones[m].Text) then
+				bad(id .. " rank " .. m .. " milestone missing")
+			end
+		end
+		if not WeaponData.StatUse[def.Behavior] then
+			bad(id .. " behaviour " .. tostring(def.Behavior) .. " has no StatUse row")
+		end
+		local RP = def.Params or {}
+		if RP.Visual and not WeaponData.Visuals[RP.Visual] then
+			bad(id .. " Visual " .. tostring(RP.Visual) .. " has no Visuals entry")
+		end
+		continue
 	end
 	if not BEHAVIORS[def.Behavior] then
 		bad(id .. " unknown behaviour " .. tostring(def.Behavior))

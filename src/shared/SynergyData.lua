@@ -34,8 +34,16 @@
 ]]
 
 local WeaponData = require(script.Parent.WeaponData)
+local RunConfig = require(script.Parent.Parent:WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
 
 local SynergyData = {}
+
+-- [stream B] The continuation pack's rank system hides every synergy (RunConfig.Builds.Enabled and
+-- HideSynergies): none is ever active, advanced or hinted; the data stays.
+function SynergyData.Hidden(): boolean
+	local B: any = RunConfig.Builds
+	return B.Enabled == true and B.HideSynergies == true
+end
 
 export type Piece = { Kind: string, Any: { string }?, Element: string?, Label: string }
 export type Synergy = {
@@ -206,6 +214,9 @@ end
 -- Ids of every complete synergy, in SynergyData.Order.
 function SynergyData.Active(owned: Owned): { string }
 	local out = {}
+	if SynergyData.Hidden() then
+		return out
+	end
 	for _, id in ipairs(SynergyData.Order) do
 		local n, need = SynergyData.Progress(id, owned)
 		if n >= need then
@@ -236,6 +247,9 @@ end
 ]]
 function SynergyData.Advances(owned: Owned, kind: string, id: string): (Synergy?, number, number)
 	local best, bestHave, bestNeed = nil, 0, 0
+	if SynergyData.Hidden() then
+		return best, bestHave, bestNeed
+	end
 	for _, sid in ipairs(SynergyData.Order) do
 		local s = SynergyData.Synergies[sid]
 		local have, need = SynergyData.Progress(sid, owned)

@@ -11,6 +11,10 @@
 -- Every hit enemy must also lie inside the drawn slash (Fx.Slash yaw / reach), so the
 -- picture and the damage agree.
 local player = game:GetService("Players").LocalPlayer
+-- [stream B] these checks are the old Sword (12 levels, forehand + backhand, Riposte): run with the
+-- continuation pack's rank system off (the rank Sword, 110 / 130 degrees, 10 / 12 studs, max 6, is
+-- checked by builds-sim)
+require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Builds.Enabled = false
 preview.startServer()
 preview.advance(1)
 local RM = preview.server("RunManager")

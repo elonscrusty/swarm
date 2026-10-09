@@ -22,7 +22,7 @@ end
 
 -- Damage of one landing: no damage for drops up to SafeDrop studs (measured from the highest point
 -- of the fall), then PerStud of max HP per extra stud, at most MaxShare. `reduction` (0..1, e.g. the
--- Spring Stitch passive's rp.Stats.FallDamageReduction) scales the result down.
+-- Spring Stitch passive: 1 - rp.Stats.FallDamageMult) scales the result down.
 function SurvivalRules.FallDamage(drop: number, maxHP: number, reduction: number?): number
 	local F = RunConfig.Survival.Fall
 	if not finite(drop) or not finite(maxHP) or maxHP <= 0 or drop <= F.SafeDrop then

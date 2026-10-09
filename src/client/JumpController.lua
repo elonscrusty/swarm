@@ -4,9 +4,10 @@
 	numbers in RunConfig.Survival.Move and RunConfig.Movement).
 
 	  * Input: Space, gamepad A and the touch JUMP button (MobileControls). A press is kept
-	    for BufferSeconds (0.10), so pressing just before landing still jumps on the landing frame;
-	    a press within CoyoteSeconds (0.10) of walking off an edge still jumps. One jump per
-	    takeoff (JumpCooldown, no double jumps).
+	    for BufferSeconds (0.10), so pressing just before landing still jumps as soon as the
+	    post-landing restriction (LandLockSeconds 0.12, shortened by Spring Stitch's LandLockReduce
+	    attribute) ends; a press within CoyoteSeconds (0.10) of walking off an edge still jumps.
+	    One jump per takeoff (JumpCooldown, no double jumps).
 	  * No bunny hop: chained jumps never raise the speed. Horizontal momentum carries through a
 	    jump (the humanoid keeps walking), and the flat speed is capped at HorizontalCap (34)
 	    outside dashes / leaps (Suppress) and an explicit class boost (player attributes
@@ -47,6 +48,7 @@ local controls: any = nil
 local requestedAt = -math.huge -- last jump press (buffer)
 local groundedAt = -math.huge -- last frame on the ground (coyote time)
 local jumpedAt = -math.huge
+local landedAt = -math.huge -- the last landing (post-landing jump restriction)
 local wasGrounded = true
 local airStart: number? = nil
 local airDir = Vector3.zero
@@ -142,6 +144,19 @@ function JumpController.JumpPower(): number
 	return SurvivalRules.JumpVelocity(workspace.Gravity, apex)
 end
 
+-- The post-landing jump restriction in seconds (RunConfig.Survival.Move.LandLockSeconds, 0.12),
+-- shortened by the Spring Stitch passive (Player attribute LandLockReduce, stream B). Runs only.
+function JumpController.LandLock(): number
+	if player:GetAttribute("InRun") ~= true then
+		return 0
+	end
+	local reduce = tonumber(player:GetAttribute("LandLockReduce")) or 0
+	if reduce ~= reduce then
+		reduce = 0
+	end
+	return math.max(0, (SM.LandLockSeconds or 0) - math.max(0, reduce))
+end
+
 -- Kept for older callers: there is no hop speed multiplier any more.
 function JumpController.HopMultiplier(): number
 	return 1
@@ -197,6 +212,9 @@ local function step(_dt: number)
 	if grounded then
 		local started = airStart
 		airStart = nil
+		if started and now - started >= 0.05 then
+			landedAt = now
+		end
 		if started and now - started >= 0.1 then
 			for _, cb in ipairs(table.clone(landedCallbacks)) do
 				task.spawn(cb, now - started)
@@ -206,9 +224,15 @@ local function step(_dt: number)
 	end
 	wasGrounded = grounded
 
+	-- the post-landing restriction: no jump for LandLock() s after a landing; a press buffered
+	-- just before (or during) it is kept and fires the moment it ends
+	local lock = JumpController.LandLock()
+	local locked = grounded and now - landedAt < lock
+	local pending = now - requestedAt <= SM.BufferSeconds
+		or (requestedAt >= landedAt - SM.BufferSeconds and now - landedAt <= lock + SM.BufferSeconds)
 	if not allowed then
 		requestedAt = -math.huge
-	elseif now - requestedAt <= SM.BufferSeconds and now - jumpedAt >= SM.JumpCooldown then
+	elseif pending and not locked and now - jumpedAt >= SM.JumpCooldown then
 		if grounded or now - groundedAt <= SM.CoyoteSeconds then
 			doJump(hum, root, now)
 		end

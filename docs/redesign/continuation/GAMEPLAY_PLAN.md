@@ -77,8 +77,8 @@ goes into `rp.CommitInfo.NewUnlocks` for the results screen.
 ## Checklist (brief sections -> stream)
 
 - [ ] **A** 8 new class models: coach_crunch, doug_janitor, peter_parkour, barry_plotter, rambozo, swolverine, crash_cassidy, knuckles_mcgee
-- [ ] **B** rank 1-5 formula, crit, armor, intervals, hit ledgers, LOS targeting (0.15 s re-pick, 0.30 s hold), status caps (scorch, slow 40%, knockback 24, stagger immunity, elite / boss limits), secondary budget 10/s
-- [ ] **B** 15-weapon catalog, milestones at rank 3 and 5 for all 15, 4 evolutions (level 8+, rank 5 + passive rank 3), 8 loot passives, offers (weights 45/35/12/8, rarity 70/23/6/1, capacity), heal fallback, queue, 10 s deadline (first card on timeout), 1 reroll per panel, 2 free per run (+VIP existing), 1/2/3 keys
+- [x] **B** rank 1-5 formula, crit, armor, intervals, hit ledgers, LOS targeting (0.15 s re-pick, 0.30 s hold), status caps (scorch, slow 40%, knockback 24, stagger immunity, elite / boss limits), secondary budget 10/s
+- [x] **B** 15-weapon catalog, milestones at rank 3 and 5 for all 15, 4 evolutions (level 8+, rank 5 + passive rank 3), 8 loot passives, offers (weights 45/35/12/8, rarity 70/23/6/1, capacity), heal fallback, queue, 10 s deadline (first card on timeout), 1 reroll per panel, 2 free per run (+VIP existing), 1/2/3 keys (milestone behaviour of the 8 newer signatures: data only, stream C; see ../gameplay/BUILDS.md)
 - [ ] **C** 12 kits exactly as the brief: weapons, passives, movement hooks, HP modifiers, base speed (Granny 20)
 - [ ] **D** 15-minute run, beacon at 12:30 (rally 30 s, charge 60 s, r35, one living non-downed hero within 20 to activate), Basin Breaker (HP formula, 3 telegraphed attacks, 50% phase), victory / defeat, overtime ramp
 - [ ] **D** N scaling (HP / damage / spawn), time scaling, spawn rate, alive caps 55/95/145/200, roster (beetle, floating eye, root runner from min 2, stump brute from min 4, sap lobber from min 6, elites from min 5 at 5%), spawns 35-70 studs on reachable ground, stuck repath / despawn
@@ -87,3 +87,33 @@ goes into `rp.CommitInfo.NewUnlocks` for the results screen.
 - [ ] **F** HUD layout (desktop and phone positions from the brief), boss bar and objective stage strip, 4+4 slot rows with ranks, upgrade cards (rarity symbol + text, current -> next), inventory (Tab), north-up minimap with 80-stud reveal shared per team and big map (M), interact (E) prompts for chest / beacon / revive, downed / spectate UI, results (Pending Save -> Saved, new unlocks), Escape run menu "The run continues"
 - [ ] **G** class sounds, contact sparks, crit burst, damage text grouping, mild shake (<0.12 s), reduced-motion paths
 - [ ] **H** acceptance flows 1-8 offline where possible, perf scenes (4 players, 200 enemies), full regression, report
+
+## Notes from stream A for stream C (models done, uploaded, in MeshCatalog)
+
+- **Mesh names** for the ClassRoster `MeshName` field (ModelBuilder reads it):
+
+  | Class id | MeshName |
+  |---|---|
+  | coach_crunch | CoachCrunch |
+  | doug_janitor | DougJanitor |
+  | peter_parkour | PeterParkour |
+  | barry_plotter | BarryPlotter |
+  | rambozo | Rambozo |
+  | swolverine | Swolverine |
+  | crash_cassidy | CrashCassidy |
+  | knuckles_mcgee | KnucklesMcGee |
+
+- **ClassAnimator:** `CLASS_IDS` / `TUNE` only know the first 4 classes. Add the 8 new ones with these settings:
+
+  | Class | Gear and anchor | Animation tuning |
+  |---|---|---|
+  | Rambozo | gun welded to the torso, arms posed on it | ArmSwing 0 |
+  | Crash | stick on the right arm, blade near the ground | small or zero right-arm swing |
+  | Doug | mop on the right arm, soap on the left | small swing |
+  | Barry | staff and pots on the right arm | reduced swing |
+  | Coach | ball on the right arm | none listed |
+  | Peter | spring shoes, long legs | Hop style, bigger Bob |
+  | Knuckles | big gloves | ArmSwing ~0.3 |
+  | Swolverine | claws on the arms | small swing |
+
+- **Rig:** feet at y=0, HumanoidRootPart at y=3, CanCollide off on the mesh parts (as before).

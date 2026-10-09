@@ -63,6 +63,7 @@ local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).
 local Survival = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Survival
 local SurvivalRules = require(game:GetService("ReplicatedStorage").SwarmV2.Run.SurvivalRules)
 local DashRules = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Dash
+local BuildRules = require(game:GetService("ReplicatedStorage").SwarmV2.Run.BuildRules) -- [stream B] armor A / (100 + A)
 
 local RunManager = {}
 
@@ -163,7 +164,8 @@ function RunManager.RefreshFrozen()
 	local ids, names = {}, {}
 	local rewardIds, rewardNames = {}, {}
 	for _, rp in ipairs(runPlayers) do
-		if rp.Offer and rp.Alive and not rp.Returned then
+		-- (a live team-run choice, rp.LiveChoice, never freezes anything: [stream B] LevelUpSystem)
+		if rp.Offer and rp.Alive and not rp.Returned and not rp.LiveChoice then
 			choosing = true
 			table.insert(ids, tostring(rp.Player.UserId))
 			table.insert(names, rp.Player.DisplayName)
@@ -1135,9 +1137,10 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?, kind: strin
 	local k = kind or hitKind(cause)
 	local fall = k == "fall"
 	-- an open upgrade / reward panel protects only while Survival.MenuProtection is on (off:
-	-- live menus never pause the world nor shield the chooser). A solo reward hold freezes the
-	-- whole world instead (RefreshFrozen).
-	if Survival.MenuProtection and rp.Paused and rp.Offer ~= nil and Config.Player.LevelUpInvulnerable then
+	-- live menus never pause the world nor shield the chooser), or with the old 12-level system
+	-- switched back on (RunConfig.Builds.Enabled = false keeps its duo choice protection). A solo
+	-- reward hold freezes the whole world instead (RefreshFrozen).
+	if (Survival.MenuProtection or not BuildRules.On()) and rp.Paused and rp.Offer ~= nil and Config.Player.LevelUpInvulnerable then
 		if tracing then
 			trace(rp, cause, k, 0, rp.HP, rp.HP, "choice")
 		end
@@ -1179,7 +1182,12 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?, kind: strin
 		dmg = amount
 		taken = amount
 	else
-		dmg = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
+		if BuildRules.On() then
+			-- the rank system's armor: A / (100 + A) less, A clamped 0..100 (never negative)
+			dmg = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken * BuildRules.ArmorMult(rp.Stats.Armor))
+		else
+			dmg = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
+		end
 		taken = dmg -- after armor / Iron Plate, before the shield (Barbed Mail scales on it)
 		dmg = ctx.ItemSystem.AbsorbHit(rp, dmg) -- Guardian Ward shield first
 	end
@@ -1216,8 +1224,8 @@ end
 --[[
 	A landing the server saw (Dash.lua's landing check): `drop` = studs from the highest point
 	of the fall to the landing. No damage up to Survival.Fall.SafeDrop (18), then PerStud (2%) of
-	max HP per extra stud, at most MaxShare (35%) per landing; rp.Stats.FallDamageReduction (0..1,
-	the Spring Stitch passive, stream B) scales it down. Leaps, launch pads, rescues and
+	max HP per extra stud, at most MaxShare (35%) per landing; the Spring Stitch passive (stream B:
+	rp.Stats.FallDamageMult = 1 - its reduction) scales it down. Leaps, launch pads, rescues and
 	teleports never count (Dash.lua skips those landings).
 ]]
 function RunManager.OnFallLanding(rp, drop: number)
@@ -1225,7 +1233,9 @@ function RunManager.OnFallLanding(rp, drop: number)
 		return
 	end
 	local stats: any = rp.Stats
-	local dmg = SurvivalRules.FallDamage(drop, rp.Stats.MaxHP, stats.FallDamageReduction)
+	local mult = tonumber(stats.FallDamageMult)
+	local reduction = if mult and mult == mult then 1 - mult else tonumber(stats.FallDamageReduction)
+	local dmg = SurvivalRules.FallDamage(drop, rp.Stats.MaxHP, reduction)
 	rp.LastLanding = { Drop = drop, Damage = dmg, At = runTime }
 	if dmg > 0 then
 		RunManager.DamagePlayer(rp, dmg, "Fall", "fall")
