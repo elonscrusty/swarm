@@ -1637,9 +1637,24 @@ resetDirectorStats()
 	installed as EnemyData.RowOverride (encounters and altars spawn the Cliffwood roster), the
 	stats reset. Off: the old spawn table again.
 ]]
+-- [stream H] the director's opening (RunConfig.Director.Spawn.Opening, a proposal on top of the
+-- brief's rate): the rate is x Start at 0:00 and rises linearly to x1 at Seconds; FirstEnemies
+-- are owed at once so the first contact comes within a few seconds; PartyRamp also ramps the
+-- party's extra spawn share in (stepDirector). nil / Seconds 0: x1.
+function EnemySpawner.OpeningMult(seconds: number): number
+	local O = (Dir.Spawn or {}).Opening
+	local len = O and tonumber(O.Seconds) or 0
+	if not O or len <= 0 or seconds >= len then
+		return 1
+	end
+	local start = math.clamp(tonumber(O.Start) or 1, 0, 1)
+	return start + (1 - start) * math.max(0, seconds) / len
+end
+
 function EnemySpawner.SetDirector(on: boolean)
 	directorOn = on
-	dirBudget = 0
+	local O = (Dir.Spawn or {}).Opening
+	dirBudget = on and O and math.max(0, tonumber(O.FirstEnemies) or 0) or 0
 	dirTick = 0
 	if on then
 		resetDirectorStats()
@@ -1679,14 +1694,22 @@ local function stepDirector(dt: number)
 	local F = SM.Formula
 	local t = SM.DirectorMinutes()
 	local n = SM.PartyN()
-	local rate = F.SpawnRate(t, n) * (ctx.RunModifiers and ctx.RunModifiers.SpawnMult() or 1)
+	local opening = EnemySpawner.OpeningMult(t * 60)
+	local rate = F.SpawnRate(t, n) * (ctx.RunModifiers and ctx.RunModifiers.SpawnMult() or 1) * opening
+	-- [stream H] Opening.PartyRamp: the extra heroes' share of the rate (Party.SpawnPerExtra) ramps
+	-- in with the opening too, so a party's first level choice is not twice as early as a solo one
+	local O = S.Opening
+	if O and O.PartyRamp and opening < 1 and n > 1 then
+		local party = F.PartySpawn(n)
+		rate *= (1 + (party - 1) * opening) / party
+	end
 	local cap = F.AliveCap(n)
 	if stage == "Boss" then
 		rate *= S.BossRateMult or 0.5
 		cap = math.floor(cap * (S.BossCapMult or 0.5))
 	end
 	local tick = S.TickSeconds or 0.25
-	dirBudget = math.min(dirBudget + rate * dt, (S.MaxBank or 3) + rate * tick)
+	dirBudget = math.min(dirBudget + rate * dt, math.max((S.MaxBank or 3) + rate * tick, dirBudget))
 	dirTick += dt
 	if dirTick < tick then
 		return

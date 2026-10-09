@@ -91,6 +91,8 @@ def main():
     checks += [("layout", ["danger-arrows-regression", d]) for d in ("iphone", "phone-portrait", "pc")]  # DangerArrows: logic PASS/FAIL lines + layout
     checks += [("layout", ["smart-tutorial-regression", d]) for d in ("iphone", "phone-portrait", "pc")]  # SmartTutorial: logic PASS/FAIL lines + layout
     checks += [("walkthrough-regression", [])]  # Walkthrough: interactive first-run steps, holds, exactly-once chest, timeouts (PASS/FAIL lines)
+    # the beacon-run walkthrough's longest bubble lines fit on phones (stream H)
+    checks += [("layout", ["walkthrough-bubble", d, "step=" + s]) for d in ("iphone", "phone-portrait") for s in ("Move", "Beacon")]
     # batch B (docs/PROMPT_BATCH_B.md, docs/next/); one block per group
     # batch B group A: AffixIcons, DamageNumberOptions
     checks += [("affix-sight-regression", []), ("damage-settings-regression", [])]  # AffixIcons first-sight notice + SeenAffixes (real server); DamageNumberOptions settings path (real server)
@@ -133,6 +135,12 @@ def main():
     # continuation stream E1 survival rules: downed / hold-to-revive / bleed-out / wipe once, shared hit
     # protection, falls, out-of-bounds rescue, movement caps and dash, disconnect window (PASS/FAIL lines)
     checks += [("survival-sim", [])]
+    # continuation stream H: the beacon run's pacing measured by a scripted player bot (first kill,
+    # first choice, first loot, builds by minute; targets print PASS / WARN, FAIL = a run that could
+    # not be measured) and the 4-player / 200-enemy / maximum-build cost scene with spikes and
+    # run / return leak cycles (Lune mock numbers, not device FPS)
+    checks += [("pacing-sim", ["part=solo", "classes=ruckus,granny_boom", "minutes=3", "full=none"])]
+    checks += [("perf-sim", ["scenario=cliffwood", "seconds=20", "window=10", "cycles=4"])]
 
     def run(check):
         scene, settings = check
@@ -141,7 +149,7 @@ def main():
         command = [args.lune, "run", "tools/" + scripts[scene], *settings] if scene in scripts else [
             args.lune, "run", "tools/preview/runtime/main.luau", "--", "--scene", scene,
             "--studio", "--device", "pc", "--out", str(args.out / (name + ".json")),
-            "--max-time", "3000" if scene in ("corner-regression", "class-kits-sim", "cliffwood-run-sim", "swarm-v2-flow", "director-sim") else "400", "--set", "headless=on",
+            "--max-time", "3000" if scene in ("corner-regression", "class-kits-sim", "cliffwood-run-sim", "swarm-v2-flow", "director-sim", "pacing-sim") else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
         if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")) or (scene == "analytics-regression" and settings == ["mode=published"]):
@@ -166,9 +174,10 @@ def main():
             # Long client scenes: 220-290 s each when run alone (menu was 267 s before the
             # features batch too, so this is Lune time, not game cost); with three workers in
             # parallel they pass 360 s, so they get 600 s.
-            limit = 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim", "run-entry-regression", "class-kits-sim", "cliffwood-run-sim", "swarm-v2-flow", "director-sim") else (
+            limit = 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim", "run-entry-regression", "class-kits-sim", "cliffwood-run-sim", "swarm-v2-flow", "director-sim", "pacing-sim") else (
+                900 if scene == "perf-sim" else
                 600 if scene in ("menu", "ui", "run-intro", "events-fx", "loot-focus-regression", "perf-regression", "results-flow", "textfit-regression", "comeback-regression", "analytics-client")
-                or (scene == "layout" and settings[0] == "smart-tutorial-regression") else 360)
+                or (scene == "layout" and settings[0] in ("smart-tutorial-regression", "walkthrough-bubble")) else 360)
             result = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=limit)
             output = result.stdout + result.stderr
             if scene == "layout" and result.returncode == 0:

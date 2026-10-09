@@ -514,6 +514,14 @@ RunConfig.Director = {
 		MaxBank = 3, -- budget kept while capped / no spot (no burst when room opens)
 		BossRateMult = 0.5, -- during the boss fight
 		BossCapMult = 0.5,
+		-- [stream H] the opening (proposal; the brief: the rate is "adjusted by population and safe
+		-- opportunities"): the rate above x Start at 0:00, rising linearly to x1 at Seconds;
+		-- FirstEnemies are owed at once (the first contact within a few seconds); PartyRamp: the
+		-- party's extra spawn share (Party.SpawnPerExtra) ramps in the same way. Without it the
+		-- solo first level choice came at 14-18 s (target 20-35 s), a party's at 13 s; with it
+		-- solo 22-25 s, a party of 4 about 19 s, first kill 2-5 s (offline Lune pacing-sim;
+		-- docs/redesign/continuation/PACING_PERF.md). From Seconds on the brief's rate is exact.
+		Opening = { Seconds = 60, Start = 0.2, FirstEnemies = 1, PartyRamp = true },
 	},
 	Elite = {
 		FromMinute = 5,
@@ -563,7 +571,11 @@ RunConfig.Director = {
 	-- the Basin Breaker (BossData BasinBreaker): HP = HPB x B x [1 + 0.80 (N-1)] x [1 + 0.07 t]
 	Boss = {
 		Id = "BasinBreaker",
-		HPB = 200,
+		-- [stream H] the brief's initial 200, tuned against late-run DPS (the brief: "tune HP against
+		-- real late-run DPS for approximately 45-90 seconds"): at 200 the measured fights took
+		-- 34-72 s (median 49 s; N = 1 and 4, offline Lune pacing-sim bot builds); x1.2 puts the
+		-- median near 60 s (docs/redesign/continuation/PACING_PERF.md)
+		HPB = 240,
 		HPPerExtra = 0.80,
 		HPPerMinute = 0.07,
 		Contact = 0.10, -- walking into it, x H0 x party damage (proposed; attacks in BossData)
@@ -656,6 +668,11 @@ RunConfig.Economy = {
 		ChestBase = 40,
 		ChestGrowth = 1.35,
 		ChestCap = 400,
+		-- [stream H] team gold at the start of a run (proposal, not in the brief; 0 = none): the
+		-- first chest (40) is paid by 5 kills, around the first level choice. Without it (and with
+		-- the gentler opening) the first chest opened at 35-42 s; with it 24-30 s (target: useful
+		-- loot within ~30 s; offline Lune pacing-sim)
+		StartGold = 25,
 	},
 	Chests = {
 		-- with stream B's LevelUpSystem.QueueChoice: chests never hold an old item; every
