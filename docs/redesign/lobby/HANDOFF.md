@@ -118,7 +118,7 @@ MatchAdmission.ReturnToLobby(list) --> { { userId, ok, errorCode?, message? } }
 | `party-v2-regression` (real server: invite / accept / expiry / full party races / kick / leave / leader policy / Promote / disconnect / OnChanged; save normalisation) | PASS 82/82 after fixing two bugs it found |
 | `basecamp` scene (world render, 1139 parts) | renders, 0 errors; looked at by eye |
 | `basecamp-ui` scene on iphone / phone-portrait / pc (12 views) | renders; `check_layout.py` clean except a deliberately long test name (ellipsis) |
-| Full `tools/run_regressions.py` | **NOT finished** (stopped by the owner at 241 of the checks): 220 PASS, 21 FAIL, all of them layout checks of the OLD lobby screens (menu, daily, party, results, explore, store, levelup). Not yet known whether they also fail on `main` or come from this branch (likely cause if ours: the basecamp boots in the preview's "local" role and hides the old Home screen, or the 6-worker run). Check with `python3 tools/run_regressions.py --only <name>` on both `main` and this branch before merging. |
+| Full `tools/run_regressions.py` (6 workers) | 254/275 PASS. All 8 new basecamp-ui phone layout checks PASS. The 21 FAIL are all layout checks of the OLD lobby screens (menu, daily, party, results, explore, store, levelup): not yet compared with `main`, so unknown whether they are pre-existing or caused by the basecamp hiding the old Home screen in the preview. Compare with `--only <name>` on `main` before merging. |
 
 BLOCKED (need a published game / Studio): live reserved-server teleport, MemoryStore, real avatars
 (`LoadCharacterWithHumanoidDescription`), walking, ProximityPrompts, SurfaceGui gate signs (the preview
