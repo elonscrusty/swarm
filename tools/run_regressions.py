@@ -108,9 +108,12 @@ def main():
     checks += [("layout", ["pause", d, "view=settings"]) for d in ("iphone", "phone-portrait")]
     # (landscape cards only: the narrow portrait cards keep their one-line details inline, no toggle)
     checks += [("layout", ["levelup", d, "details=2"]) for d in ("iphone", "pc")]
+    # SwarmV2 lobby UI (basecamp-ui scene): class sheet, gates, queue, countdown on phones
+    checks += [("layout", ["basecamp-ui", d, "view=" + v]) for d in ("iphone", "phone-portrait") for v in ("idle", "classes", "gates", "countdown")]
     # funnel analytics (server Analytics.lua, docs/ANALYTICS.md): AnalyticsService mock as a
     # published lobby, the same flow in Studio (nothing sent), and the real client's ready report
     checks += [("run-entry-regression", [])]  # SwarmV2 arrival barrier, local match start with the admitted class, return hook
+    checks += [("admission-regression", []), ("lobby-queue-regression", []), ("party-v2-regression", [])]  # SwarmV2 lobby: MatchAdmission + TicketStore, QueueService/Transfer/ClassService, PartyService Promote/OnChanged + save normalisation (PASS/FAIL lines)
     checks += [("analytics-regression", ["mode=published"]), ("analytics-regression", ["mode=studio"]), ("analytics-client", [])]
     # redesign: ground height + flow fields (server HeightGrid; flat fallback, ramp / cliff, routing, cave)
     checks += [("heightgrid-regression", [])]

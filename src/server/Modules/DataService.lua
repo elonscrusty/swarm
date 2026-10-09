@@ -71,6 +71,7 @@ local HttpService = game:GetService("HttpService")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
+local ClassCatalog = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("ClassCatalog"))
 local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
 local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 local AccountData = require(game:GetService("ReplicatedStorage").Shared.AccountData)
@@ -136,7 +137,7 @@ local function defaultData()
 		Meta = {},
 		Heroes = {},
 		HeroUpgrades = {},
-		OwnedCharacters = { [CharacterData.Default] = true },
+		OwnedCharacters = { [CharacterData.Default] = true, [ClassCatalog.Default] = true },
 		SelectedCharacter = CharacterData.Default,
 		Skins = {},
 		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0, MostKills = 0, BestScore = 0, BestScoreEndless = 0, BestLevel = 0, TimePlayed = 0 },
@@ -667,7 +668,14 @@ function DataService.Migrate(data: any): { [string]: any }
 		data.OwnedCharacters = {}
 	end
 	data.OwnedCharacters[CharacterData.Default] = true
-	if not CharacterData.Characters[data.SelectedCharacter] or not data.OwnedCharacters[data.SelectedCharacter] then
+	-- SwarmV2 redesign (docs/redesign/DECISIONS.md): every account owns the free class; the
+	-- four class ids live in the same OwnedCharacters set and SelectedCharacter may hold one
+	-- (an old hero id there is read as the free class by the lobby and left as it is)
+	data.OwnedCharacters[ClassCatalog.Default] = true
+	local selected = data.SelectedCharacter
+	local validOld = CharacterData.Characters[selected] ~= nil and data.OwnedCharacters[selected] == true
+	local validNew = ClassCatalog.IsClassId(selected) and data.OwnedCharacters[selected] == true
+	if not validOld and not validNew then
 		data.SelectedCharacter = CharacterData.Default
 	end
 	-- worn skins: a known skin of that character (or the Starter Pack one); ownership is

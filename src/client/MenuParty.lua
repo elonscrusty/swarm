@@ -622,11 +622,16 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			local canKick = isLeader() and not me
 			local toggle = me and not leads and inParty()
 			-- right side: [KICK | READY toggle]
-			local btnW = canKick and bw(100, "KICK") or (toggle and bw(120, ready and "UNREADY" or "READY") or 0)
+			local leadW = canKick and bw(80, "LEAD") + 8 or 0
+			local btnW = canKick and (bw(100, "KICK") + leadW) or (toggle and bw(120, ready and "UNREADY" or "READY") or 0)
 			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and C.BlueDeep or nil, btnW > 0 and btnW + 12 or 0, me)
 			if canKick then
 				rowButton(f, "KICK", nil, "Danger", 100, 8, function()
 					send("Kick", m.UserId)
+				end)
+				-- hand the party lead to this member (server: PartyService "Promote", leader only)
+				rowButton(f, "LEAD", nil, "Secondary", 80, 8 + bw(100, "KICK") + 8, function()
+					send("Promote", m.UserId)
 				end)
 			elseif toggle then
 				rowButton(f, ready and "UNREADY" or "READY", if ready then nil else "check", ready and "Secondary" or "Primary", 120, 8, function()

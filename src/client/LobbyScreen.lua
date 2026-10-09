@@ -118,6 +118,21 @@ local lastPartyCount = 0
 -- the automatic first run: "" (not asked), "Asked" (waiting for the server), "Done"
 local firstRun = ""
 local firstRunAt = 0
+-- walk-around basecamp (SwarmV2 lobby): the old Home screen is never shown, the other screens open
+-- over the camp and return to the invisible Home. Off = exactly the old behaviour.
+local basecamp = false
+
+local function applyBasecamp()
+	if not basecamp or not ui.Frame then
+		return
+	end
+	if current == "Home" then
+		ui.Home.Visible = false
+		ui.Vignette.Visible = false
+	elseif ui.Frame.Visible then
+		ui.Vignette.Visible = true
+	end
+end
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -739,7 +754,7 @@ local function relayout()
 	setChipFlat(not portrait and current == "Characters")
 	local topRowChip = compact and not portrait and not home and ins.Top >= 48
 	ui.Chip.Visible = not home and (topRowChip or not (compact and not portrait and current ~= "Characters"))
-	ui.Cog.Instance.Visible = home
+	ui.Cog.Instance.Visible = home and not basecamp
 	local chipY = ins.Right > 4 and (ins.Top + 6) or 12
 	if portrait then
 		chipY = ins.Top >= 48 and math.max(4, math.floor((ins.Top - 52) / 2)) or 12
@@ -1120,10 +1135,11 @@ function LobbyScreen.Show(name: string, arg: any?)
 		s.OnShow(profile, arg)
 		Remotes.Get("RequestProfile"):FireServer()
 	end
-	if name == "Home" then
+	if name == "Home" and not basecamp then
 		homeEntrance()
 		UIKit.FocusIfGamepad(ui.PlayBtn.Instance)
 	end
+	applyBasecamp()
 end
 
 function LobbyScreen.Current(): string
@@ -1161,14 +1177,40 @@ function LobbyScreen.SetVisible(on: boolean)
 		UIAnim.SwapScreens(nil, ui.Home, 1, Config.UI.ScreenSlideSeconds)
 		-- scale-only entrance: relayout() owns the chip's Position
 		UIAnim.Pop(ui.Chip, 0, 0.85)
-		homeEntrance()
 		lastStatus = ""
 		LobbyScreen.RefreshHero()
-		UIKit.FocusIfGamepad(ui.PlayBtn.Instance)
-		if profile then
-			maybeAskFirstRun(profile)
+		if not basecamp then
+			homeEntrance()
+			UIKit.FocusIfGamepad(ui.PlayBtn.Instance)
+			if profile then
+				maybeAskFirstRun(profile)
+			end
 		end
+		applyBasecamp()
 	end
+end
+
+-- Basecamp mode (SwarmV2 lobby): Home stays hidden and does not block input or draw a backdrop;
+-- Store / Party / Ranks / Settings / Quests / More open as usual and BACK returns to the invisible Home.
+function LobbyScreen.SetBasecamp(on: boolean)
+	basecamp = on == true
+	if not ui.Frame then
+		return
+	end
+	if basecamp then
+		if ui.FirstRunCover then
+			ui.FirstRunCover.Visible = false
+		end
+		if firstRun == "" then
+			firstRun = "Done"
+		end
+		homeAmbient(false)
+	elseif ui.Frame.Visible and current == "Home" then
+		ui.Home.Visible = true
+		ui.Vignette.Visible = true
+	end
+	relayout()
+	applyBasecamp()
 end
 
 -- "K N I G H T  ·  G O L D  T R I M": the caption's letter-spaced words.

@@ -81,7 +81,7 @@ local function runArena(): string?
 end
 
 local function isTerminal(code: string?): boolean
-	return code ~= nil and table.find(E.TerminalCodes, code) ~= nil
+	return code == nil or table.find(E.RetryCodes, code) == nil
 end
 
 -- Waits (bounded) for the player's save to load: the run reads it.
@@ -112,6 +112,9 @@ local function resolve(player: Player): AdmissionResult
 			end
 		else
 			last = { ok = false, errorCode = "ADMISSION_ERROR", message = "Couldn't reach the match service." }
+		end
+		if attempt > (E.RetryAttempts or 2) then
+			break
 		end
 		local delay = E.ResolveRetryDelays[attempt]
 		if not delay or not player.Parent then

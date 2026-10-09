@@ -241,8 +241,10 @@ RunConfig.Entry = {
 	LateGraceSeconds = 60, -- after the run starts, for missing expected players
 	ProfileWaitSeconds = 30, -- save load before admission gives up
 	ResolveRetryDelays = { 1, 2, 4 }, -- transient admission failures
-	-- error codes that never succeed on retry (anything else is retried)
-	TerminalCodes = { "NOT_EXPECTED", "WRONG_SERVER", "WRONG_PLACE", "EXPIRED", "NOT_OWNED", "BAD_CLASS", "NO_TICKET", "UNAUTHORIZED" },
+	RetryAttempts = 1, -- the lobby advises one more call on a recoverable error
+	-- MatchAdmission errors worth one more try (docs/redesign/lobby/HANDOFF.md section 5);
+	-- every other code is final: show the message, then return to the lobby
+	RetryCodes = { "STORE_UNAVAILABLE", "PROFILE_UNAVAILABLE", "TIMEOUT", "ADMISSION_ERROR" },
 	RejectShowSeconds = 4, -- the reason stays on screen this long before the return
 	ReturnAttempts = 2,
 }
