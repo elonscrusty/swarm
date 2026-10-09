@@ -1710,6 +1710,7 @@ for _, d in ipairs(NEW_SIGNATURES) do
 		table.insert(levels, levelRow)
 	end
 	d.Behavior = spec.Behavior
+	d.RankOnly = true -- no hand-made 12-level rows or evolution: the rank system's weapon
 	d.Params = { Radius = spec.Radius or 1, Visual = spec.Visual or 1, EvoVisual = spec.Visual or 1 }
 	d.Levels = levels
 	WeaponData.Weapons[d.Id] = d

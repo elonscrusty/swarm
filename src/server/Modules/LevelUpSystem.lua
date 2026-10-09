@@ -1421,6 +1421,13 @@ function R.roll(rp, kind: string): { any }
 	if #cards == 0 then
 		table.insert(cards, R.card(rp, { Category = "Heal" }))
 	end
+	-- Clove Bulb Sigil (META): the run's first offer shows one card fewer (never the evolution)
+	if rp.SigilFewerFirst and kind ~= "PassiveOnly" then
+		rp.SigilFewerFirst = nil
+		if #cards > 1 then
+			table.remove(cards)
+		end
+	end
 	return cards
 end
 
@@ -1556,8 +1563,9 @@ function R.publishPending(rp)
 	end
 end
 
+-- Downed, eliminated or disconnected (inside the reconnect window): the personal choice waits.
 function R.downed(rp): boolean
-	return not rp.Alive or rp.Downed == true
+	return not rp.Alive or rp.Downed == true or rp.Returned == true or not (rp.Player and rp.Player.Parent)
 end
 
 -- Opens the queue's head choice when it can (or closes the panel when the queue is empty).
@@ -1806,9 +1814,10 @@ end
 ------------------------------------------------------------------------------------------
 
 local function chestLevelUp(rp, rewards)
-	-- 1) an available evolution
+	-- 1) an available evolution (old system only: the rank system offers evolutions in the level
+	-- choices, never straight from a chest)
 	for _, id in ipairs(rp.WeaponOrder) do
-		if canEvolve(rp, id) then
+		if not ranked() and canEvolve(rp, id) then
 			rp.Weapons[id].Evolved = true
 			if ctx.Analytics then
 				ctx.Analytics.OnEvolution(rp.Player) -- before discover: an empty record = the account's first

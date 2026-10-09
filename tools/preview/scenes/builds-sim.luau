@@ -335,6 +335,46 @@ preview.advance(Builds.SoloChoiceSeconds + (Config.LevelUp.RevealGraceSeconds or
 local took = (fType == "WeaponUp" or fType == "WeaponNew") and rp.Weapons[fId] ~= nil and rp.Weapons[fId].Level == fTo
 	or (fType == "PassiveUp" or fType == "PassiveNew") and rp.Passives[fId] == fTo
 check("B22 the deadline takes the first displayed card", took and not rp.Offer, string.format("%s %s -> %s", tostring(fType), tostring(fId), tostring(fTo)))
+-- Banish (an existing feature) on the rank pool: a NEW card leaves the pool, only its slot re-rolls
+if Config.FeatureOn("Banish") then
+	local idx, card = nil, nil
+	for _ = 1, 30 do
+		LU.QueueLevels(rp, 1)
+		for i, c in ipairs(rp.Offer or {}) do
+			if c.Type == "WeaponNew" or c.Type == "PassiveNew" then
+				idx, card = i, c
+				break
+			end
+		end
+		if idx then
+			break
+		end
+		LU.Cancel(rp)
+	end
+	if idx and card then
+		local others = {}
+		for i, c in ipairs(rp.Offer) do
+			if i ~= idx then
+				others[i] = tostring(c.Category) .. ":" .. tostring(c.Id)
+			end
+		end
+		local left = LU.BanishesLeft(rp)
+		preview.remote("LevelUpBanish"):FireServer(idx, rp.OfferSeq)
+		preview.advance(0.05)
+		local same = true
+		for i, k in pairs(others) do
+			if not rp.Offer[i] or (tostring(rp.Offer[i].Category) .. ":" .. tostring(rp.Offer[i].Id)) ~= k then
+				same = false
+			end
+		end
+		local inPool = table.find(LU.PoolKeys(rp), card.Category .. ":" .. card.Id) ~= nil
+		check("B22b Banish: the NEW card leaves the rank pool, the other slots stay", not inPool and same and LU.BanishesLeft(rp) == left - 1,
+			string.format("%s:%s banished, %d left", tostring(card.Category), tostring(card.Id), LU.BanishesLeft(rp)))
+	else
+		check("B22b Banish: a NEW card was offered", false)
+	end
+	LU.Cancel(rp)
+end
 -- inventory payload for the HUD: rank, effective damage / interval, protected slot
 local inv = nil
 local conn = preview.remote("Inventory").OnClientEvent:Connect(function(payload) inv = payload end)

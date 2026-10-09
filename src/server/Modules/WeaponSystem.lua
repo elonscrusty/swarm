@@ -4079,9 +4079,11 @@ function Rk.stepVortex(p: Projectile, dt: number, _now: number): boolean
 	p.Yaw += dt * 4
 	local n = grid():QueryCircle(c.X, c.Z, x.R, queryBuf)
 	local list = table.move(queryBuf, 1, n, 1, {})
-	-- the inward pull: ordinary enemies only (velocity floor along the inward direction)
+	-- the inward pull: ordinary enemies only (velocity floor along the inward direction), and only
+	-- those the rift could see at its last pulse (it never drags anything across terrain)
+	local seen = x.Seen
 	for _, e in ipairs(list) do
-		if e.Alive and not e.Boss and not e.Elite and e.Knock then
+		if seen and seen[e] and e.Alive and not e.Boss and not e.Elite and e.Knock then
 			local rel = (c - e.Pos) * FLAT
 			local d = rel.Magnitude
 			if d > 0.8 then
@@ -4099,6 +4101,14 @@ function Rk.stepVortex(p: Projectile, dt: number, _now: number): boolean
 	end
 	x.T = x.Tick
 	Rk.burst(owner, c, x.R, p.Damage, nil, x.Max, true)
+	-- who the rift can see now (the pull set until the next pulse)
+	local vis = {}
+	for _, e in ipairs(list) do
+		if e.Alive and WeaponSystem.HasLineOfSight(c, e.Pos) then
+			vis[e] = true
+		end
+	end
+	x.Seen = vis
 	return false
 end
 
