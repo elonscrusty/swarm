@@ -137,6 +137,8 @@ local function sizeOf(v, depth): number
 			n += sizeOf(k, depth + 1) + sizeOf(x, depth + 1)
 		end
 		return n
+	elseif t == "buffer" then
+		return buffer.len(v) + 2 -- ProjectileBatch / FxBatch payloads
 	elseif t == "Color3" or t == "Vector3" then
 		return 13
 	elseif t == "CFrame" then

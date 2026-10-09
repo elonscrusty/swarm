@@ -663,15 +663,64 @@ local function inBand(rp, pos: Vector3): boolean
 		or math.abs(HeightGrid.GroundY(rp.Root.Position.X, rp.Root.Position.Z) + Config.XP.GemHeight - pos.Y) <= Nav.HitBand
 end
 
+--[[
+	[stream H] One look at a run player per server frame for updateGems: its root position, the
+	ground under it, its shard pickup radius and whether it may collect (XPSystem.IsEligible).
+	A 4-player swarm keeps up to Economy.XP.PoolSize (800) shards on the floor and every one of
+	them asked its owner's root, player, attributes and stat sheet again every check (perf-sim
+	cliffwood: XPSystem was the second biggest server step). Nothing in updateGems moves a hero
+	or changes who is eligible, so the frame's first answer holds for every shard. Only
+	updateGems uses it (other callers run outside the gem loop and read the live values).
+]]
+type View = {
+	Frame: number,
+	Live: boolean, -- liveOwner's test: a root, a player, the player still in the game
+	Root: boolean, -- a root (its Position below)
+	Parented: boolean, -- the root is in the world (flightValid)
+	Pos: Vector3,
+	Ground: number,
+	Radius: number,
+	Eligible: boolean,
+}
+local views: { [any]: View } = setmetatable({}, { __mode = "k" }) :: any
+
+local function frameView(rp): View
+	local v = views[rp]
+	if not v then
+		v = { Frame = -1, Live = false, Root = false, Parented = false, Pos = Vector3.zero, Ground = 0, Radius = 0, Eligible = false }
+		views[rp] = v
+	end
+	if v.Frame ~= frame then
+		v.Frame = frame
+		local root = rp.Root
+		local player = rp.Player
+		v.Live = root ~= nil and player ~= nil and player.Parent ~= nil
+		v.Root = root ~= nil
+		v.Parented = root ~= nil and root.Parent ~= nil
+		if root then
+			local pos = root.Position
+			v.Pos = pos
+			v.Ground = HeightGrid.GroundY(pos.X, pos.Z)
+		end
+		v.Eligible = XPSystem.IsEligible(rp)
+		v.Radius = shardRadius(rp)
+	end
+	return v
+end
+
 local function nearestCollector(gem: Gem, runPlayers): any?
 	local pos = gem.Pos
 	if gem.Owner then
-		local owner = liveOwner(gem)
+		local o = gem.Owner
+		local owner = frameView(o).Live and o or liveOwner(gem)
 		-- only its owner, alive or downed, connected, not eliminated
-		if owner and owner.Root and XPSystem.IsEligible(owner) and inBand(owner, pos) then
-			local m = ((owner.Root.Position - pos) * Vector3.new(1, 0, 1)).Magnitude
-			if m <= shardRadius(owner) then
-				return owner
+		if owner then
+			local v = frameView(owner)
+			if v.Root and v.Eligible and (not HeightGrid.IsActive() or math.abs(v.Ground + Config.XP.GemHeight - pos.Y) <= Nav.HitBand) then
+				local dx, dz = v.Pos.X - pos.X, v.Pos.Z - pos.Z
+				if dx * dx + dz * dz <= v.Radius * v.Radius then
+					return owner
+				end
 			end
 		end
 		return nil
@@ -695,11 +744,12 @@ end
 
 -- Can this flight go on? Shared gems: a living collector; shards: their eligible owner.
 local function flightValid(gem: Gem, target): boolean
-	if not target.Root or not target.Root.Parent then
+	local v = frameView(target)
+	if not v.Parented then
 		return false
 	end
 	if gem.Owner then
-		return target == gem.Owner and XPSystem.IsEligible(target)
+		return target == gem.Owner and v.Eligible
 	end
 	return target.Alive == true
 end
@@ -739,7 +789,7 @@ local function updateGems(dt: number, runPlayers)
 				gem.Part:SetAttribute("Fly", nil) -- ... written once, then the flight ends
 				gridAdd(gem)
 			else
-				local to = target.Root.Position - gem.Pos
+				local to = frameView(target).Pos - gem.Pos
 				local dist = to.Magnitude
 				if dist <= collectDist then
 					target.GemsPicked = (target.GemsPicked or 0) + 1 -- daily quests (DailyQuests)
