@@ -58,4 +58,12 @@ LobbyConfig.ResolveWaitSeconds = 30 -- a second ResolvePlayer call waits at most
 -- Remote rate limits (calls per second per player).
 LobbyConfig.Rates = { Class = 3, Queue = 4, Sync = 2 }
 
+-- [stream L1] Home screen: the first-time guide (opens once for an account that never started a run;
+-- reopenable from HOW TO PLAY and Settings) and the loading statuses (docs/redesign/lobby/L1_STATUS.md).
+LobbyConfig.Home = {
+	Guide = true, -- false: the guide never opens by itself (HOW TO PLAY still reopens it)
+	ExplainLoadingAfter = 8, -- seconds until the load card says what is still loading
+	OfferRetryAfter = 30, -- seconds until it offers RETRY with a failure message
+}
+
 return LobbyConfig

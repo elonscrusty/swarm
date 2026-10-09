@@ -145,6 +145,47 @@ function ClassOwnership.GoalProgress(data: any, classId: any): (number, number)
 	return math.min(goalCount(data, goal.Stat), goal.Need), goal.Need
 end
 
+-- [stream L1] Goal progress for the class browser (LobbyView.Progress). One entry per class that
+-- has a goal and is not owned yet: Have / Need of the main stat (Have capped at Need), and Parts
+-- (every stat of an "any one of" goal, e.g. Knuckles: a boss OR a revive) when the goal has them.
+-- Pure: reads data.Stats.ClassGoals only, never writes.
+export type Progress = { Have: number, Need: number, Stat: string, Parts: { { Stat: string, Have: number, Need: number } }? }
+function ClassOwnership.ProgressOf(data: any, classId: any): Progress?
+	local info = ClassCatalog.Get(classId)
+	local goal = info and info.Goal
+	if not goal then
+		return nil
+	end
+	local out: Progress = {
+		Have = math.min(goalCount(data, goal.Stat), goal.Need),
+		Need = goal.Need,
+		Stat = goal.Stat,
+	}
+	if type(goal.Any) == "table" then
+		local parts = {}
+		for _, g in ipairs(goal.Any) do
+			if type(g.Stat) == "string" and type(g.Need) == "number" then
+				table.insert(parts, { Stat = g.Stat, Have = math.min(goalCount(data, g.Stat), g.Need), Need = g.Need })
+			end
+		end
+		out.Parts = parts
+	end
+	return out
+end
+
+function ClassOwnership.ProgressAll(data: any): { [string]: Progress }
+	local out: { [string]: Progress } = {}
+	for _, id in ipairs(ClassCatalog.Order) do
+		if not ClassOwnership.Owns(data, id) then
+			local p = ClassOwnership.ProgressOf(data, id)
+			if p then
+				out[id] = p
+			end
+		end
+	end
+	return out
+end
+
 -- Unlocks every class whose goal is met and that this save doesn't own yet. Pure; returns the
 -- newly unlocked ids (never removes anything, never charges gold).
 function ClassOwnership.EarnGoals(data: any): { string }
