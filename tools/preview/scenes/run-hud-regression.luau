@@ -57,7 +57,7 @@ local function setP(k: string, v: any)
 	lp:SetAttribute(k, v)
 end
 local function settle(t: number?)
-	preview.advance(t or 0.5, 12) -- 12 fps: enough for the UI timers, three times cheaper than the default 30
+	preview.advance(t or 0.5, 8) -- 8 fps: enough for the UI timers, almost four times cheaper than the default 30
 end
 
 -- modules ---------------------------------------------------------------------------------------

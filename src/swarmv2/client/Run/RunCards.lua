@@ -264,14 +264,14 @@ function RunCards.Build(root: Instance, k: any)
 	ui.Ring = ring
 	ui.Seconds = W.Text(ring.Frame, "10", { Name = "Seconds", Size = 18, Font = "Number", Align = "Center", Box = UDim2.fromScale(1, 1), ZIndex = 5, Color = RunTheme.Cream })
 	ui.Title = W.Text(face, "LEVEL UP", { Name = "Title", Size = 20, Font = "Heading", Position = UDim2.fromOffset(62, 4), Box = UDim2.new(0.5, -62, 0, 26), Fit = 13, Color = RunTheme.Gold })
-	ui.StatusSize = labelSize(14, 12)
-	ui.Status = W.Text(face, "Combat continues", { Name = "Status", Size = ui.StatusSize, Font = "Label", Position = UDim2.fromOffset(62, 29), Box = UDim2.new(0.6, -62, 0, 20), Fit = 11, Color = RunTheme.CreamMuted })
+	ui.Status = W.Text(face, "Combat continues", { Name = "Status", Size = labelSize(14, 12), Font = "Label", Position = UDim2.fromOffset(62, 29), Box = UDim2.new(0.6, -62, 0, 20), Fit = 11, Color = RunTheme.CreamMuted })
 	ui.Cards = new("Frame", { Name = "Cards", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, HEAD_H), Size = UDim2.new(1, -16, 0, CARD_MIN_H), Active = false }, face)
 	ui.CardsList = UIKit.list(ui.Cards, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Top, Padding = UDim.new(0, 8) })
 	ui.Reroll = W.Button(face, {
 		Name = "Reroll",
 		Text = "REROLL",
 		Sub = "R",
+		SubSize = labelSize(14, 12),
 		Kind = "Secondary",
 		TextSize = 18,
 		Size = UDim2.fromOffset(150, LAYOUT.TouchMin),
@@ -684,12 +684,11 @@ function RunCards.Show(payload: any)
 			table.insert(cards, RunCards.Normalize(c, i))
 		end
 	end
-	-- the status label is built at the size that comes out at 12 pt on this device (the UI scale is known by now)
-	if ui.StatusSize ~= labelSize(14, 12) then
-		local parent = ui.Status.Parent
-		ui.Status:Destroy()
-		ui.StatusSize = labelSize(14, 12)
-		ui.Status = W.Text(parent, "Combat continues", { Name = "Status", Size = ui.StatusSize, Font = "Label", Position = UDim2.fromOffset(62, 29), Box = UDim2.new(0.6, -62, 0, 20), Fit = 11, Color = RunTheme.CreamMuted })
+	-- the small header labels come out at 12 pt on this device (the UI scale is known by now)
+	local headSize = labelSize(14, 12)
+	W.SetSize(ui.Status, headSize)
+	if ui.Reroll.Sub then
+		W.SetSize(ui.Reroll.Sub, headSize)
 	end
 	emptySlots = math.clamp(math.floor(tonumber(payload.Empty) or 0), 0, math.max(0, 3 - #cards))
 	emptyText = str(payload.EmptyText) or "Nothing left to offer."

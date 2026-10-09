@@ -150,6 +150,19 @@ function Widgets.Fit(label: TextLabel, minSize: number?): TextLabel
 	return label
 end
 
+-- Re-sizes a label made by Text with Fit (design size, the phone boost applies): the box limit follows.
+function Widgets.SetSize(label: TextLabel, designSize: number)
+	local px = TS(designSize)
+	if label.TextSize ~= px then
+		label.TextSize = px
+	end
+	local c = label:FindFirstChild("Fit")
+	if c and c:IsA("UITextSizeConstraint") then
+		c.MaxTextSize = px
+		c.MinTextSize = math.min(px, c.MinTextSize)
+	end
+end
+
 -- Sets text only when it changed.
 function Widgets.Set(label: TextLabel, str: string)
 	if label.Text ~= str then
@@ -416,7 +429,7 @@ end
 --[[
 	A button. o: Text, Kind ("Primary" gold / "Secondary" navy / "Danger"), Size (UDim2; the
 	height is never under 48), Position, AnchorPoint, LayoutOrder, ZIndex, OnClick(input),
-	TextSize, Name, Sub (a second small line). Returns { Instance, Face, Label, SetText,
+	TextSize, Name, Sub (a second small line), SubSize (its design size). Returns { Instance, Face, Label, SetText,
 	SetEnabled(on, reason?), SetPending(on), IsEnabled }.
 ]]
 function Widgets.Button(parent: Instance?, o: any): any
@@ -464,7 +477,7 @@ function Widgets.Button(parent: Instance?, o: any): any
 	})
 	local subLabel = nil
 	if sub then
-		subLabel = Widgets.Text(face, sub, { Name = "Sub", Size = 14, Font = "Label", Align = "Center", Color = textColor, Box = UDim2.new(1, -12, 0.4, 0), Position = UDim2.new(0, 6, 0.58, 0), Fit = 10, ZIndex = (o.ZIndex or 1) + 1 })
+		subLabel = Widgets.Text(face, sub, { Name = "Sub", Size = o.SubSize or 14, Font = "Label", Align = "Center", Color = textColor, Box = UDim2.new(1, -12, 0.4, 0), Position = UDim2.new(0, 6, 0.58, 0), Fit = 10, ZIndex = (o.ZIndex or 1) + 1 })
 	end
 	local state = { Enabled = true, Pending = false, Hover = false, Down = false }
 	local function paint()
