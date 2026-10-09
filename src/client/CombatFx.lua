@@ -116,7 +116,7 @@ end
 
 -- Budget multiplier now: Reduced effects and slow frames shrink it.
 local function scale(): number
-	local s = ClientSettings.Reduced() and REDUCED or 1
+	local s = (ClientSettings.Reduced() and REDUCED or 1) * ClientSettings.EffectsMult() -- [stream L1] Settings > Effects intensity
 	if avgDt > SLOW * 1.6 then
 		s *= 0.25
 	elseif avgDt > SLOW then

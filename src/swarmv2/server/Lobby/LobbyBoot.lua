@@ -68,6 +68,10 @@ function LobbyBoot.View(p: Player): { [string]: any }?
 		Queue = QueueService.View(p),
 		PartySize = party and #party.Members or 1,
 		IsLeader = party == nil or party.Leader == p,
+		-- [stream L1] class browser: goal progress of the classes not owned yet, and the answer to
+		-- the player's last ClassAction (Select / Buy) so a pending choice resolves on the server's word
+		Progress = ClassOwnership.ProgressAll(data),
+		ClassAck = ClassService.AckOf(p),
 	}
 end
 

@@ -1,13 +1,19 @@
 --!strict
 --[[
 	SwarmV2Client/Lobby/PartyStrip.lua
-	OWNER: lobby track (Chat 1). A small, unobtrusive party strip under the class chip: party
-	size, who leads, and a PARTY button that opens the existing Party screen.
+	OWNER: lobby track (Chat 1). The PARTY entry on the home screen, under the class chip: party size,
+	who leads, and a PARTY button that opens the existing Party screen. While the lobby's profile has
+	not answered it says so instead of guessing.
 ]]
 
-local Kit = require(script.Parent.Kit)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local UIKit, Theme = Kit.UIKit, Kit.Theme
+local Kit = require(script.Parent.Kit)
+local Brief = require(script.Parent.Brief)
+local LobbyConfig = require(ReplicatedStorage:WaitForChild("SwarmV2"):WaitForChild("Lobby"):WaitForChild("LobbyConfig"))
+
+local UIKit = Kit.UIKit
+local T = Brief.T
 
 local PartyStrip = {}
 
@@ -18,55 +24,62 @@ export type Panel = {
 }
 
 function PartyStrip.Build(ctx: Kit.Ctx, openParty: () -> ()): Panel
-	local holder, face = UIKit.Surface(ctx.Root, {
+	local strip = UIKit.new("Frame", {
 		Name = "PartyStrip",
-		Size = UDim2.fromOffset(250, 66),
-		Radius = Theme.Radius.M,
-		Depth = 3,
-		Transparency = 0.1,
+		BackgroundColor3 = T.Navy,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(260, 66),
 		ZIndex = 3,
-	})
-	local title = Kit.txt(face, "H3", "PARTY", {
+	}, ctx.Root)
+	UIKit.corner(strip, 14)
+	UIKit.stroke(strip, T.Line, 2, 0)
+	local title = Brief.label(strip, "Caption", "PARTY", {
 		Name = "Title",
-		Position = UDim2.fromOffset(12, 8),
-		Size = UDim2.new(1, -124, 0, 26),
+		Position = UDim2.fromOffset(14, 8),
+		Size = UDim2.new(1, -132, 0, 20),
+		TextColor3 = T.Gold,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 4,
-	}, 18)
-	local sub = Kit.txt(face, "Small", "", {
+	}, ctx.Compact)
+	local sub = Brief.label(strip, "Label", "", {
 		Name = "Sub",
-		Position = UDim2.fromOffset(12, 34),
-		Size = UDim2.new(1, -120, 0, 22),
+		Position = UDim2.fromOffset(14, 30),
+		Size = UDim2.new(1, -132, 0, 26),
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 4,
-	}, 14)
-	Kit.btn(face, {
-		Kind = "Secondary",
+	}, ctx.Compact)
+	Brief.button(strip, {
+		Name = "PartyButton",
 		Title = "PARTY",
-		Size = UDim2.fromOffset(104, 50),
+		Icon = "people2",
+		Size = UDim2.fromOffset(112, 50),
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -8, 0.5, 0),
-		Name = "PartyButton",
-		Depth = "Light",
-		Shrink = true,
 		ZIndex = 5,
+		Kind = "Secondary",
+		TitleSize = 15,
 		OnClick = openParty,
 	})
 	return {
-		Frame = holder,
+		Frame = strip,
 		Layout = function(c: Kit.Ctx, x: number, y: number)
-			holder.Position = UDim2.fromOffset(x, y)
-			holder.Size = UDim2.fromOffset(c.Portrait and math.min(260, c.W - 2 * Kit.M) or 250, 66)
+			strip.Position = UDim2.fromOffset(x, y)
+			strip.Size = UDim2.fromOffset(c.Portrait and math.min(300, c.W - 2 * Kit.M) or 260, 66)
 		end,
 		Render = function(c: Kit.Ctx)
 			local v = c.View
-			local size = v and v.PartySize or 0
+			if v == nil then
+				title.Text = "PARTY"
+				sub.Text = "Loading..."
+				return
+			end
+			local size = v.PartySize or 1
 			if size > 1 then
-				title.Text = "PARTY  " .. tostring(size)
+				title.Text = string.format("PARTY  %d / %d", size, LobbyConfig.MaxPlayers)
 				sub.Text = v.IsLeader and "You lead" or "You are a member"
 			else
 				title.Text = "PARTY"
-				sub.Text = "With friends"
+				sub.Text = "Playing solo"
 			end
 		end,
 	}

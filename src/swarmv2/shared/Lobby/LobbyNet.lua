@@ -43,6 +43,10 @@ export type LobbyView = {
 	Queue: QueueView?,
 	PartySize: number,
 	IsLeader: boolean,
+	-- [stream L1] goal progress of the classes this save does not own yet (class browser)
+	Progress: { [string]: { Have: number, Need: number, Stat: string, Parts: { { Stat: string, Have: number, Need: number } }? } }?,
+	-- [stream L1] the server's answer to the player's latest ClassAction: N counts up with every answer
+	ClassAck: { N: number, Id: string, Action: string, Ok: boolean, Code: string? }?,
 }
 
 local LobbyNet = {}

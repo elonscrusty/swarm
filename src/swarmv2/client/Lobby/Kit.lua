@@ -24,7 +24,11 @@ export type Ctx = {
 	H: number,
 	Portrait: boolean,
 	Touch: boolean,
+	Compact: boolean, -- a phone-sized screen (UIKit.IsCompact)
+	Scale: number, -- the lobby UI's UIScale (virtual px -> real px)
 	View: any?, -- LobbyNet.LobbyView
+	Profile: any?, -- the last ProfileSync payload (nil until the save answered)
+	OpenGuide: (reopen: boolean?) -> (), -- the how-to-play guide (first-time or from Help / Settings)
 	Fire: (name: string, ...any) -> (),
 	OpenSheet: (name: string?) -> (),
 	Toast: (text: string, kind: string?) -> (),

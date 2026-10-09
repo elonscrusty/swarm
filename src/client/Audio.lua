@@ -722,8 +722,9 @@ end
 
 function Audio.SetVolumes(music: number, sfx: number)
 	local muted = ClientSettings.Get("MuteAll") == true
-	musicGroup.Volume = muted and 0 or math.clamp(music, 0, 1)
-	sfxGroup.Volume = muted and 0 or math.clamp(sfx, 0, 1)
+	local master = ClientSettings.MasterVolume() -- [stream L1] Settings > Master volume
+	musicGroup.Volume = muted and 0 or math.clamp(music, 0, 1) * master
+	sfxGroup.Volume = muted and 0 or math.clamp(sfx, 0, 1) * master
 	for name, group in pairs(channels) do
 		group.Volume = math.clamp(tonumber(ClientSettings.Get(name .. "Volume")) or 1, 0, 1)
 	end

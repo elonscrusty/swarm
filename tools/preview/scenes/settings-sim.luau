@@ -17,7 +17,9 @@ end)
 
 local saved = { Music = 0.4, Sfx = 0.7, Shake = 0.83, ReducedEffects = true, DamageNumbers = false, Tips = false, Minimap = false,
 	Colorblind = "Protanopia", ReduceFlashes = true, CombatVolume = 0.5, InterfaceVolume = 0.6, WarningVolume = 1,
-	MuteAll = false, VisualAudioCues = true, TouchLayout = "LeftHanded", DamageNumberSize = "Big", CombineNumbers = false }
+	MuteAll = false, VisualAudioCues = true, TouchLayout = "LeftHanded", DamageNumberSize = "Big", CombineNumbers = false,
+	-- stream L1: master volume, camera, effects intensity, UI size, the lobby guide flag
+	MasterVolume = 0.7, CameraSensitivity = 0.8, InvertCameraX = true, InvertCameraY = false, EffectsIntensity = 0.5, UIScale = 0.3, LobbyGuideSeen = true }
 -- UIBuilder passes ProfileSync.Settings to ClientSettings.Apply; the scene calls Apply the
 -- same way so the logic is checked even when the menu scripts are not running (headless)
 local function sync(settings)

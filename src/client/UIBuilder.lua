@@ -287,6 +287,7 @@ local function updateScale()
 	else
 		s = math.clamp(math.min(size.X / refX, size.Y / refY), Config.UI.MinScale, Config.UI.MaxScale)
 	end
+	s *= ClientSettings.UIScaleMult() -- [stream L1] Settings > UI size (0.8x..1.2x, 1x by default)
 	uiScale.Scale = s
 	root.Size = UDim2.fromScale(1 / s, 1 / s)
 	computeInsets()
@@ -3814,6 +3815,15 @@ local function buildPause()
 	pause.Flashes = UIKit.Toggle(colB, "Reduce flashes", "sparkle", "Keep attack warnings; suppress bright hit and screen flashes.", ClientSettings.Get("ReduceFlashes") == true, function(on)
 		ClientSettings.Set("ReduceFlashes", on)
 	end, { LayoutOrder = 6 })
+	-- [stream L1] master volume, camera, effects intensity, UI size, reset, how to play (MenuSettingsPlus)
+	pause.Plus = require(script.Parent.MenuSettingsPlus).Build(colA, colB, {
+		Close = function()
+			UIBuilder.ClosePause()
+		end,
+		Resync = function()
+			UIBuilder.SyncSettings()
+		end,
+	})
 	pause.Choices = {}
 	for i, option in ipairs({ { "Colorblind", "COLORS" }, { "TouchLayout", "TOUCH LAYOUT" } }) do
 		local key, label = option[1], option[2]
@@ -3969,7 +3979,15 @@ local function syncOptions()
 	for key, option in pairs(pause.Choices) do
 		option.Button.SetText(option.Label .. ": " .. settingWord(ClientSettings.Get(key)))
 	end
+	if pause.Plus then
+		pause.Plus.Sync() -- [stream L1]
+	end
 	pause.Layout()
+end
+
+-- [stream L1] MenuSettingsPlus' reset button refreshes every row through this.
+function UIBuilder.SyncSettings()
+	syncOptions()
 end
 
 ------------------------------------------------------------------------------------------
@@ -6482,6 +6500,11 @@ function UIBuilder.Init(d: { [string]: any })
 	end)
 
 	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
+	ClientSettings.OnChanged(function(key: string) -- [stream L1] UI size changes apply at once
+		if key == "UIScale" then
+			updateScale()
+		end
+	end)
 	gui:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateScale)
 	fxGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 	fxGui:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateScale)

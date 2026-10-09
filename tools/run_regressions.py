@@ -119,6 +119,22 @@ def main():
     checks += [("layout", ["levelup", d, "details=2"]) for d in ("iphone", "pc")]
     # SwarmV2 lobby UI (basecamp-ui scene): class sheet, gates, queue, countdown on phones
     checks += [("layout", ["basecamp-ui", d, "view=" + v]) for d in ("iphone", "phone-portrait") for v in ("idle", "classes", "gates", "countdown")]
+    # stream L1 (docs/redesign/lobby/L1_STATUS.md): class browser data + server confirmation, codex, settings keys
+    # (class-browser-regression); the browser, loading statuses, first-time guide and home entry points on four
+    # devices (class-browser-ui logic checks run inside each layout scene); the codex; the Settings screen
+    checks += [("class-browser-regression", [])]
+    checks += [("layout", ["class-browser-ui", d, "view=" + v, "owned=few"]) for d in ("pc", "iphone", "phone-portrait", "tablet") for v in ("grid", "details")]
+    checks += [("layout", ["class-browser-ui", d, "view=grid", "owned=many", "longnames=on"]) for d in ("pc", "iphone", "phone-portrait", "tablet")]
+    checks += [("layout", ["class-browser-ui", d, "view=queued", "owned=few"]) for d in ("pc", "iphone")]
+    checks += [("layout", ["class-browser-ui", d, "view=confirm", "owned=few", "gold=rich"]) for d in ("pc", "iphone", "phone-portrait")]
+    checks += [("layout", ["class-browser-ui", d, "view=loading", "age=31"]) for d in ("pc", "iphone", "phone-portrait")]
+    checks += [("layout", ["class-browser-ui", d, "view=guide", "step=4"]) for d in ("pc", "iphone", "phone-portrait")]
+    checks += [("layout", ["class-browser-ui", d, "view=home"]) for d in ("pc", "iphone", "phone-portrait", "tablet")]
+    checks += [("layout", ["class-browser-ui", "pc", "view=" + v, "owned=few"]) for v in ("pending", "refused", "owned", "page2", "unavailable")]
+    checks += [("layout", ["class-browser-ui", "pc", "view=loading", "age=9"]), ("layout", ["class-browser-ui", "pc", "view=loading", "age=0"])]
+    checks += [("layout", ["codex-ui", d, "tab=" + t, "open=" + o]) for d in ("pc", "iphone", "phone-portrait") for t, o in (("Classes", "ruckus"), ("Weapons", "ScrapToss"), ("Enemies", "BasinBreaker"), ("Controls", "Touch"))]
+    checks += [("layout", ["codex-ui", "iphone", "tab=Weapons", "open=ToastVolley", "found=none"]), ("layout", ["codex-ui", "pc", "tab=Evolutions", "open=ToastVolley", "found=none"])]
+    checks += [("layout", ["settings", "tablet"])]
     # funnel analytics (server Analytics.lua, docs/ANALYTICS.md): AnalyticsService mock as a
     # published lobby, the same flow in Studio (nothing sent), and the real client's ready report
     checks += [("run-entry-regression", [])]  # SwarmV2 arrival barrier, local match start with the admitted class, return hook

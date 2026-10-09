@@ -9,6 +9,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Kit = require(script.Parent.Kit)
+local Brief = require(script.Parent.Brief)
 local V2 = ReplicatedStorage:WaitForChild("SwarmV2")
 local LobbyNet = require(V2:WaitForChild("Lobby"):WaitForChild("LobbyNet"))
 local LobbyConfig = require(V2:WaitForChild("Lobby"):WaitForChild("LobbyConfig"))
@@ -20,7 +21,7 @@ local new = UIKit.new
 local QueuePanel = {}
 
 export type Panel = {
-	Play: any,
+	Play: Brief.Button,
 	Queue: Frame,
 	Sheet: Kit.Sheet,
 	Layout: (ctx: Kit.Ctx) -> (),
@@ -56,18 +57,16 @@ end
 
 function QueuePanel.Build(ctx: Kit.Ctx): Panel
 	------------------------------------------------------------------ PLAY
-	local play = Kit.btn(ctx.Root, {
+	-- [stream L1] the one gold main action of the home screen (brief tokens; at least 56 px tall)
+	local play = Brief.button(ctx.Root, {
 		Kind = "Primary",
 		Title = "PLAY",
 		TitleSize = 34,
 		Icon = "play",
-		IconSize = 30,
 		Size = UDim2.fromOffset(230, 84),
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -Kit.M, 1, -Kit.M),
 		Name = "PlayButton",
-		Depth = "Strong",
-		Radius = Theme.Radius.L,
 		ZIndex = 3,
 		OnClick = function()
 			ctx.OpenSheet("Gates")

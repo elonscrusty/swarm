@@ -1,270 +1,137 @@
 --!strict
 --[[
 	SwarmV2Client/Lobby/ClassPanel.lua
-	OWNER: lobby track (Chat 1). The class chip (top-left) and the class sheet: four cards in
-	ClassCatalog.Order with SELECT / BUY / LOCKED states. Buttons only send ClassAction; the
-	server decides (ownership, gold, lock) and answers with a new LobbyState.
+	OWNER: lobby track (Chat 1). The CLASSES entry on the home screen (a chip with the class in use)
+	and the class browser it opens (ClassBrowser: twelve classes, filters, details, server-confirmed
+	selection). Buttons only send ClassAction; the server decides (ownership, gold, lock) and answers
+	with a new LobbyState (ClassAck).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Kit = require(script.Parent.Kit)
+local Brief = require(script.Parent.Brief)
+local ClassBrowser = require(script.Parent.ClassBrowser)
 local V2 = ReplicatedStorage:WaitForChild("SwarmV2")
 local ClassCatalog = require(V2:WaitForChild("ClassCatalog"))
 
-local UIKit, Theme, C = Kit.UIKit, Kit.Theme, Kit.C
+local UIKit = Kit.UIKit
 local new = UIKit.new
+local T = Brief.T
 
 local ClassPanel = {}
 
 export type Panel = {
 	Chip: Frame,
-	Sheet: Kit.Sheet,
+	Sheet: ClassBrowser.Sheet,
 	Layout: (ctx: Kit.Ctx) -> (),
 	Render: (ctx: Kit.Ctx) -> (),
+	Step: (ctx: Kit.Ctx) -> (),
+	Back: () -> boolean,
+	Browser: ClassBrowser.Panel,
 }
 
-local function classOf(view: any?): ClassCatalog.ClassInfo
-	local id = view and view.Selected or ClassCatalog.Default
-	return ClassCatalog.Get(id) or ClassCatalog.Get(ClassCatalog.Default) :: ClassCatalog.ClassInfo
-end
-
 function ClassPanel.Build(ctx: Kit.Ctx): Panel
-	local chip, chipFace = Kit.tapPanel(ctx.Root, {
+	local chip = new("Frame", {
 		Name = "ClassChip",
-		Size = UDim2.fromOffset(250, 64),
+		BackgroundColor3 = T.Navy,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(260, 72),
 		Position = UDim2.fromOffset(Kit.M, Kit.M),
-		Radius = Theme.Radius.M,
-		Depth = 4,
 		ZIndex = 3,
-	}, function()
-		ctx.OpenSheet("Classes")
-	end)
+	}, ctx.Root)
+	UIKit.corner(chip, 14)
+	UIKit.stroke(chip, T.Line, 2, 0)
 	local swatch = new("Frame", {
 		Name = "Swatch",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 10, 0.5, 0),
-		Size = UDim2.fromOffset(40, 40),
-		BackgroundColor3 = C.Panel,
+		Position = UDim2.new(0, 12, 0.5, 0),
+		Size = UDim2.fromOffset(44, 44),
+		BackgroundColor3 = T.NavyRaised,
 		BorderSizePixel = 0,
 		ZIndex = 4,
-	}, chipFace)
+	}, chip)
 	UIKit.corner(swatch, 999)
-	local swatchStroke = UIKit.stroke(swatch, C.Text, 3, 0)
-	local name = Kit.txt(chipFace, "H2", "", {
+	local swatchStroke = UIKit.stroke(swatch, T.Cream, 3, 0)
+	Brief.label(chip, "Caption", "CLASSES", {
+		Name = "Caption",
+		Position = UDim2.fromOffset(66, 6),
+		Size = UDim2.new(1, -108, 0, 18),
+		TextColor3 = T.Gold,
+		ZIndex = 4,
+	}, ctx.Compact)
+	local name = Brief.label(chip, "Body", "", {
 		Name = "Name",
-		Position = UDim2.fromOffset(62, 6),
-		Size = UDim2.new(1, -108, 0, 28),
+		FontFace = Brief.Weight.Black,
+		TextSize = 20,
+		Position = UDim2.fromOffset(66, 23),
+		Size = UDim2.new(1, -108, 0, 26),
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 4,
-	}, 20)
-	local role = Kit.txt(chipFace, "Label", "", {
+	}, ctx.Compact)
+	local role = Brief.label(chip, "Label", "", {
 		Name = "Role",
-		Position = UDim2.fromOffset(62, 34),
-		Size = UDim2.new(1, -108, 0, 22),
+		Position = UDim2.fromOffset(66, 47),
+		Size = UDim2.new(1, -108, 0, 20),
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 4,
-	}, 13)
-	local caret = Kit.txt(chipFace, "H2", "v", {
+	}, ctx.Compact)
+	Kit.Icons.Draw(chip, "chevronRight", {
 		Name = "Caret",
+		Size = 24,
+		Color = T.Cream,
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(28, 28),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = C.Blue,
+		Position = UDim2.new(1, -12, 0.5, 0),
 		ZIndex = 4,
-	}, 20)
-	caret.Name = "Caret"
-
-	local sheet: Kit.Sheet
-	sheet = Kit.sheet(ctx.Root, "ClassSheet", "YOUR CLASS", function()
-		ctx.OpenSheet(nil)
-	end)
-	-- [integration] twelve classes: the card grid scrolls when it doesn't fit the screen
-	local list = new("ScrollingFrame", {
-		Name = "Cards",
+	})
+	local hit = new("TextButton", {
+		Name = "Hit",
+		Text = "",
 		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 1, -46),
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollingDirection = Enum.ScrollingDirection.Y,
-		ScrollBarThickness = 6,
-		ZIndex = 12,
-	}, sheet.Body)
-	local grid = new("UIGridLayout", {
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		CellPadding = UDim2.fromOffset(8, 8),
-		CellSize = UDim2.fromOffset(200, 240),
-		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-	}, list)
-	local note = Kit.txt(sheet.Body, "Small", "Your avatar stays yourself in camp. You become this class in the run.", {
-		Name = "Note",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.fromScale(0, 1),
-		Size = UDim2.new(1, 0, 0, 42),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextWrapped = true,
-		ZIndex = 12,
-	}, 14)
-	local gold = Kit.txt(sheet.Head, "BodyStrong", "", {
-		Name = "Gold",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -66, 0.5, 0),
-		Size = UDim2.fromOffset(150, 28),
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = C.BlueDeep,
-		ZIndex = 13,
-	}, 18)
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 20,
+		AutoButtonColor = false,
+	}, chip)
+	Brief.focusable(hit)
+	hit.Activated:Connect(Kit.debounced(function()
+		ctx.OpenSheet("Classes")
+	end))
 
-	local sig = ""
-	local cols = 4
-
-	local function card(ctxNow: Kit.Ctx, id: string, order: number)
-		local info = ClassCatalog.Get(id)
-		if not info then
-			return
-		end
-		local view = ctxNow.View
-		local selected = view ~= nil and view.Selected == id
-		local owned = id == ClassCatalog.Default or (view ~= nil and view.Owned[id] == true)
-		local locked = view ~= nil and view.ClassLocked == true
-		local goldNow: number = view and view.Gold or 0
-		local holder, face = UIKit.Surface(list, {
-			Name = "Card_" .. id,
-			LayoutOrder = order,
-			Radius = Theme.Radius.M,
-			Color = selected and C.SelectedPale or C.Panel,
-			Edge = selected and C.SelectedEdge or C.PanelEdge,
-			EdgeThickness = selected and 4 or 2,
-			Transparency = 0,
-			Depth = 4,
-			ZIndex = 13,
-		})
-		local top = info.Primary or C.Panel
-		local pic = new("Frame", {
-			Name = "Pic",
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 8),
-			Size = UDim2.fromOffset(46, 46),
-			BackgroundColor3 = top,
-			BorderSizePixel = 0,
-			ZIndex = 14,
-		}, face)
-		UIKit.corner(pic, 999)
-		UIKit.stroke(pic, info.Accent or C.Text, 4, 0)
-		Kit.txt(face, "H2", info.Name, {
-			Name = "Name",
-			Position = UDim2.fromOffset(6, 58),
-			Size = UDim2.new(1, -12, 0, 26),
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-			ZIndex = 14,
-		}, 19)
-		Kit.txt(face, "Label", info.Role or "", {
-			Name = "Role",
-			Position = UDim2.fromOffset(6, 84),
-			Size = UDim2.new(1, -12, 0, 20),
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextColor3 = C.BlueDeep,
-			ZIndex = 14,
-		}, 13)
-		Kit.txt(face, "Small", info.Tagline, {
-			Name = "Tagline",
-			Position = UDim2.fromOffset(8, 106),
-			Size = UDim2.new(1, -16, 0, 76),
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			TextWrapped = true,
-			ZIndex = 14,
-		}, 14)
-		local title, kind, enabled, action: string? = "SELECT", "Primary", true, nil
-		if selected then
-			title, kind, enabled = "SELECTED", "Selected", false
-		elseif locked then
-			title, kind, enabled = "LOCKED", "Disabled", false
-		elseif owned then
-			title, kind, action = "SELECT", "Primary", "Select"
-		elseif info.GoalOnly then
-			-- earned by play only: show the goal (DECISIONS C2)
-			title, kind, enabled = string.upper(info.Goal and info.Goal.Text or "Earn in runs"), "Disabled", false
-		elseif goldNow >= info.Cost then
-			title, kind, action = "BUY " .. Kit.gold(info.Cost), "Primary", "Buy"
-		else
-			title, kind, enabled = "NEED " .. Kit.gold(info.Cost - goldNow) .. " MORE", "Disabled", false
-		end
-		local b = Kit.btn(face, {
-			Kind = kind,
-			Title = title,
-			Size = UDim2.new(1, -16, 0, 52),
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -8),
-			Name = "Action",
-			Depth = "Medium",
-			Shrink = true,
-			ZIndex = 15,
-			OnClick = function()
-				if action then
-					ctxNow.Fire("ClassAction", action, id)
-				end
-			end,
-		})
-		if not enabled then
-			b.SetEnabled(false)
-		end
-		holder.Parent = list
-	end
+	local browser = ClassBrowser.Build(ctx)
 
 	local panel: Panel
 	panel = {
 		Chip = chip,
-		Sheet = sheet,
+		Sheet = browser.Sheet,
+		Browser = browser,
 		Layout = function(c: Kit.Ctx)
-			cols = c.Portrait and 2 or 4
-			local avail = math.min(c.W - 2 * Kit.M, 960)
-			local cellW = math.floor((avail - 28 - (cols - 1) * 8) / cols)
-			local cellH = c.Portrait and 250 or 240
-			local rows = math.ceil(#ClassCatalog.Order / cols)
-			grid.CellSize = UDim2.fromOffset(cellW, cellH)
-			-- at most about two rows tall; the rest scrolls
-			local bodyH = math.min(rows * cellH + (rows - 1) * 8, math.max(cellH + 8, (c.H or 700) - 220)) + 46
-			sheet.Resize(avail, 28 + 58 + bodyH)
-			if c.Portrait then
-				chip.Size = UDim2.fromOffset(math.min(260, c.W - 2 * Kit.M), 64)
-			else
-				chip.Size = UDim2.fromOffset(250, 64)
-			end
-			sig = "" -- force a rebuild at the new size
+			chip.Size = UDim2.fromOffset(c.Portrait and math.min(300, c.W - 2 * Kit.M) or 260, 72)
+			browser.Layout(c)
 		end,
 		Render = function(c: Kit.Ctx)
 			local v = c.View
-			local info = classOf(v)
-			name.Text = info.Name
-			role.Text = (v and v.ClassLocked) and "CLASS LOCKED" or (info.Role or "")
-			swatch.BackgroundColor3 = info.Primary or C.Panel
-			swatchStroke.Color = info.Accent or C.Text
-			gold.Text = v and ("GOLD " .. Kit.gold(v.Gold)) or ""
-			local parts = { tostring(cols) }
-			if v then
-				table.insert(parts, tostring(v.Selected))
-				table.insert(parts, tostring(math.floor(v.Gold)))
-				table.insert(parts, tostring(v.ClassLocked == true))
-				for _, id in ipairs(ClassCatalog.Order) do
-					table.insert(parts, (v.Owned[id] and "1" or "0"))
-				end
+			if v == nil then
+				-- the save has not answered yet: never show a guess as the player's class
+				name.Text = "Loading class..."
+				role.Text = "Please wait"
+				swatch.BackgroundColor3 = T.NavyRaised
+				swatchStroke.Color = T.Line
+			else
+				local info = ClassCatalog.Get(v.Selected) or ClassCatalog.Get(ClassCatalog.Default)
+				name.Text = info and info.Name or "Class"
+				role.Text = v.ClassLocked and "Class locked" or (info and info.Role or "")
+				swatch.BackgroundColor3 = info and info.Primary or T.NavyRaised
+				swatchStroke.Color = info and info.Accent or T.Cream
 			end
-			local s = table.concat(parts, "|")
-			if s == sig then
-				return
-			end
-			sig = s
-			Kit.clear(list)
-			for i, id in ipairs(ClassCatalog.Order) do
-				card(c, id, i)
-			end
+			browser.Render(c)
+		end,
+		Step = function(c: Kit.Ctx)
+			browser.Step(c)
+		end,
+		Back = function(): boolean
+			return browser.Back()
 		end,
 	}
-	note.Parent = sheet.Body
 	return panel
 end
 

@@ -224,6 +224,9 @@ local function cameraSide(x: number): boolean
 end
 
 local function rotate(dx: number, dy: number)
+	-- [stream L1] Settings: camera sensitivity and invert X / Y apply to every look input (touch, mouse, stick)
+	local look, signX, signY = ClientSettings.CameraTuning()
+	dx, dy = dx * look * signX, dy * look * signY
 	yaw -= dx
 	pitch = math.clamp(pitch + dy, math.rad(R.MinPitch), math.rad(R.MaxPitch))
 	lastInputAt = os.clock()

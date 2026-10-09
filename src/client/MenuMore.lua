@@ -92,7 +92,7 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		{ Id = "Weekly", Title = "WEEKLY CHALLENGE", Sub = "One hero, one week", Icon = "calendar", Tint = "Navy", Feature = { "WeeklyChallenge", "TeamBoard" }, Go = function() ctx.ShowScreen("Weekly") end },
 		{ Id = "Season", Title = "SEASON", Sub = "Free rewards track", Icon = "flag", Tint = "Blue", Feature = "SeasonTrack", Go = function() ctx.ShowScreen("Season") end },
 		{ Id = "Titles", Title = "TITLES", Sub = "Wear a title under your name", Icon = "medal", Tint = "Purple", Feature = "Titles", Go = function() ctx.ShowScreen("Titles") end },
-		{ Id = "Collection", Title = "COLLECTION", Sub = "Everything you have found", Icon = "chest", Tint = "Gold", Feature = "CollectionBook", Go = function() ctx.ShowScreen("Collection") end },
+		{ Id = "Collection", Title = "CODEX", Sub = "Classes, weapons, enemies, controls", Icon = "chest", Tint = "Gold", Feature = "CollectionBook", Go = function() ctx.ShowScreen("Collection") end },
 		{ Id = "Achievements", Title = "ACHIEVEMENTS", Sub = "Goals, titles and colours", Icon = "trophy", Tint = "Orange", Go = function() ctx.ShowScreen("Stats", "Achievements") end },
 		-- LOBBY features (docs/features/LOBBY.md), listed only while their switch is on
 		{ Id = "Courtyard", Title = "COURTYARD", Sub = "Dummy, mirror and jump pads", Icon = "castle", Tint = "Green", Feature = "LobbyFun", Go = function()
