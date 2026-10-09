@@ -3,7 +3,7 @@
 	SwarmV2/Lobby/Basecamp.lua  (ServerScriptService.SwarmV2.Lobby.Basecamp)
 	OWNER: lobby track (Chat 1). Builds the walk-around social basecamp from plain Parts (no meshes,
 	no asset ids) under workspace.SwarmV2Lobby: a compact forest clearing ringed by huge stone cliffs,
-	a bonfire spawn, four class pedestals (temporary part-built previews) on the east side and the
+	a bonfire spawn, four class pedestals (part-built previews, swapped for the real class models once the meshes load) on the east side and the
 	queue gates (stone arch, glowing pad, sign) on the north side. Lighting is not touched here.
 
 	Layout (x east, z south, ground top = LobbyConfig.Origin.Y):
@@ -752,6 +752,97 @@ end
 -- Pedestals
 ----------------------------------------------------------------------------------------------------
 
+-- The real class model (server ModelBuilder + MeshService, category "Classes"), anchored, facing the
+-- bonfire. While the mesh is not loaded the part preview stays; once it is ready the preview is
+-- replaced and the "PREVIEW" label is removed. Offline / without the old modules: nothing changes.
+local REAL_HEIGHT = 11 -- studs on the pedestal (the part previews were ~12)
+
+local function swapRealModel(pedestal: Model, classId: string, root: CFrame)
+	local ok, ModelBuilder, MeshService, CharacterData = pcall(function()
+		local mods = game:GetService("ServerScriptService"):FindFirstChild("Modules")
+		assert(mods, "no Modules")
+		local shared = ReplicatedStorage:WaitForChild("Shared")
+		local cd = require(shared:WaitForChild("CharacterData"))
+		if cd.Characters[classId] == nil then
+			-- the class ids are registered at boot (GameServer); idempotent, so safe to repeat here
+			local roster = require(ReplicatedStorage:WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("ClassRoster"))
+			roster.Register(cd, require(shared:WaitForChild("MetaUpgradeData")))
+		end
+		return require(mods:WaitForChild("ModelBuilder")), require(mods:WaitForChild("MeshService")), cd
+	end)
+	if not ok then
+		return
+	end
+	local mb: any, ms: any, cd: any = ModelBuilder, MeshService, CharacterData
+	local function swap()
+		if pedestal.Parent == nil then
+			return
+		end
+		local built, model = pcall(function()
+			if cd.Characters[classId] == nil then
+				return nil
+			end
+			return mb.BuildCharacter(classId, nil)
+		end)
+		if not built or model == nil then
+			return
+		end
+		local real = model :: Model
+		-- only a mesh-built model replaces the preview (the part fallback is no better)
+		local anyMesh = false
+		for _, d in ipairs(real:GetDescendants()) do
+			if d:IsA("MeshPart") then
+				anyMesh = true
+				break
+			end
+		end
+		if not anyMesh then
+			real:Destroy()
+			return
+		end
+		for _, d in ipairs(real:GetDescendants()) do
+			if d:IsA("BasePart") then
+				d.Anchored = true
+				d.CanCollide = false
+				d.CanQuery = false
+				d.CanTouch = false
+			elseif d:IsA("Humanoid") then
+				d.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+				d.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+			end
+		end
+		real.Name = "Class_" .. classId
+		real:SetAttribute("ClassModel", classId)
+		real:PivotTo(root)
+		local _, size = real:GetBoundingBox()
+		if size.Y > 0.1 then
+			real:ScaleTo(REAL_HEIGHT / size.Y)
+		end
+		real:PivotTo(root)
+		local cf, sz = real:GetBoundingBox()
+		real:PivotTo(real:GetPivot() + Vector3.new(0, root.Position.Y - (cf.Position.Y - sz.Y / 2), 0))
+		for _, c in ipairs(pedestal:GetChildren()) do
+			if c.Name == "Preview_" .. classId then
+				c:Destroy()
+			end
+		end
+		real.Parent = pedestal
+		local tag = pedestal:FindFirstChild("PreviewTag", true)
+		if tag then
+			tag:Destroy()
+		end
+	end
+	local okNames, names = pcall(function()
+		return mb.MeshesFor(classId, nil)
+	end)
+	if okNames then
+		-- deferred: the pedestal is parented and its sign exists by the time the swap runs
+		ms.WhenReady(names, function()
+			task.defer(swap)
+		end)
+	end
+end
+
 local function priceText(cost: number): (string, Color3)
 	if cost <= 0 then
 		return "FREE", Color3.fromRGB(130, 236, 130)
@@ -808,6 +899,7 @@ local function buildPedestals(parent: Instance, pedestals: { [string]: BasePart 
 		-- the temporary preview, facing the bonfire (west)
 		local root = at(PED_X, 4.1, z) * CFrame.Angles(0, math.rad(90), 0)
 		buildPreview(m, id, root, primary, accent)
+		swapRealModel(m, id, root)
 
 		-- prompt
 		local prompt = Instance.new("ProximityPrompt")
