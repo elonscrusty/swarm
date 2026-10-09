@@ -15,3 +15,9 @@
   behaviour, C8). The brief wants a deliberate button. Proposal: open it only when the player taps REVIVE.
 - **Owner decision:** the class bonus changes. Stream C removed the first four classes' old innate
   bonuses, and Granny's boost fire trail.
+- **layout-results-iphone / -phone-portrait:** REPORT A BUG is cut off, PHOTO is off screen, and the
+  "7,700 / 10,000 gold" line overflows. This also happens on the base branch (found by F).
+- **Portrait:** stacked level-up cards can overlap the top of JUMP slightly (F).
+- **Results:** the server sends no Outcome / Duration / Stats fields. The UI derives them from Won /
+  Abandoned and ClassGoals; the brief wants server-confirmed outcome, duration and stats (F).
+- **Walkthrough / tutorial texts:** still mention the portal (H1 is on it).
