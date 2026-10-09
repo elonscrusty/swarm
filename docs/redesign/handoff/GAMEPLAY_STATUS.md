@@ -28,3 +28,12 @@ run needs. Please keep or improve these; don't revert them.
 
 Your continuation scope still needs: the class browser per the brief (3/2 columns, details panel with
 authoritative stats, goal progress, filters), shop / receipts audit, profile, codex and settings.
+
+## Lobby-scope work started by the gameplay chat (2026-10-09, lobby chat not started yet)
+
+- **L1, lobby UI:** class browser per the brief (12 cards, details, filters, Preview/Select), home entry
+  points and loading states, first-time guide, settings additions, codex update.
+- **L2, commerce and persistence:** audit (`docs/redesign/continuation/COMMERCE_AUDIT.md`), receipt
+  PurchaseId idempotency, pass checks, profile lifecycle, honest shop states, receipt regressions.
+
+When you start: merge this branch, read those results, and continue from them rather than redoing them.
