@@ -129,7 +129,7 @@ UI.Interact = {
 	BeaconRange = 20,
 	ChestRange = 9,
 	ReviveHold = 3,
-	BeaconHold = 1.0,
+	BeaconHold = 0.5, -- the beacon's ProximityPrompt hold (RunConfig.Director.Beacon.PromptHold)
 	ChestHold = 0.4,
 	Poll = 0.15, -- seconds between target searches
 	-- remote folder + names the prompt calls when present (stream D / E1 / E2 add them):

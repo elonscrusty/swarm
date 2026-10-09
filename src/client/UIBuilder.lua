@@ -5772,7 +5772,10 @@ local function onRunResult(data)
 	local heroDef = CharacterData.Characters[heroId]
 	-- "KNIGHT · FOREST · STAGE 1" (Endless: "ENDLESS STAGE 9")
 	local stageText = (data.Endless and "Endless stage " or "Stage ") .. tostring(tonumber(data.Stage) or 1)
-	results.Arena.Text = UIKit.track(string.format("%s · %s · %s", heroDef and heroDef.Name or heroId, tostring(data.Arena), stageText))
+	-- [stream F] a director run (RunStage set) has no stage numbers: no "stage N", no "new best stage"
+	local director = Hud.DirectorRun()
+	results.Arena.Text = UIKit.track(director and string.format("%s · %s", heroDef and heroDef.Name or heroId, tostring(data.Arena))
+		or string.format("%s · %s · %s", heroDef and heroDef.Name or heroId, tostring(data.Arena), stageText))
 	-- the hero who played
 	for _, ch in ipairs(results.Medal:GetChildren()) do
 		if ch:IsA("Frame") and ch ~= results.BossBadge then
@@ -5823,7 +5826,8 @@ local function onRunResult(data)
 	results.Hero.Text = string.format("%s damage dealt", UIKit.formatNumber(math.floor(damage)))
 		.. (type(data.Score) == "number" and ((data.Endless and "  ·  Endless score " or "  ·  Score ") .. UIKit.formatNumber(data.Score)) or "")
 	-- numbers
-	results.Stages.Text = tostring(cleared)
+	results.Stages.Text = director and tostring(tonumber(data.Level) or 1) or tostring(cleared)
+	results.StagesCaption.Text = UIKit.track(director and "Level reached" or "Stages cleared")
 	results.Time.Text = formatTime(data.Time)
 	local queens = tonumber(data.BossKills) or 0
 	if queens > 0 then
@@ -5837,10 +5841,11 @@ local function onRunResult(data)
 		results.BossCaption.Text = UIKit.track("Boss not reached")
 	end
 	-- the personal best score (the high-score board's value) comes first when it was beaten
-	results.Best.Text = data.NewBestScore == true and (data.NewBestStage and "NEW BEST SCORE AND STAGE!" or "NEW BEST SCORE!")
-		or (data.NewBest and data.NewBestStage) and "NEW BEST TIME AND STAGE!"
-		or (data.NewBestStage and "NEW BEST STAGE!" or (data.NewBest and "NEW BEST TIME!" or "NEW BEST LEVEL!"))
-	data.NewBest = data.NewBest == true or data.NewBestStage == true or data.NewBestLevel == true or data.NewBestScore == true
+	local newBestStage = data.NewBestStage == true and not director
+	results.Best.Text = data.NewBestScore == true and (newBestStage and "NEW BEST SCORE AND STAGE!" or "NEW BEST SCORE!")
+		or (data.NewBest and newBestStage) and "NEW BEST TIME AND STAGE!"
+		or (newBestStage and "NEW BEST STAGE!" or (data.NewBest and "NEW BEST TIME!" or "NEW BEST LEVEL!"))
+	data.NewBest = data.NewBest == true or newBestStage or data.NewBestLevel == true or data.NewBestScore == true
 	results.Best.Visible = data.NewBest == true
 	results.Unlocked.Visible = data.Unlocked ~= nil
 	results.Unlocked.Text = data.Unlocked and ("Unlocked: " .. data.Unlocked .. " arena!") or ""

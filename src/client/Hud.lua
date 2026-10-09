@@ -1381,6 +1381,9 @@ function showBanner(titleText: string, goal: string, color: Color3?, onShow: (()
 end
 
 local function showStageBanner(stageNo: number, goal: string)
+	if Hud.DirectorRun() then
+		return -- a director run has no stages: the objective strip says what to do
+	end
 	if Hud.StageIntro and Hud.StageIntro(stageNo) then
 		return
 	end
@@ -1783,6 +1786,13 @@ end
 -- The rectangle (design px) the run layout gave a named piece: Health, Timer, Objective, Boss,
 -- Counters, Map, Party, Equipment, XpStrip, Stick, Jump, Dash. nil when the piece does not exist
 -- on this device or before the first layout.
+-- [stream F] Is this a director run (SwarmState RunStage is set)? The older stage banner / pill, the PORTAL
+-- arrow and ring, the stage-start card and "new best stage" wording ask this and stay away: the objective
+-- strip, the beacon cue and the results say the run in the director's words.
+function Hud.DirectorRun(): boolean
+	return type(Remotes.State():GetAttribute("RunStage")) == "string"
+end
+
 -- The side of a touch target at this scale (design px): 48 device points on a phone.
 function Hud.TouchPx(): number
 	return RunLayout.TouchPx(host.Scale(), RunUI.Layout, UIKit.IsCompact())
@@ -2646,7 +2656,7 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	else
 		runTime = state:GetAttribute("RunTime") or 0
 	end
-	local over = flow and runTime >= RunUI.OvertimeAt
+	local over = flow and (state:GetAttribute("Overtime") == true or runTime >= RunUI.OvertimeAt)
 	if over ~= (ui.Overtime == true) then
 		ui.Overtime = over
 		layout()

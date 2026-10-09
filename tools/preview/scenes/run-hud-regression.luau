@@ -364,6 +364,57 @@ section("objective", function()
 	setS("RunStage", "Survive")
 	setS("RunClock", 300)
 	settle(0.6)
+	-- SwarmState Overtime (the director's flag) shows the OVERTIME tag even with an early clock
+	setS("Overtime", true)
+	settle(0.6)
+	check(Hud.Elements().Overtime == true, "SwarmState Overtime shows the OVERTIME tag on the timer")
+	setS("Overtime", false)
+	settle(0.5)
+end)
+
+------------------------------------------------------------------------------------------
+-- stream D: on a director run (RunStage set) the older stage / portal surfaces stay quiet
+section("director", function()
+	local StageUI = preview.client("StageUI")
+	local far = centre + Vector3.new(120, 0, -60)
+	-- what the director publishes beside RunStage: the old Stage / StagePhase and PortalPos / PortalHint (the beacon)
+	setS("Stage", 1)
+	setS("StagePhase", "Explore")
+	setS("PortalPos", far)
+	setS("PortalHint", true)
+	setS("PortalReveal", 1)
+	setS("RunStage", "BeaconAvailable")
+	setS("BeaconPos", far)
+	setS("RunClock", 760)
+	settle(1.2)
+	check(Hud.DirectorRun(), "Hud.DirectorRun is true while RunStage is set")
+	check(not StageUI.Elements().Arrow.Visible and not StageUI.Elements().Ring.Visible, "the older PORTAL arrow and ring stay hidden on a director run")
+	check(anyText("PORTAL ·") == nil and anyText("PORTAL HAS APPEARED") == nil, "no PORTAL words on screen on a director run")
+	check(anyText("^STAGE 1$") == nil, "no STAGE 1 banner or pill on a director run")
+	check(RunObjective.Elements().Cue.Visible, "the beacon arrow (RunObjective) is the one cue")
+	-- the beacon's own ProximityPrompt (E, a 0.5 s hold): this prompt says the same words and draws it
+	local root = lp.Character and lp.Character.PrimaryPart
+	if root then
+		local pp = Instance.new("ProximityPrompt")
+		pp.Name = "BeaconPrompt"
+		pp.ActionText = "Light the beacon"
+		pp.ObjectText = "Beacon"
+		pp.HoldDuration = 0.5
+		pp.Parent = workspace
+		setS("BeaconPos", root.Position + Vector3.new(5, 0, 2))
+		settle(1.6)
+		local E = RunInteract.Elements()
+		check(RunInteract.Priority() == "Beacon", "the beacon prompt is the interact target beside the beacon (" .. tostring(RunInteract.Priority()) .. ")")
+		check(string.find(string.upper(E.Label.Text), "LIGHT THE BEACON") ~= nil and string.find(E.Sub.Text, "0.5 s hold") ~= nil, "the prompt says the ProximityPrompt's words and its 0.5 s hold (" .. E.Label.Text .. " / " .. E.Sub.Text .. ")")
+		check(pp.Style == Enum.ProximityPromptStyle.Custom, "the default Roblox prompt is switched to Custom on this client (no second prompt)")
+		pp:Destroy()
+	end
+	for _, k in ipairs({ "Stage", "StagePhase", "PortalPos", "PortalHint", "PortalReveal", "BeaconPos" }) do
+		setS(k, nil)
+	end
+	setS("RunStage", "Survive")
+	setS("RunClock", 300)
+	settle(0.8)
 end)
 
 ------------------------------------------------------------------------------------------
@@ -766,10 +817,15 @@ section("cards", function()
 	check(not textHas(E.Panel, "RECOMMEND") and not textHas(E.Panel, "BEST PICK"), "no Recommended / best-pick label")
 	local minPx = math.huge
 	local _, _, sc = virtualSize()
+	local minName = "?"
 	for _, t in ipairs(visibleTexts(E.Panel)) do
-		minPx = math.min(minPx, t.Inst.TextSize * sc)
+		-- the 1 / 2 / 3 key caps only show for a keyboard (hidden on touch)
+		if not t.Inst:FindFirstAncestor("KeyBadge") and t.Inst.TextSize * sc < minPx then
+			minPx = t.Inst.TextSize * sc
+			minName = t.Inst.Name .. " '" .. t.Text .. "'"
+		end
 	end
-	preview.log(string.format("  smallest card text %.1f pt on %s", minPx, device))
+	preview.log(string.format("  smallest card text %.1f pt on %s (%s)", minPx, device, minName))
 	check(minPx >= 11 - 0.01, "card text is at least 11 pt (smallest " .. string.format("%.1f", minPx) .. ")")
 	-- the body lines (current -> next) are the text people read: 16 pt on a phone
 	local bodyMin, bodyRows = math.huge, 0
@@ -969,6 +1025,7 @@ section("results", function()
 	C.setState({ Phase = "Results" })
 	C.sendProfile(C.profile({ Frame = "Gold", Account = { XP = 2240 } }))
 	setP("RunSaveState", nil)
+	setS("RunStage", "Victory") -- the director keeps its terminal state through the results
 	local returned = 0
 	preview.remote("ReturnToLobby").OnServerEvent:Connect(function()
 		returned += 1
@@ -985,9 +1042,11 @@ section("results", function()
 		Build = { Weapons = { { Id = "Whip", Level = 5, Evolved = true }, { Id = "MagicOrb", Level = 3 } }, Passives = { { Id = "Might", Level = 3 } } },
 		Account = { Gained = 342, From = 7, To = 8, Into = 92, Need = 500, Rewards = {} },
 		Time = 927, Kills = 1840, Gold = 640, GoldEarned = 640, GoldLost = 0, GoldRetention = 1, Level = 21, Damage = 186400,
-		Arena = "Cliffwood", Seconds = 25, StagesCleared = 1, Stage = 1, BossKills = 1, BossFight = true, Items = {},
+		Arena = "Cliffwood", Seconds = 25, StagesCleared = 5, Stage = 5, NewBestStage = true, BossKills = 1, BossFight = true, Items = {},
 	})
 	settle(2.5)
+	check(anyText("NEW BEST STAGE") == nil and anyText("STAGE 5") == nil, "results on a director run: no 'new best stage' and no stage number")
+	check(anyText("LEVEL REACHED") ~= nil and anyText("CLIFFWOOD") ~= nil and anyText("· STAGE") == nil, "results on a director run: level reached, no stage in the hero line")
 	local X = ResultsExtras.Elements()
 	check(X.Outcome.Visible and X.OutcomeTitle.Text == "VICTORY", "results: the server-confirmed outcome")
 	check(string.find(string.upper(X.OutcomeLine.Text), "CONFIRMED BY THE SERVER") ~= nil, "results: says the server confirmed it")

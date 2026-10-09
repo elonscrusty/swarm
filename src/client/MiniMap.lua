@@ -653,6 +653,13 @@ local function updateFast(state: Configuration, root: BasePart, dt: number, now:
 		ppos = state:GetAttribute("PortalPos")
 	end
 	local portalOn = typeof(ppos) == "Vector3"
+	-- the legend names the objective marker the way the run does (director run: the beacon)
+	local legendCell = ui.Legend and ui.Legend:FindFirstChild("Portal")
+	local legendText = legendCell and legendCell:FindFirstChildOfClass("TextLabel")
+	local objectiveWord = type(runStage) == "string" and "Beacon" or "Portal"
+	if legendText and legendText.Text ~= objectiveWord then
+		legendText.Text = objectiveWord
+	end
 	setVisible(portal.Frame, portalOn)
 	if portalOn then
 		placePin(portal, ppos.X, ppos.Z, pos.X, pos.Z)

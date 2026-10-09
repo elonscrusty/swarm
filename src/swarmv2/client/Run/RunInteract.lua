@@ -102,7 +102,44 @@ local function legacyReviveRemote(): Instance?
 	return folder and folder:FindFirstChild("ReviveHold") or nil
 end
 
+-- The beacon's own ProximityPrompt (stream D: "BeaconPrompt", E, a 0.5 s hold; the server's
+-- Beacon.TryActivate decides). This prompt draws it (the default Roblox one is switched to Custom on this
+-- client) and forwards the hold with InputHoldBegin / InputHoldEnd.
+local beaconPrompt: ProximityPrompt? = nil
+local beaconPromptAt = 0
+local function findBeaconPrompt(): ProximityPrompt?
+	if beaconPrompt and beaconPrompt.Parent then
+		return beaconPrompt
+	end
+	local now = os.clock()
+	if now - beaconPromptAt < 1 then
+		return nil
+	end
+	beaconPromptAt = now
+	local found = workspace:FindFirstChild("BeaconPrompt", true)
+	beaconPrompt = found and found:IsA("ProximityPrompt") and found or nil
+	if beaconPrompt then
+		pcall(function()
+			(beaconPrompt :: ProximityPrompt).Style = Enum.ProximityPromptStyle.Custom
+		end)
+	end
+	return beaconPrompt
+end
+
 local function send(kind: string, id: any, on: boolean)
+	if kind == "Beacon" then
+		local pp = findBeaconPrompt()
+		if pp then
+			local ok = pcall(function()
+				if on then
+					pp:InputHoldBegin()
+				else
+					pp:InputHoldEnd()
+				end
+			end)
+			return ok
+		end
+	end
 	local r = findRemote()
 	if r and r:IsA("RemoteEvent") then
 		r:FireServer(kind, id, on)
@@ -125,6 +162,9 @@ local function canAct(kind: string): boolean
 	if kind == "Revive" then
 		-- E1's ReviveHoldClient sends the hold; without it the older ReviveHold remote still does
 		return reviveHold() ~= nil or legacyReviveRemote() ~= nil
+	end
+	if kind == "Beacon" and findBeaconPrompt() then
+		return true
 	end
 	return findRemote() ~= nil
 end
@@ -169,7 +209,8 @@ local function findTarget(state: Instance): { [string]: any }?
 	if state:GetAttribute("RunStage") == "BeaconAvailable" and typeof(beacon) == "Vector3" then
 		local d = ((beacon - root.Position) * FLAT).Magnitude
 		if d <= CFG.BeaconRange and canAct("Beacon") then
-			return { Kind = "Beacon", Id = "Beacon", Name = "the beacon", Hold = CFG.BeaconHold }
+			local pp = findBeaconPrompt()
+		return { Kind = "Beacon", Id = "Beacon", Name = "the beacon", Hold = pp and pp.HoldDuration or CFG.BeaconHold, Action = pp and pp.ActionText or nil }
 		end
 	end
 	-- chest
@@ -393,8 +434,8 @@ function RunInteract.Update(_dt: number, state: Instance, inRun: boolean)
 		local bleed = tonumber(t.Player:GetAttribute("BleedLeft"))
 		sub = now < interruptedUntil and "Interrupted. Hold again" or string.format("%d second hold%s", t.Hold, bleed and string.format("  ·  %d s left", math.ceil(bleed)) or "")
 	elseif t.Kind == "Beacon" then
-		label = "Hold to start the beacon"
-		sub = string.format("Stay within %d studs", CFG.BeaconRange)
+		label = "Hold to " .. string.lower(t.Action or "light the beacon")
+		sub = string.format("%s s hold  ·  stay within %d studs", tostring(math.floor((t.Hold or CFG.BeaconHold) * 10 + 0.5) / 10), CFG.BeaconRange)
 		progress = holding and math.clamp((now - holdStart) / t.Hold, 0, 1) or 0
 	else
 		label, sub, ok = chestLines(t, state)

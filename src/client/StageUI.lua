@@ -96,6 +96,10 @@ end
 -- The portal reveal: banner + sound (the beacon and the minimap ping watch the attribute
 -- themselves). A mid-run joiner sees the banner too: it tells them where to go.
 local function checkReveal(state: Configuration)
+	if Hud.DirectorRun() then
+		lastReveal = tonumber(state:GetAttribute("PortalReveal")) or 0
+		return -- [stream F] the beacon has its own reveal (RunStage BeaconAvailable): no portal banner
+	end
 	local reveal = state:GetAttribute("PortalReveal") or 0
 	if lastReveal == nil then
 		lastReveal = 0
@@ -644,7 +648,8 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	local pos = state:GetAttribute("PortalPos")
 	local root = localRoot()
 	local alive = player:GetAttribute("Alive") ~= false
-	if typeof(pos) ~= "Vector3" or not root or travel.Active then
+	if typeof(pos) ~= "Vector3" or not root or travel.Active or Hud.DirectorRun() then
+		-- (a director run points PortalPos at the beacon: RunObjective draws that arrow and the ring)
 		ui.Arrow.Visible = false
 		ui.Ring.Visible = false
 		return
