@@ -123,6 +123,8 @@ for stream E1); Splinter Badge: direct hits 4 % n chance to throw two 0.15 B spl
   (`rp.SuspendedOffer`), picks are refused, the world is not paused; revival resumes the same cards.
 - Rerolls: one per choice, `FreeRerolls` (2) per run on top of the existing VIP pass and account Reroll
   upgrade; debited only when the new offer differs; the deadline stays. Skips and Banish work as before.
+  A Shrine of Trial bonus pick queues a choice whose offer holds a card above Common; the Clove Bulb
+  sigil still removes one card from the run's first offer.
 - Payload (LevelUpOffer) adds per card `Category`, `Rarity`, `RankFrom`, `RankTo`, `Slot`, `Lines`,
   `Synergy` (evolution partner text) and per offer `Deadline` (server time), `RerollsLeft`, `Source`,
   `Kind`, `Live`, `Empty`, `EmptyText`; `OfferId` validation is unchanged (the client already sends it,
@@ -137,8 +139,10 @@ LevelUpSystem.PendingCount(rp) -> number            (attribute PendingChoices)
 LevelUpSystem.CancelAll(rp)                         (run end / victory: drops everything, no new choice)
 LevelUpSystem.Entitled(rp, weaponId) -> boolean
 WeaponSystem.Damage(rp, enemy, coefficient, weaponId, rank?, opts?) -> (died, dealt)
-  opts: Secondary, Status, Crit, Proc, CastId, Rehit, Depth/Terminal (for CanEmit), From, LOS, Dir,
-        Knock, Stagger, Slow + SlowSeconds, Scorch, Mult, Amount, NoHarvest
+  opts: Secondary, Status (true = status damage; "Scorch" = apply scorch after the hit), Crit, Proc,
+        CastId, Rehit, Depth/Terminal (for CanEmit), From (sight check + knock direction), LOS = false,
+        Dir, Knock (studs/s), Stagger (s), Slow (share) + SlowSeconds, Scorch (mult), Mult, Amount,
+        NoHarvest. Defaults: a primary hit (crit + procs); rank = the player's rank of weaponId.
 WeaponSystem.HasLineOfSight(fromPos, toPos) -> boolean
 WeaponSystem.NearestTarget(rp, range, { Key?, From?, Exclude?, PreferBoss? }) -> enemy?
 WeaponSystem.CanEmit(rp, parentOpts?) -> boolean   WeaponSystem.NewCast() -> castId

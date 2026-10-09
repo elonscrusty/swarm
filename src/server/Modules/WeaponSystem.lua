@@ -3437,7 +3437,7 @@ end
 	opts.Mult, armor A / (100 + A), knockback by kind and capped, and the crit / proc rules:
 	  primary hit (default): may crit (server roll, x1.75) and proc (Splinter Badge, item procs)
 	  opts.Secondary = true: a bounce / burst / pulse / fragment: no procs, no crit unless Crit = true
-	  opts.Status = true: status damage: never crits, never procs
+	  opts.Status = true: status damage: never crits, never procs ("Scorch": scorch after the hit)
 	  opts.Crit = false: never crits; opts.Proc = false: no procs
 	opts also: CastId (hit each target once per cast id; Rehit = true allows more), From (origin:
 	sight check unless LOS = false, knockback direction), Dir, Knock (studs/s), Stagger (s), Slow
@@ -3467,7 +3467,10 @@ function WeaponSystem.Damage(rp, e, coefficient: number, weaponId: string?, rank
 	if not (amount > 0 and amount < math.huge) then
 		return false, 0
 	end
+	-- Status = true: this hit IS status damage; Status = "Scorch": apply scorch after the hit (the
+	-- shared contract's spelling; Scorch = mult does the same)
 	local status = o.Status == true
+	local applyScorch = o.Scorch or (o.Status == "Scorch" and 1) or nil
 	local secondary = o.Secondary == true
 	local procs = not status and not secondary and o.Proc ~= false
 	local critOk = not status and (o.Crit == true or (o.Crit == nil and not secondary))
@@ -3502,8 +3505,8 @@ function WeaponSystem.Damage(rp, e, coefficient: number, weaponId: string?, rank
 		if o.Slow then
 			WeaponSystem.ApplySlow(e, o.Slow, o.SlowSeconds or 1)
 		end
-		if o.Scorch then
-			WeaponSystem.ApplyScorch(rp, e, tonumber(o.Scorch) or 1, w)
+		if applyScorch then
+			WeaponSystem.ApplyScorch(rp, e, tonumber(applyScorch) or 1, w)
 		end
 	end
 	return died, math.max(0, hp0 - e.HP)
