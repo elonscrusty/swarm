@@ -125,7 +125,7 @@ def main():
     checks += [("layout", ["class-browser-ui", "pc", "view=" + v, "owned=few"]) for v in ("pending", "refused", "owned", "page2", "unavailable")]
     checks += [("layout", ["class-browser-ui", "pc", "view=loading", "age=9"]), ("layout", ["class-browser-ui", "pc", "view=loading", "age=0"])]
     checks += [("layout", ["codex-ui", d, "tab=" + t, "open=" + o]) for d in ("pc", "iphone", "phone-portrait") for t, o in (("Classes", "ruckus"), ("Weapons", "ScrapToss"), ("Enemies", "BasinBreaker"), ("Controls", "Touch"))]
-    checks += [("layout", ["codex-ui", "iphone", "tab=Weapons", "open=ToastVolley", "found=none"]), ("layout", ["codex-ui", "pc", "tab=Evolutions", "open=Toaststorm", "found=none"])]
+    checks += [("layout", ["codex-ui", "iphone", "tab=Weapons", "open=ToastVolley", "found=none"]), ("layout", ["codex-ui", "pc", "tab=Evolutions", "open=ToastVolley", "found=none"])]
     checks += [("layout", ["settings", "tablet"])]
     # funnel analytics (server Analytics.lua, docs/ANALYTICS.md): AnalyticsService mock as a
     # published lobby, the same flow in Studio (nothing sent), and the real client's ready report

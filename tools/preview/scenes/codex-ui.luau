@@ -56,10 +56,29 @@ local function textOf(root: any): string
 	end
 	return table.concat(out, " | ")
 end
+local function shownNow(o: any): boolean
+	local x: any = o
+	while x do
+		if x:IsA("GuiObject") and not x.Visible then
+			return false
+		end
+		if x:IsA("LayerCollector") then
+			return x.Enabled
+		end
+		x = x.Parent
+	end
+	return false
+end
 local function clickText(t: string)
-	local g = preview.findGui(function(o)
-		return o:IsA("GuiButton") and string.upper(o.Text) == string.upper(t) and preview.isShown(o)
-	end)[1]
+	local g
+	for _, o in ipairs(preview.findGui(function(o)
+		return o:IsA("GuiButton") and string.upper(o.Text) == string.upper(t)
+	end)) do
+		if shownNow(o) then
+			g = o
+			break
+		end
+	end
 	if g then
 		preview.click(g)
 		C.settle(0.5)

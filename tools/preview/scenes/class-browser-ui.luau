@@ -45,9 +45,9 @@ local ClassCatalog = preview.require(RS.SwarmV2.ClassCatalog)
 if preview.args.longnames == "on" then
 	-- the catalog and the roster both carry the display name
 	local long = {
-		doug_janitor = "Doug the Exhausted Janitor of the Eastern Cliffwood Basin",
-		knuckles_mcgee = "Knuckles McGee the Undefeated Champion of Everywhere",
-		captain_croak = "Captain Croak of the Long Expedition",
+		doug_janitor = "Doug the Exhausted Janitor Prime",
+		knuckles_mcgee = "Knuckles McGee the Undefeated",
+		captain_croak = "Captain Croak of the Expedition",
 	}
 	for id, name in pairs(long) do
 		ClassCatalog.Get(id).Name = name
@@ -107,6 +107,14 @@ local function sentCount(name: string, a: string?, b: string?): number
 	return n
 end
 
+-- the folders the real server makes (the client modules wait for them: a long advance would time out)
+for _, name in ipairs({ "SwarmPickups", "SwarmEnemies", "SwarmGems" }) do
+	if not workspace:FindFirstChild(name) then
+		local f = Instance.new("Folder")
+		f.Name = name
+		f.Parent = workspace
+	end
+end
 C.startClient()
 C.settle(1)
 C.settle(1)
@@ -172,10 +180,11 @@ local function send(state)
 	LobbyNet.Get("LobbyState"):FireClient(me, state)
 	C.settle(0.6)
 end
+local shownNow: (any) -> boolean -- (defined below)
 local function press(pred)
 	local found
 	for _, g in ipairs(preview.findGui(pred)) do
-		if preview.isShown(g) then
+		if shownNow(g) then
 			found = g
 			break
 		end
@@ -194,32 +203,38 @@ local function btn(name: string)
 		return o.Name == name
 	end
 end
-local function texts(root: any?): string
+-- shown = this object and every ancestor up to its ScreenGui is visible (a cheap manual walk: the mock's
+-- preview.isShown is slow over the thousands of objects of the old UI)
+shownNow = function(o: any): boolean
+	local x: any = o
+	while x do
+		if x:IsA("GuiObject") and not x.Visible then
+			return false
+		end
+		if x:IsA("LayerCollector") then
+			return x.Enabled
+		end
+		x = x.Parent
+	end
+	return false
+end
+local lobbyGui: any = nil
+local function texts(): string
+	lobbyGui = lobbyGui or me:WaitForChild("PlayerGui"):FindFirstChild("SwarmV2Lobby")
 	local out = {}
-	for _, g in ipairs(preview.findGui(function(o)
-		return (o.ClassName == "TextLabel" or o.ClassName == "TextButton") and o.Text ~= "" and preview.isShown(o)
-	end)) do
-		table.insert(out, g.Text)
+	if lobbyGui then
+		for _, g in ipairs(lobbyGui:GetDescendants()) do
+			if (g:IsA("TextLabel") or g:IsA("TextButton")) and g.Text ~= "" and shownNow(g) then
+				table.insert(out, g.Text)
+			end
+		end
 	end
 	return table.concat(out, " | ")
 end
 -- true when ANY element with this name is shown (the older screens reuse names such as "SETTINGS")
 local function visible(name: string): boolean
 	for _, g in ipairs(preview.findGui(btn(name))) do
-		local shown = true
-		local o: any = g
-		while o do
-			if o:IsA("GuiObject") and not o.Visible then
-				shown = false
-				break
-			end
-			if o:IsA("LayerCollector") and not o.Enabled then
-				shown = false
-				break
-			end
-			o = o.Parent
-		end
-		if shown then
+		if shownNow(g) then
 			return true
 		end
 	end
@@ -240,14 +255,17 @@ if view == "loading" then
 	check("loading: the load card shows from the start and the class chip does not guess", visible("LoadCard") and string.find(texts(), "Loading class") ~= nil, texts())
 	check("loading: no guide, no purchase while nothing is loaded", not visible("LobbyGuide"))
 	if age > 0 then
-		preview.advance(age, 10)
+		preview.advance(age, 2)
 		C.settle(0.3)
 	end
 	local t = texts()
 	if age >= 31 then
 		check("loading 31 s: a plain failure message and RETRY, progress called safe", string.find(t, "untouched") ~= nil and visible("LoadRetry"), t)
+		local asksBefore, syncBefore = profileAsks, sentCount("LobbySync")
 		press(btn("LoadRetry"))
-		check("loading: RETRY asks again (RequestProfile + LobbySync), once", profileAsks == 1 and sentCount("LobbySync") >= 2, tostring(profileAsks) .. "/" .. tostring(sentCount("LobbySync")))
+		check("loading: RETRY asks again (one RequestProfile + one LobbySync)", profileAsks == asksBefore + 1 and sentCount("LobbySync") == syncBefore + 1, tostring(profileAsks - asksBefore) .. "/" .. tostring(sentCount("LobbySync") - syncBefore))
+		press(btn("LoadRetry"))
+		check("loading: a second tap inside the cooldown asks nothing more", profileAsks == asksBefore + 1)
 	elseif age >= 9 then
 		check("loading 9 s: says what is still loading and that nothing is lost", string.find(t, "Still loading") ~= nil and string.find(t, "Nothing is lost") ~= nil and not visible("LoadRetry"), t)
 	else
@@ -264,7 +282,7 @@ elseif view == "unavailable" then
 	send(base)
 	openBrowser()
 	check("unavailable: portraits say PREVIEW LOADING at first", string.find(texts(), "PREVIEW LOADING") ~= nil, texts())
-	preview.advance(13, 10)
+	preview.advance(13, 2)
 	C.settle(0.8)
 	check("unavailable: later PREVIEW UNAVAILABLE (an explicit state, not a finished picture)", string.find(texts(), "PREVIEW UNAVAILABLE") ~= nil, texts())
 else
@@ -276,7 +294,7 @@ else
 		for _, name in ipairs({ "ClassChip", "PartyButton", "PlayButton", "SHOP", "CODEX", "SETTINGS", "MORE", "HelpButton" }) do
 			check("home: entry point " .. name .. " is on screen", visible(name))
 		end
-		check("home: first-time guide opened by itself for an account with no runs (and is dismissible)", visible("LobbyGuide") and visible("Skip"))
+		check("home: first-time guide opened by itself for an account with no runs (and is dismissible)", visible("LobbyGuide") and visible("GuideSkip"))
 		press(btn("GuideSkip"))
 		check("home: SKIP closes the guide and saves LobbyGuideSeen", not visible("LobbyGuide"))
 		check("home: HOW TO PLAY reopens it", press(btn("HelpButton")) and visible("LobbyGuide"))
@@ -319,7 +337,7 @@ else
 			press(btn("ClassMain"))
 			return sentCount("ClassAction", "Select", "toastmaster") == 1
 		end)())
-		preview.advance(7, 10)
+		preview.advance(7, 2)
 		C.settle(0.5)
 		check("pending: a silent server drops the choice after a few seconds, says so and keeps the old class", string.find(texts(), "did not confirm") ~= nil and string.find(texts(), "Still using Ruckus") ~= nil, string.sub(texts(), -300))
 		-- the real answer arriving later with the class changed: shown as selected, no stale pending

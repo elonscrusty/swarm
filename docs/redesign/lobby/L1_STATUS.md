@@ -69,7 +69,7 @@ Categories: Classes (12), Weapons (15, `WeaponData.Catalog`), Passives (8, `Pass
 
 ## 3. Tests (all offline)
 
-See section 5 for the results table and what is only mock-verified.
+See section 4 for the results table and what is only mock-verified.
 
 | Check | What it covers |
 |---|---|
@@ -81,7 +81,35 @@ See section 5 for the results table and what is only mock-verified.
 
 Registered in `tools/run_regressions.py` (comment "stream L1").
 
-## 4. Gaps, risks and owner decisions
+## 4. Results (offline only; nothing here was run in Studio)
+
+PASS = last run of that check passed. All layout runs use the preview renderer's mock of Roblox, not a device.
+
+| Area | Result |
+|---|---|
+| `bash tools/check.sh --quick` (type check, compile, art keys) | PASS, zero diagnostics, after the last source edit |
+| `class-browser-regression` (headless) | PASS |
+| `class-browser-ui` layout, 12 classes: grid and details on pc / iphone / phone-portrait / tablet | PASS (8) |
+| long names (wrapped, not cut) on four devices | PASS (4) |
+| queued (pc, iphone), confirm purchase (pc, iphone, phone-portrait), pending, refused, owned filter, page 2, unavailable portraits (pc) | PASS (11) |
+| loading card at 0 s, 9 s, 31 s (31 s on pc, iphone, phone-portrait) with RETRY | PASS (5) |
+| first-time guide, step 4 (pc, iphone, phone-portrait) | PASS (3) |
+| home entry points (pc, iphone, phone-portrait, tablet) | PASS (4), run before the last load-card placement edit; not repeated (see below) |
+| `codex-ui` layout: classes, weapons, enemies, controls on pc / iphone / phone-portrait; two not-found cases | PASS (14) |
+| `settings` layout (pc, iphone, phone-portrait, tablet) and `settings-sim` | PASS (5) |
+| `lobby-screens-regression` | PASS |
+| `lobby-queue-regression` | PASS (237/237) earlier in the stream; NOT re-run after the last edits (BLOCKED, see below) |
+| `basecamp-ui` layout (iphone, phone-portrait: idle, classes, gates, countdown) | BLOCKED: not re-run after the last edits |
+| `menu-phone`, `menu-phone-portrait` clarity, `layout-pause-*`, `party-v2`, `admission` | BLOCKED: not re-run (see below) |
+| `layout-menu-iphone` | FAIL, CUT `Name: 'Bramblew...  [Bramblewick]'` at (655,101); not investigated, probably not from this stream (the menu leaderboard/hero name lines were not touched) |
+| `discovery-phone`, `discovery-phone-portrait` | FAIL at `tools/menu_discovery_regression.luau` line 28 (the Characters skin swatch `Knight_Crimson` is nil); the same line fails on a clean extract of 7c96a55, so it is not from this stream |
+| `data-regression` | FAIL with 22 findings (weapon rank specs of six new weapons, BasinBreaker boss data, `Config.Features` count / `ClassSfx`); all in files this stream did not edit |
+
+Findings fixed in this last pass: the refused-answer toast covered the details name (the open browser now shows the answer in its own note, toasts only when it is closed); the 31 s load card covered the SHOP / CODEX buttons and HOW TO PLAY on iphone (landscape: it sits under the menu buttons and right of the left column, shorter when needed); the enemy list lines are the short label before the colon (the full sentence stays in the details); the not-found evolution check used an evolution name instead of the weapon id.
+
+Screenshots (final renders of the passing scenes) are in `docs/redesign/lobby/l1-shots/`. The refused picture is a scene that forces a NOT_OWNED answer for a class the profile owns, so its grid badge and its note disagree on purpose.
+
+## 5. Gaps, risks and owner decisions
 
 - **Not tested in Studio or live.** ViewportFrame portraits, gamepad navigation, Escape on a real keyboard (Roblox's own menu also opens on Escape), safe areas on real phones, text size Largest, and the real `CharacterPreviews` replication are only mock-verified. The preview renders models with its own approximation of Roblox's ViewportFrame.
 - **Two visual systems on the home screen.** The brief's navy tokens are applied to everything stream L1 built or restyled. The gate sheet and queue panel (`QueuePanel.lua`), the toasts, and every old `Menu*` screen (Settings rows, Party, Store, More, Daily ...) still use the Bright Arcade theme from `Theme.lua`. Re-theming those is the lobby chat's job (`Theme` / `UIKit` belong to the gameplay track). `Brief.lua` is the place to extend.

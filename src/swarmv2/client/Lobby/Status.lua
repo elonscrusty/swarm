@@ -30,7 +30,7 @@ local T = Brief.T
 local Status = {}
 
 export type Panel = {
-	Layout: (ctx: Kit.Ctx, x: number, y: number) -> (),
+	Layout: (ctx: Kit.Ctx, x: number, y: number, clear: number?) -> (), -- clear: the menu bar's bottom edge
 	Render: (ctx: Kit.Ctx) -> (),
 	Step: (ctx: Kit.Ctx) -> (),
 	State: () -> { [string]: any },
@@ -105,8 +105,8 @@ function Status.Build(ctx: Kit.Ctx): Panel
 	retry.Instance.Visible = false
 
 	-- status row ------------------------------------------------------------------------------
-	local row = new("Frame", { Name = "StatusRow", BackgroundTransparency = 1, Size = UDim2.fromOffset(260, 48), ZIndex = 3 }, ctx.Root)
-	local pill = new("Frame", { Name = "Pill", BackgroundColor3 = T.Navy, BorderSizePixel = 0, Size = UDim2.fromOffset(136, 48), ZIndex = 3 }, row)
+	local row = new("Frame", { Name = "StatusRow", BackgroundTransparency = 1, Size = UDim2.fromOffset(300, 48), ZIndex = 3 }, ctx.Root)
+	local pill = new("Frame", { Name = "Pill", BackgroundColor3 = T.Navy, BorderSizePixel = 0, Size = UDim2.fromOffset(128, 48), ZIndex = 3 }, row)
 	UIKit.corner(pill, 14)
 	UIKit.stroke(pill, T.Line, 2, 0)
 	local dot = new("Frame", { Name = "Dot", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = T.Good, BorderSizePixel = 0, ZIndex = 4 }, pill)
@@ -115,8 +115,8 @@ function Status.Build(ctx: Kit.Ctx): Panel
 	Brief.button(row, {
 		Name = "HelpButton",
 		Title = "HOW TO PLAY",
-		Size = UDim2.fromOffset(116, 48),
-		Position = UDim2.fromOffset(144, 0),
+		Size = UDim2.fromOffset(164, 48),
+		Position = UDim2.fromOffset(136, 0),
 		ZIndex = 4,
 		Kind = "Secondary",
 		TitleSize = 14,
@@ -218,12 +218,30 @@ function Status.Build(ctx: Kit.Ctx): Panel
 
 	local panel: Panel
 	panel = {
-		Layout = function(c: Kit.Ctx, x: number, y: number)
+		Layout = function(c: Kit.Ctx, x: number, y: number, clear: number?)
 			row.Position = UDim2.fromOffset(x, y)
-			row.Size = UDim2.fromOffset(c.Portrait and math.min(300, c.W - 2 * Kit.M) or 260, 48)
+			row.Size = UDim2.fromOffset(math.min(300, c.W - 2 * Kit.M), 48)
 			saveWarn.Position = UDim2.fromOffset(x, y + 52)
 			saveWarn.Size = UDim2.fromOffset(row.Size.X.Offset, 40)
-			card.Size = UDim2.fromOffset(math.min(460, c.W - 24), c.Compact and 350 or 330)
+			local cardH = c.Compact and 350 or 330
+			if clear and not c.Portrait then
+				-- landscape: sit in the free space under the menu buttons instead of covering them
+				local free = c.H - clear - 12
+				if free < cardH then
+					cardH = math.max(250, free)
+				end
+				-- and to the right of the class / party / status column
+				local cardW = math.min(460, c.W - 24)
+				local left = math.max((c.W - cardW) / 2, x + row.Size.X.Offset + 12)
+				left = math.min(left, c.W - 12 - cardW)
+				card.AnchorPoint = Vector2.new(0, 0)
+				card.Position = UDim2.fromOffset(math.max(12, left), clear + math.max(0, (free - cardH) / 2))
+			else
+				card.AnchorPoint = Vector2.new(0.5, 0.5)
+				card.Position = UDim2.fromScale(0.5, 0.5)
+			end
+			card.Size = UDim2.fromOffset(math.min(460, c.W - 24), cardH)
+			message.Size = UDim2.new(1, -40, 0, cardH - 230)
 			for _, r in pairs(rows) do
 				r.Text.TextSize = Brief.size("Body", c.Compact)
 			end

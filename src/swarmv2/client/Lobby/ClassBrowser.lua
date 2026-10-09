@@ -452,7 +452,8 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 			picW, picH = cardH - 2 * pad, cardH - 2 * pad
 			textX, textW = pad + picW + 10, cardW - (pad + picW + 10) - pad
 		else
-			picW, picH = cardW - 2 * pad, math.floor(cardH * 0.5)
+			-- a long name wraps to two lines (a smaller picture makes room)
+			picW, picH = cardW - 2 * pad, math.floor(cardH * ((#info.Name > 15) and 0.4 or 0.5))
 			textX, textW = pad, cardW - 2 * pad
 		end
 		local por = makePortrait(card, id, { Position = UDim2.fromOffset(pad, pad), Size = UDim2.fromOffset(picW, picH), ZIndex = 14 }, 0, compact)
@@ -480,19 +481,23 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 		end
 		local nameSize = rowStyle and 19 or 20
 		local nameY = rowStyle and pad or (pad + picH + 6)
+		local nameLines = (not rowStyle and #info.Name > 15) and 2 or 1
+		local nameH = nameLines * (nameSize + 2) + 4
 		Brief.label(card, "Body", info.Name, {
 			Name = "Name",
 			FontFace = Brief.Weight.Black,
 			TextSize = nameSize,
 			Position = UDim2.fromOffset(textX, nameY),
-			Size = UDim2.fromOffset(textW, nameSize + 6),
+			Size = UDim2.fromOffset(textW, nameH),
+			TextWrapped = nameLines > 1,
+			TextYAlignment = Enum.TextYAlignment.Top,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 14,
 		}, compact)
 		local d = ClassDetails.Get(id)
 		Brief.label(card, "Label", d and d.Role or (info.Role or ""), {
 			Name = "Role",
-			Position = UDim2.fromOffset(textX, nameY + nameSize + 6),
+			Position = UDim2.fromOffset(textX, nameY + nameH + 2),
 			Size = UDim2.fromOffset(textW, Brief.size("Label", compact) + 4),
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 14,
@@ -992,10 +997,17 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 			} :: any)[why] or "The server could not change your class."
 			local current = v.Selected or ClassCatalog.Default
 			setNotice("Error", text .. " Still using " .. nameOf(current) .. ".")
-			c.Toast(text, "warn")
+			if not isOpen then
+				c.Toast(text, "warn") -- the open browser already shows the answer in its own note
+			end
 		elseif (answered and v.Selected == pend.Id) or (v.Selected == pend.Id and ownedNow(pend.Id)) then
 			pending = nil
-			c.Toast(nameOf(pend.Id) .. (pend.Action == "Buy" and " unlocked and selected" or " selected"), "good")
+			local said = nameOf(pend.Id) .. (pend.Action == "Buy" and " unlocked and selected" or " selected")
+			if isOpen then
+				setNotice("Good", said .. ".")
+			else
+				c.Toast(said, "good")
+			end
 		elseif answered then
 			pending = nil -- it worked, but another class is selected now: nothing to say
 		end

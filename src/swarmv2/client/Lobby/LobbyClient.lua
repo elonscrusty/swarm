@@ -253,7 +253,7 @@ function LobbyClient.Start(): boolean
 		if portrait then
 			statusY = barBottom + 8
 		end
-		status.Layout(ctx, Kit.M, statusY)
+		status.Layout(ctx, Kit.M, statusY, barBottom + 8)
 		classes.Layout(ctx)
 		queue.Layout(ctx)
 		guide.Layout(ctx)
@@ -380,6 +380,9 @@ function LobbyClient.Start(): boolean
 			queue.Step(ctx)
 			classes.Step(ctx)
 			status.Step(ctx)
+			if not autoGuideDone then
+				maybeAutoGuide() -- the first answer may arrive while another screen is up: try again on the home screen
+			end
 		end
 	end)
 

@@ -131,13 +131,23 @@ for _, baseId in ipairs((RunConfig.Builds :: any).Evolutions) do
 	end
 end
 
+-- the list line is the label before the colon ("Ranged"); the full sentence stays in the entry's details
+local function shortRole(role: string?): string
+	local text = role or ""
+	local cut = string.find(text, "[:;]")
+	if cut then
+		text = string.sub(text, 1, cut - 1)
+	end
+	return text
+end
+
 -- the Cliffwood roster in the director's order, then the elite marker, then the boss
 local enemies: { Entry } = {}
 for _, r in ipairs((RunConfig.Director :: any).Roster) do
 	local def: any = EnemyData.Enemies[r.Type]
 	if def then
 		local name: string = r.Name or def.DisplayName
-		table.insert(enemies, { Id = r.Type, Name = name, Sub = def.Role or "", Icon = "skull" })
+		table.insert(enemies, { Id = r.Type, Name = name, Sub = shortRole(def.Role), Icon = "skull" })
 	end
 end
 table.insert(enemies, { Id = "EliteMarker", Name = "Elite marker", Sub = "A golden crown over an enemy: a tougher one", Icon = "crown" })
