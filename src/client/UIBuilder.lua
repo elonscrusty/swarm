@@ -4609,7 +4609,8 @@ local function buildRevive()
 		LayoutOrder = 1,
 		OnClick = function()
 			local id = Config.Monetization.Products.Revive
-			if id and id ~= 0 then
+			-- only with a real platform price (the lookup below); never sold blind
+			if id and id ~= 0 and revive.PriceReady == true then
 				MarketplaceService:PromptProductPurchase(player, id)
 			end
 		end,
@@ -4656,13 +4657,26 @@ local function onReviveOffer(data)
 		revive.Heart.Position = UDim2.new()
 		revive.Heart.Size = UDim2.fromOffset(48, 48)
 	end
-	revive.Buy.SetText("REVIVE")
+	-- the price comes from Roblox; until it answers the button waits, and a failed lookup
+	-- (or an item off sale) shows PRICE UNAVAILABLE instead of a blind purchase
+	revive.PriceReady = false
+	revive.Buy.SetText("REVIVE  R$ ...")
+	revive.Buy.SetEnabled(false)
+	revive.PriceToken = (revive.PriceToken or 0) + 1
+	local priceToken = revive.PriceToken
 	task.spawn(function()
 		local ok, info = pcall(function()
 			return MarketplaceService:GetProductInfo(data.ProductId, Enum.InfoType.Product)
 		end)
-		if ok and info and info.PriceInRobux then
+		if priceToken ~= revive.PriceToken then
+			return
+		end
+		if ok and info and type(info.PriceInRobux) == "number" and info.IsForSale ~= false then
+			revive.PriceReady = true
 			revive.Buy.SetText("REVIVE  R$" .. tostring(info.PriceInRobux))
+			revive.Buy.SetEnabled(true)
+		else
+			revive.Buy.SetText("PRICE UNAVAILABLE")
 		end
 	end)
 	show(revive.Overlay, "Revive", true)
