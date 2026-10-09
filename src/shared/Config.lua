@@ -1437,12 +1437,18 @@ Config.Audio = {
 	  DamageNumbers    floating damage numbers over enemies (off by default; summed per
 	                   enemy and capped, so a swarm never turns into a wall of text)
 	  Tips             contextual hints (first run tutorial, co-op rules)
+	  [stream L1] MasterVolume, CameraSensitivity, InvertCameraX / Y, EffectsIntensity, UIScale (0-1 sliders
+	  or booleans, read through ClientSettings), LobbyGuideSeen (the lobby's first-time guide was shown)
 ]]
 Config.Settings = {
 	Defaults = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = true, Minimap = true,
 		Colorblind = "Off", ReduceFlashes = false, CombatVolume = 1, InterfaceVolume = 1, WarningVolume = 1,
 		MuteAll = false, VisualAudioCues = false, TouchLayout = "RightHanded",
-		DamageNumberSize = "Normal", CombineNumbers = true }, -- last two: DamageNumberOptions
+		DamageNumberSize = "Normal", CombineNumbers = true, -- last two: DamageNumberOptions
+		-- [stream L1] Settings screen: master volume, camera sensitivity (0.5 = 1x, see ClientSettings.CameraTuning),
+		-- invert camera, effects intensity (cosmetic budgets only), UI size (0.5 = 1x), and the lobby guide flag
+		MasterVolume = 1, CameraSensitivity = 0.5, InvertCameraX = false, InvertCameraY = false,
+		EffectsIntensity = 1, UIScale = 0.5, LobbyGuideSeen = false },
 	Enums = {
 		DamageNumberSize = { "Small", "Normal", "Big" },
 		Colorblind = { "Off", "Protanopia", "Deuteranopia", "Tritanopia" },

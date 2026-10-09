@@ -270,7 +270,8 @@ local fxParts = 0 -- effect parts in use (animator, waves, pools)
 
 -- Settings > Reduced effects: cosmetic effect and trail budgets shrink to this share.
 local function budgetScale(): number
-	return ClientSettings.Reduced() and (GRAPHICS.ReducedEffectsBudget or 0.4) or 1
+	local base = ClientSettings.Reduced() and (GRAPHICS.ReducedEffectsBudget or 0.4) or 1
+	return base * ClientSettings.EffectsMult() -- [stream L1] Settings > Effects intensity (cosmetic budgets only)
 end
 
 -- Room for `count` more effect parts? Warnings (critical) may use half again the budget

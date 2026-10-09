@@ -50,6 +50,33 @@ function ClientSettings.Flashes(): boolean
 	return values.ReduceFlashes == true or ClientSettings.Reduced()
 end
 
+-- [stream L1] Derived settings. Sliders are stored as 0-1 (Config.ValidateSetting); these map them to what
+-- the game reads. 0.5 is "normal" for sensitivity and UI size, so the default changes nothing.
+-- Camera: (look multiplier 0.5x..2x, horizontal sign, vertical sign) for CameraController.rotate.
+function ClientSettings.CameraTuning(): (number, number, number)
+	local v = math.clamp(tonumber(values.CameraSensitivity) or 0.5, 0, 1)
+	return 2 ^ ((v - 0.5) * 2), values.InvertCameraX == true and -1 or 1, values.InvertCameraY == true and -1 or 1
+end
+-- The readout of a sensitivity slider value, e.g. 0.5 -> "1.0x".
+function ClientSettings.SensitivityText(v: number): string
+	return string.format("%.1fx", 2 ^ ((math.clamp(v, 0, 1) - 0.5) * 2))
+end
+-- UI size multiplier 0.8x..1.2x (UIBuilder.updateScale and the lobby UI).
+function ClientSettings.UIScaleMult(): number
+	return 0.8 + 0.4 * math.clamp(tonumber(values.UIScale) or 0.5, 0, 1)
+end
+function ClientSettings.UIScaleText(v: number): string
+	return string.format("%d%%", math.floor((0.8 + 0.4 * math.clamp(v, 0, 1)) * 100 + 0.5))
+end
+-- Cosmetic effect budget multiplier 0.25..1 (VFX / CombatFx; telegraphs and warnings never use it).
+function ClientSettings.EffectsMult(): number
+	return 0.25 + 0.75 * math.clamp(tonumber(values.EffectsIntensity) or 1, 0, 1)
+end
+-- Overall volume 0..1 (Audio.SetVolumes).
+function ClientSettings.MasterVolume(): number
+	return math.clamp(tonumber(values.MasterVolume) or 1, 0, 1)
+end
+
 local function valid(key: string, value: any): boolean
 	return Config.ValidateSetting(key, value) ~= nil
 end
